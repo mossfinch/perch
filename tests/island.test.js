@@ -516,6 +516,57 @@ test("the installer's socket check waits for a real connection, never for the fi
   assert.equal(out.split("\n").pop(), "ok", out);
 });
 
+test("the release audit runs on the finished archive, not on the bundle beside it", () => {
+  // ⚠️ Why this exists at all: the debug symbols that carry the builder's
+  // absolute paths live as SIBLINGS of the .app — Perch.app.dSYM,
+  // Perch.swiftmodule — so a check that walks the bundle structurally cannot
+  // see them, and "zip up the build folder" ships them with every guard green.
+  // The archive is the artifact; the audit belongs on the archive.
+  const home = ["/User", "s/"].join("");   // assembled: see the note in the bundle test below
+  const buildPath = `${home}someone/Developer/priv/Perch/Care/`;
+  const py = [
+    "import zipfile, pathlib, tempfile, importlib.util",
+    `spec = importlib.util.spec_from_file_location('pkgrel', ${JSON.stringify(pkgPath("package-release.py"))})`,
+    "m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)",
+    `BUILD_PATH = ${JSON.stringify(buildPath)}`,
+    "d = pathlib.Path(tempfile.mkdtemp())",
+    "EXE = 'Perch.app/Contents/MacOS/Perch'",
+    "def make(name, entries):",
+    "    p = d / name",
+    "    with zipfile.ZipFile(p, 'w') as z:",
+    "        for n, data in entries: z.writestr(n, data)",
+    "    return p",
+    "def refuses(p, why):",
+    "    try:",
+    "        m.audit(p)",
+    "        raise AssertionError('did not refuse: ' + why)",
+    "    except SystemExit as e:",
+    "        return str(e)",
+    // ① a clean archive must pass, or the gate is unpassable and will be removed
+    "m.audit(make('ok.zip', [(EXE, b'ordinary bytes')]))",
+    // ② UTF-16: a plain ASCII find sails straight past this one
+    "msg = refuses(make('u16.zip', [(EXE, b'pad' + BUILD_PATH.encode('utf-16-le'))]), 'utf-16 build path')",
+    "assert 'utf-16-le' in msg, 'caught it but misreported the encoding: ' + msg",
+    "assert 'someone/Developer/priv' in msg, 'did not show the evidence: ' + msg",
+    // ③ by-products are refused BY NAME — a step earlier than searching bytes
+    "msg = refuses(make('ds.zip', [(EXE, b'clean'), ('Perch.app.dSYM/Contents/x', b'clean')]), 'dSYM')",
+    "assert 'dSYM' in msg, 'wrong reason: ' + msg",
+    "msg = refuses(make('sm.zip', [(EXE, b'clean'), ('Perch.swiftmodule/x.swiftsourceinfo', b'clean')]), 'swiftmodule')",
+    "assert 'swiftmodule' in msg or 'Swift module' in msg, 'wrong reason: ' + msg",
+    // ④ resource-fork sidecars carry the packer's xattrs
+    "msg = refuses(make('sc.zip', [(EXE, b'clean'), ('__MACOSX/._Perch', b'x')]), 'sidecar')",
+    "assert 'sidecar' in msg, 'wrong reason: ' + msg",
+    // ⑤ compressed payloads cannot be scanned as text, so they are refused
+    "msg = refuses(make('ne.zip', [(EXE, b'clean'), ('Perch.app/Contents/i.zip', b'PK\\x03\\x04rest')]), 'nested archive')",
+    "assert 'archive inside' in msg, 'wrong reason: ' + msg",
+    // ⑥ control group: an archive holding nothing must not be called clean
+    "refuses(make('empty.zip', [('readme.txt', b'nothing here')]), 'archive without the executable')",
+    "print('ok')",
+  ].join("\n");
+  const out = execFileSync("python3", ["-B", "-c", py], { encoding: "utf8", cwd: ROOT }).trim();
+  assert.equal(out.split("\n").pop(), "ok", out);
+});
+
 test("the installer refuses to ship a bundle carrying the builder's own paths", () => {
   // ⚠️ The gap this closes: every other guard here scans the REPOSITORY — the
   // manifest picks which files ship, the privacy test scans those. **The

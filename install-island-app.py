@@ -281,26 +281,37 @@ def verify_shipped_bytes(app: Path) -> None:
 
     Every other guard here scans the repository: the manifest decides which
     FILES ship and the privacy test scans those. **The compiled bundle is in
-    none of that** — and it is the thing a stranger actually downloads. So the
-    check lives next to the step that produces it.
+    none of that** — and it is closer to what a stranger downloads than
+    anything the repository holds. So the check lives next to the step that
+    produces it.
 
     The needle is the shape `/Users/`, never one particular username: someone
     building on their own machine should not ship their path either, and a
     check that a rename defeats is not a check.
+
+    ⚠️ This is the early warning, **not the last word**. It walks the bundle,
+    and the debug symbols that carry those paths live *beside* the bundle as
+    siblings — `Perch.app.dSYM`, `Perch.swiftmodule` — where this cannot reach
+    them. What actually ships is the archive, so the authoritative audit is in
+    `package-release.py`, which opens the finished zip. Catching it here just
+    means finding out at build time instead of at package time.
     """
+    needles = [("/Users/".encode(enc), enc)
+               for enc in ("utf-8", "utf-16-le", "utf-16-be")]
     for f in sorted(app.rglob("*")):
         if f.is_symlink() or not f.is_file():
             continue
         buf = f.read_bytes()
-        at = buf.find(b"/Users/")
-        if at != -1:
-            sample = buf[at:at + 90].split(b"\x00")[0].decode("utf-8", "replace")
-            raise SystemExit(
-                f"{f.relative_to(app)} carries a build-machine path, refusing to ship it:\n"
-                f"  {sample}\n"
-                "Debug symbols are the usual source — check that the strip step ran before signing."
-            )
-    print("Shipped bytes carry no build-machine path")
+        for needle, enc in needles:
+            at = buf.find(needle)
+            if at != -1:
+                sample = buf[at:at + 120].decode(enc, "replace").split("\x00")[0]
+                raise SystemExit(
+                    f"{f.relative_to(app)} carries a build-machine path ({enc}), refusing to ship it:\n"
+                    f"  {sample}\n"
+                    "Debug symbols are the usual source — check that the strip step ran before signing."
+                )
+    print("Bundle carries no build-machine path (the archive gets audited again at package time)")
 
 
 ENTITLEMENTS = HERE / "Perch" / "Perch.entitlements"

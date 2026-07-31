@@ -1,51 +1,51 @@
 # Perch
 
-Your neck, shoulders and eyes pay for the screen every day.
+You give Claude Code or codex a task. Then you wait.
 
-You know you should look up now and then — roll your neck, let your eyes focus
-on something far away. The trouble is that most break reminders arrive while
-you are concentrating. They ask you to stop what you are doing, so you dismiss
-them.
+That wait is awkward. It is usually too short to start anything real, and too
+unpredictable to walk away from — the agent may want an approval at any moment.
+So you open another tab, pick up your phone, and keep half an eye on the
+terminal.
 
-But when you work with a coding agent, some pauses are already there. The task
-is handed off, the agent is running, and all you need to know is when it wants
-your approval and when it is done. **That pause doesn't ask you to stop
-anything — you have already stopped.**
+Perch watches the run for you.
 
-Perch lives in that pause.
+It lives in your Mac's notch: blue while an agent is working, yellow when it
+needs you, green when it is done. You can look away without wondering whether
+you missed something.
+
+And while you are away from the terminal, it offers a 30-second move for your
+neck, shoulders or eyes — illustrated, paced by a beat, and logged when you
+finish it.
+
+**That waiting time is already part of your day. Perch turns it into a small
+reset instead of more screen time.**
+
+![The unfolded card: project dots, the project asking for you, and a move with its beat and Start button](perch-card.png)
+
+## Why this wait is different
+
+Plenty of things remind you to take a break. They arrive while you are
+concentrating and ask you to stop what you are doing, so you dismiss them.
+
+This pause asks you to stop nothing. You have already stopped — the task is
+handed off and the agent is running. The only thing still holding you to the
+screen was not knowing when it would need you.
+
+## How Perch watches your agents
+
+Hooks in Claude Code and codex tell it when a run starts, when it needs you,
+and when it ends. Collapsed, it reports one number per state, and a leaf takes
+the colour of whatever needs you most. Hover the notch and it unfolds — one dot
+per project, in a row per agent, with whichever project is asking for you named
+on the right.
 
 ![Perch collapsed in the notch: a leaf and one count per state](perch-status-key.png)
 
-Perch sits in your Mac's notch and watches the agent for you: one count per
-state — blue running, yellow waiting on you, green finished — and a leaf that
-takes the colour of whatever needs you most. You don't have to keep an eye on
-the terminal, so you can safely look up and spend 30 seconds rolling your neck,
-loosening your shoulders, or letting your eyes leave close range.
+## The moves
 
-Every move comes with an illustration and a beat, and leaves a line in a local
-log when you finish it. You don't have to carve out a separate block of time to
-look after your body — the agent has already left you these gaps.
-
-## How it works
-
-**1 · Perch takes over the watching.** Hooks in Claude Code and codex tell it
-when a run starts, when it needs you, and when it ends. Collapsed, it reports
-one number per state; hover the notch and it unfolds — one dot per project,
-in a row per agent.
-
-**2 · You look away.** That is what the lights are for. Nothing is slipping
-past you while your head is up — the yellow number is what calls you back.
-
-**3 · You get a 30-second move.** Neck, shoulders, or eyes. Illustrated, paced
-by a beat, and logged when you finish it, so over time you can see what you
+Neck, shoulders, eyes. Each comes with an illustration and a beat, and leaves a
+line in a local log when you finish it — so over time you can see what you
 actually did rather than what you meant to do.
-
-![The unfolded card: project dots, the current project, a move with its beat and Start button, and two illustrated stages](perch-card.png)
-
-All three at once: the dots on the left, whichever project is asking for you on
-the right, and the move you can do about it in between.
-
-The moves cover neck, shoulders and eyes:
 
 ![Three of the illustrated moves: a side neck tilt, a trapezius release, and an orbital massage](perch-care-moves.png)
 

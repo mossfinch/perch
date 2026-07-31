@@ -30,7 +30,8 @@ look after your body — the agent has already left you these gaps.
 
 **1 · Perch takes over the watching.** Hooks in Claude Code and codex tell it
 when a run starts, when it needs you, and when it ends. Collapsed, it reports
-one number per state; hover the notch and it unfolds into one row per project.
+one number per state; hover the notch and it unfolds — one dot per project,
+in a row per agent.
 
 **2 · You look away.** That is what the lights are for. Nothing is slipping
 past you while your head is up — the yellow number is what calls you back.
@@ -38,6 +39,13 @@ past you while your head is up — the yellow number is what calls you back.
 **3 · You get a 30-second move.** Neck, shoulders, or eyes. Illustrated, paced
 by a beat, and logged when you finish it, so over time you can see what you
 actually did rather than what you meant to do.
+
+![The unfolded card: project dots, the current project, a move with its beat and Start button, and two illustrated stages](perch-card.png)
+
+All three at once: the dots on the left, whichever project is asking for you on
+the right, and the move you can do about it in between.
+
+The moves cover neck, shoulders and eyes:
 
 ![Three of the illustrated moves: a side neck tilt, a trapezius release, and an orbital massage](perch-care-moves.png)
 

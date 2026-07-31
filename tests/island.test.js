@@ -516,6 +516,56 @@ test("the installer's socket check waits for a real connection, never for the fi
   assert.equal(out.split("\n").pop(), "ok", out);
 });
 
+test("the installer refuses to ship a bundle carrying the builder's own paths", () => {
+  // ⚠️ The gap this closes: every other guard here scans the REPOSITORY — the
+  // manifest picks which files ship, the privacy test scans those. **The
+  // compiled bundle is in none of it**, and the bundle is what a stranger
+  // downloads. A Release build keeps its debug symbols unless something strips
+  // them, and a DWARF file table is a list of the builder's absolute paths.
+  // The fixture paths are assembled at runtime: written literally, this file
+  // would itself carry an absolute home path and the privacy guard above would
+  // fire on the test that proves the guard works. (Same reason its own needles
+  // are joined rather than spelled out.)
+  const home = ["/User", "s/"].join("");
+  const one = `${home}someone/Developer/priv/Perch/Care/`;
+  const two = `${home}other-person/x`;
+  const py = [
+    "import sys, pathlib, tempfile",
+    "sys.path.insert(0, 'tests')",
+    "from installer_marker import load_functions",
+    `ns = load_functions(${JSON.stringify(pkgPath("install-island-app.py"))}, ['verify_shipped_bytes'])`,
+    "verify = ns['verify_shipped_bytes']",
+    `ONE, TWO = ${JSON.stringify(one)}, ${JSON.stringify(two)}`,
+    "root = pathlib.Path(tempfile.mkdtemp()) / 'Perch.app'",
+    "(root / 'Contents' / 'MacOS').mkdir(parents=True)",
+    "exe = root / 'Contents' / 'MacOS' / 'Perch'",
+    "def refuses(why):",
+    "    try:",
+    "        verify(root)",
+    "        raise AssertionError('did not refuse: ' + why)",
+    "    except SystemExit as e:",
+    "        return str(e)",
+    // ① a build-machine path in the executable -> refuse, and say which file
+    "exe.write_bytes(b'\\x00\\x01' + ONE.encode() + b'\\x00tail')",
+    "msg = refuses('build path in the executable')",
+    "assert 'Contents/MacOS/Perch' in msg, 'did not name the file: ' + msg",
+    "assert ONE in msg, 'did not show the evidence: ' + msg",
+    // ② same bundle once stripped -> must pass, or the gate is unpassable
+    "exe.write_bytes(b'\\x00\\x01ordinary bytes\\x00tail')",
+    "verify(root)",
+    // ③ the needle is the SHAPE, not one username, and not one file: a
+    //    contributor's own path in any resource counts just the same
+    "(root / 'Contents' / 'Resources').mkdir()",
+    "(root / 'Contents' / 'Resources' / 'x.bin').write_bytes(b'pad' + TWO.encode())",
+    "msg = refuses('build path outside the executable')",
+    "assert 'x.bin' in msg, 'only looked at the executable: ' + msg",
+    "print('ok')",
+  ].join("\n");
+  // Last line only: a passing check prints its own confirmation first
+  const out = execFileSync("python3", ["-B", "-c", py], { encoding: "utf8", cwd: ROOT }).trim();
+  assert.equal(out.split("\n").pop(), "ok", out);
+});
+
 test("opened panel stacks nothing above the care card", () => {
   const view = fs.readFileSync(islandPath("IslandView.swift"), "utf8");
   const opened = view.match(/private func openedPlaceholder[\s\S]*?\n    \}/)?.[0] ?? "";

@@ -261,6 +261,48 @@ def build() -> Path:
     return built
 
 
+def strip_debug_symbols(app: Path) -> None:
+    """Drop the debug symbols, which spell out the builder's own file paths.
+
+    A Release build writes its debug info to a separate .dSYM, but
+    `xcodebuild build` never runs the strip phase — so the product keeps a full
+    copy anyway, and a DWARF file table is a list of absolute source paths. On
+    the author's machine that is a username and a private repo name, printed
+    into every binary anyone downloads.
+
+    ⚠️ Order: stripping edits the executable, so it must run BEFORE signing.
+    Run it after and the signature it invalidates is the one just made.
+    """
+    run(["strip", "-S", str(app / EXEC_SUBPATH)], check=True)
+
+
+def verify_shipped_bytes(app: Path) -> None:
+    """No file in the bundle may carry a path from the machine that built it.
+
+    Every other guard here scans the repository: the manifest decides which
+    FILES ship and the privacy test scans those. **The compiled bundle is in
+    none of that** — and it is the thing a stranger actually downloads. So the
+    check lives next to the step that produces it.
+
+    The needle is the shape `/Users/`, never one particular username: someone
+    building on their own machine should not ship their path either, and a
+    check that a rename defeats is not a check.
+    """
+    for f in sorted(app.rglob("*")):
+        if f.is_symlink() or not f.is_file():
+            continue
+        buf = f.read_bytes()
+        at = buf.find(b"/Users/")
+        if at != -1:
+            sample = buf[at:at + 90].split(b"\x00")[0].decode("utf-8", "replace")
+            raise SystemExit(
+                f"{f.relative_to(app)} carries a build-machine path, refusing to ship it:\n"
+                f"  {sample}\n"
+                "Debug symbols are the usual source — check that the strip step ran before signing."
+            )
+    print("Shipped bytes carry no build-machine path")
+
+
 ENTITLEMENTS = HERE / "Perch" / "Perch.entitlements"
 
 
@@ -486,8 +528,10 @@ def main() -> None:
     opts = parser.parse_args()
 
     built = build()
+    strip_debug_symbols(built)  # before signing: stripping the executable invalidates the signature
     sign_adhoc(built)
     check_entitlement(built)   # must re-check after signing: entitlement missing = island glows but receives nothing
+    verify_shipped_bytes(built)   # no other guard scans the bundle, and the bundle is what ships
     stop_running()
     install_app(built)
     if opts.migrate_from:

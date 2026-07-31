@@ -516,53 +516,158 @@ test("the installer's socket check waits for a real connection, never for the fi
   assert.equal(out.split("\n").pop(), "ok", out);
 });
 
-test("the release audit runs on the finished archive, not on the bundle beside it", () => {
-  // ⚠️ Why this exists at all: the debug symbols that carry the builder's
-  // absolute paths live as SIBLINGS of the .app — Perch.app.dSYM,
-  // Perch.swiftmodule — so a check that walks the bundle structurally cannot
-  // see them, and "zip up the build folder" ships them with every guard green.
-  // The archive is the artifact; the audit belongs on the archive.
-  const home = ["/User", "s/"].join("");   // assembled: see the note in the bundle test below
+test("the release audit compares the archive against the bundle, not against a list of known-bad shapes", () => {
+  // ⚠️ What this replaces, and why the shape of the check changed: the gate used
+  // to refuse entries carrying an 0x7875 extra, because that is the field `zip`
+  // writes. The packing command later became ditto; ditto writes 0x5855 into the
+  // LOCAL header instead, and zipfile exposes only the CENTRAL directory's copy —
+  // so a shipped archive carried UID=502/GID=20 through a gate printing "no
+  // packer identity". Naming bad fields one at a time cannot terminate. Declaring
+  // the whole archive can: it must be the bundle's own entries and nothing else.
+  //
+  // Assembled at runtime, like the bundle test below, so the privacy guard does
+  // not fire on the fixture that proves the privacy guard works.
+  const home = ["/User", "s/"].join("");
   const buildPath = `${home}someone/Developer/priv/Perch/Care/`;
-  const py = [
-    "import zipfile, pathlib, tempfile, importlib.util",
-    `spec = importlib.util.spec_from_file_location('pkgrel', ${JSON.stringify(pkgPath("package-release.py"))})`,
-    "m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)",
-    `BUILD_PATH = ${JSON.stringify(buildPath)}`,
-    "d = pathlib.Path(tempfile.mkdtemp())",
-    "EXE = 'Perch.app/Contents/MacOS/Perch'",
-    "def make(name, entries):",
-    "    p = d / name",
-    "    with zipfile.ZipFile(p, 'w') as z:",
-    "        for n, data in entries: z.writestr(n, data)",
-    "    return p",
-    "def refuses(p, why):",
-    "    try:",
-    "        m.audit(p)",
-    "        raise AssertionError('did not refuse: ' + why)",
-    "    except SystemExit as e:",
-    "        return str(e)",
-    // ① a clean archive must pass, or the gate is unpassable and will be removed
-    "m.audit(make('ok.zip', [(EXE, b'ordinary bytes')]))",
-    // ② UTF-16: a plain ASCII find sails straight past this one
-    "msg = refuses(make('u16.zip', [(EXE, b'pad' + BUILD_PATH.encode('utf-16-le'))]), 'utf-16 build path')",
-    "assert 'utf-16-le' in msg, 'caught it but misreported the encoding: ' + msg",
-    "assert 'someone/Developer/priv' in msg, 'did not show the evidence: ' + msg",
-    // ③ by-products are refused BY NAME — a step earlier than searching bytes
-    "msg = refuses(make('ds.zip', [(EXE, b'clean'), ('Perch.app.dSYM/Contents/x', b'clean')]), 'dSYM')",
-    "assert 'dSYM' in msg, 'wrong reason: ' + msg",
-    "msg = refuses(make('sm.zip', [(EXE, b'clean'), ('Perch.swiftmodule/x.swiftsourceinfo', b'clean')]), 'swiftmodule')",
-    "assert 'swiftmodule' in msg or 'Swift module' in msg, 'wrong reason: ' + msg",
-    // ④ resource-fork sidecars carry the packer's xattrs
-    "msg = refuses(make('sc.zip', [(EXE, b'clean'), ('__MACOSX/._Perch', b'x')]), 'sidecar')",
-    "assert 'sidecar' in msg, 'wrong reason: ' + msg",
-    // ⑤ compressed payloads cannot be scanned as text, so they are refused
-    "msg = refuses(make('ne.zip', [(EXE, b'clean'), ('Perch.app/Contents/i.zip', b'PK\\x03\\x04rest')]), 'nested archive')",
-    "assert 'archive inside' in msg, 'wrong reason: ' + msg",
-    // ⑥ control group: an archive holding nothing must not be called clean
-    "refuses(make('empty.zip', [('readme.txt', b'nothing here')]), 'archive without the executable')",
-    "print('ok')",
-  ].join("\n");
+  const py = `
+import zipfile, pathlib, tempfile, struct, importlib.util
+spec = importlib.util.spec_from_file_location('pkgrel', ${JSON.stringify(pkgPath("package-release.py"))})
+m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
+BUILD_PATH = ${JSON.stringify(buildPath)}
+
+d = pathlib.Path(tempfile.mkdtemp())
+app = d / 'Perch.app'
+(app / 'Contents' / 'MacOS').mkdir(parents=True)
+exe = app / 'Contents' / 'MacOS' / 'Perch'
+exe.write_bytes(b'ordinary bytes'); exe.chmod(0o755)
+
+def refuses(src, want, why):
+    p = d / 'case.zip'
+    p.write_bytes(src if isinstance(src, bytes) else src.read_bytes())
+    try:
+        m.audit(p, want)
+        raise AssertionError('did not refuse: ' + why)
+    except SystemExit as e:
+        return str(e)
+
+# ① control group: a faithful archive must pass, or the gate is unpassable
+want = m.manifest(app)
+ok = d / 'ok.zip'
+m.pack(app, ok, want)
+m.audit(ok, want)
+raw = ok.read_bytes()
+
+def eocd(b): return len(b) - 22
+def cd_at(b): return struct.unpack_from('<I', b, eocd(b) + 16)[0]
+def local_offsets(b):
+    at = cd_at(b); outs = []
+    for _ in range(struct.unpack_from('<H', b, eocd(b) + 10)[0]):
+        nl, el, cl = struct.unpack_from('<HHH', b, at + 28)
+        outs.append(struct.unpack_from('<I', b, at + 42)[0])
+        at += 46 + nl + el + cl
+    return outs
+
+# ② THE REGRESSION: the packer's uid in the local header, central directory clean.
+#    Inserted into the LAST local header so no other entry's offset moves.
+last = max(local_offsets(raw))
+blob = struct.pack('<HH', 0x5855, 12) + struct.pack('<IIHH', 0, 0, 502, 20)
+t = bytearray(raw)
+ins = last + 30 + struct.unpack_from('<H', raw, last + 26)[0]
+t[ins:ins] = blob
+struct.pack_into('<H', t, last + 28, len(blob) - 4)
+struct.pack_into('<I', t, len(t) - 22 + 16, cd_at(raw) + len(blob))
+probe = d / 'localonly.zip'; probe.write_bytes(bytes(t))
+with zipfile.ZipFile(probe) as z:
+    assert all(i.extra == b'' for i in z.infolist()), \\
+        'fixture is not local-only: the old central-directory view would have caught it, so this proves nothing'
+msg = refuses(bytes(t), want, 'uid carried in the local header alone')
+assert 'local header' in msg and 'extra field' in msg, 'wrong reason: ' + msg
+
+# ③ an entry nothing declared — the shape that covers comments, stray files, sidecars
+(app / 'Contents' / 'sneak.txt').write_bytes(b'x')
+more = m.manifest(app)
+surplus = d / 'surplus.zip'; m.pack(app, surplus, more)
+msg = refuses(surplus, want, 'an entry the bundle never declared')
+assert 'not declared anywhere' in msg and 'sneak.txt' in msg, 'wrong reason: ' + msg
+
+# ④ ...and the other direction: declared but absent, so a truncated archive is not "clean"
+msg = refuses(ok, more, 'an entry the declaration has and the archive lacks')
+assert 'missing' in msg, 'wrong reason: ' + msg
+(app / 'Contents' / 'sneak.txt').unlink()
+
+# ⑤ same names, different bytes: the digest is what makes "exactly the bundle" mean anything
+bad = dict(want); k = 'Perch.app/' + m.EXEC_SUBPATH
+bad[k] = want[k]._replace(digest='0' * 64)
+msg = refuses(ok, bad, 'content that does not match the declaration')
+assert 'content differs' in msg, 'wrong reason: ' + msg
+
+# ⑥ bytes after the end record ship too, and no entry accounts for them
+msg = refuses(raw + BUILD_PATH.encode(), want, 'bytes appended after the end record')
+assert 'trailing bytes' in msg or 'end-of-central-directory' in msg, 'wrong reason: ' + msg
+
+# ⑦ a length the record claims but the file does not have: two readers, two archives
+t = bytearray(raw); struct.pack_into('<H', t, len(t) - 22 + 20, 32)
+msg = refuses(bytes(t), want, 'end record claiming a comment that is not there')
+assert 'comment' in msg, 'wrong reason: ' + msg
+
+# ⑧ local header and central directory naming the same entry differently
+t = bytearray(raw); nl = struct.unpack_from('<H', raw, last + 26)[0]
+t[last + 30 + nl - 1:last + 30 + nl] = b'X'
+msg = refuses(bytes(t), want, 'local and central directory disagree on the name')
+assert 'names it' in msg, 'wrong reason: ' + msg
+
+# ⑩ THE SECOND REGRESSION: bytes in the span between the last entry's data and the
+#    central directory. An earlier gate checked three boundaries — nothing before the
+#    first local header, nothing after the end record, central directory reaching the
+#    end record — and passed this while printing "no bytes outside the records".
+#    ditto refuses the same file outright, so the gate was calling an archive clean
+#    that a double-click cannot even open.
+def centrals(b):
+    at, out = cd_at(b), []
+    for _ in range(struct.unpack_from('<H', b, eocd(b) + 10)[0]):
+        nl, el, cl = struct.unpack_from('<HHH', b, at + 28)
+        out.append((at, b[at + 46:at + 46 + nl].decode(), struct.unpack_from('<I', b, at + 42)[0]))
+        at += 46 + nl + el + cl
+    return out
+
+gap = bytearray(raw); where = cd_at(raw)
+gap[where:where] = BUILD_PATH.encode()
+struct.pack_into('<I', gap, len(gap) - 22 + 16, where + len(BUILD_PATH))
+msg = refuses(bytes(gap), want, 'bytes between the last payload and the central directory')
+assert 'belong to no record' in msg, 'wrong reason: ' + msg
+
+# ⑪ a real clock instead of the fixed stamp — the archive would then say which
+#    timezone it was packed in. pack() sets it; nothing used to confirm it had.
+t = bytearray(raw)
+for cat, name, lat in centrals(raw):
+    struct.pack_into('<HH', t, cat + 12, 0x4A28, 0x5CE1)
+    struct.pack_into('<HH', t, lat + 10, 0x4A28, 0x5CE1)
+msg = refuses(bytes(t), want, 'a real wall-clock timestamp')
+assert 'not the fixed' in msg, 'wrong reason: ' + msg
+
+# ⑫ permissions that differ from the bundle's — checking only the executable's
+#    +x bit left every other entry's mode unverified
+t = bytearray(raw)
+for cat, name, lat in centrals(raw):
+    if name.endswith('MacOS/Perch'):
+        struct.pack_into('<I', t, cat + 38, 0o100644 << 16)
+msg = refuses(bytes(t), want, 'a mode that does not match the bundle')
+assert 'in the archive' in msg and 'in the bundle' in msg, 'wrong reason: ' + msg
+
+# ⑬ a multi-volume claim: the other parts are not here and nothing accounts for them
+t = bytearray(raw); struct.pack_into('<H', t, len(t) - 22 + 4, 1)
+msg = refuses(bytes(t), want, 'a multi-volume claim')
+assert 'multi-part' in msg, 'wrong reason: ' + msg
+
+# ⑨ UTF-32 build path: the encoding that sailed past a search written for UTF-8 and UTF-16
+exe.write_bytes(b'pad' + BUILD_PATH.encode('utf-32-le'))
+w32 = m.manifest(app); z32 = d / 'u32.zip'; m.pack(app, z32, w32)
+msg = refuses(z32, w32, 'utf-32 build path')
+assert 'utf-32-le' in msg, 'caught it but misreported the encoding: ' + msg
+assert 'someone/Developer/priv' in msg, 'did not show the evidence: ' + msg
+
+print('ok')
+`;
   const out = execFileSync("python3", ["-B", "-c", py], { encoding: "utf8", cwd: ROOT }).trim();
   assert.equal(out.split("\n").pop(), "ok", out);
 });

@@ -1,0 +1,17 @@
+# The Perch package's own .gitignore (the repo-root one after extraction).
+# Inside the mother repo it is a nested gitignore stacked on the root one, so
+# entries overlap on purpose — this file must stand on its own and never rely
+# on "a layer above will catch it".
+
+.DS_Store
+__pycache__/
+*.pyc
+
+# Local session state (absolute paths and session ids); never enters the repo
+# — see neverCopy in perch-package.json
+.omc/
+
+# Xcode local products
+xcuserdata/
+DerivedData/
+build/

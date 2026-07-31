@@ -1,0 +1,30 @@
+{
+  "_": [
+    "The single manifest of the Perch public package: the privacy guard scans everything",
+    "include expands to (dotfiles count), and export-perch.py copies by it. To keep something",
+    "out of the scan, the only way is an explicit neverCopy entry with a reason."
+  ],
+  "include": [
+    ".gitignore",
+    "LICENSE",
+    "Perch",
+    "Perch.xcodeproj",
+    "README.md",
+    "artifacts/island-sounds",
+    "export-perch.py",
+    "install-codex-island-hooks.py",
+    "install-island-app.py",
+    "install-island-hooks.py",
+    "island-day-report.py",
+    "perch-package.json",
+    "tests/installer_marker.py",
+    "tests/island-paths.js",
+    "tests/island.test.js"
+  ],
+  "neverCopy": {
+    "**/.omc/**": "Local editor/session state. Contains full /Users/<name>/... paths, executed commands, and session ids. gitignore keeps it out of this repo, but a cp -R extraction would drag it into the new repo, and one git add . puts it in public history.",
+    "**/.DS_Store": "Finder's per-machine file; carries directory-browsing traces.",
+    "**/__pycache__/**": "Python bytecode; embeds absolute paths.",
+    "**/*.pyc": "Same as above."
+  }
+}

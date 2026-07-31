@@ -14,12 +14,13 @@ anything — you have already stopped.**
 
 Perch lives in that pause.
 
-![Perch collapsed in the notch: one count per state](perch-status-key.svg)
+![Perch collapsed in the notch: a leaf and one count per state](perch-status-key.png)
 
-A bird sits in your Mac's notch and watches the agent for you: blue while it
-runs, yellow when it needs you, green when it finishes. You don't have to keep
-an eye on the terminal, so you can safely look up and spend 30 seconds rolling
-your neck, loosening your shoulders, or letting your eyes leave close range.
+Perch sits in your Mac's notch and watches the agent for you: one count per
+state — blue running, yellow waiting on you, green finished — and a leaf that
+takes the colour of whatever needs you most. You don't have to keep an eye on
+the terminal, so you can safely look up and spend 30 seconds rolling your neck,
+loosening your shoulders, or letting your eyes leave close range.
 
 Every move comes with an illustration and a beat, and leaves a line in a local
 log when you finish it. You don't have to carve out a separate block of time to

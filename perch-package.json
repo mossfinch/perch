@@ -17,6 +17,7 @@
     "install-island-hooks.py",
     "island-day-report.py",
     "perch-package.json",
+    "perch-status-key.svg",
     "tests/installer_marker.py",
     "tests/island-paths.js",
     "tests/island.test.js"

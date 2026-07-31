@@ -1,21 +1,74 @@
 # Perch
 
-A tiny macOS notch companion for people who run AI coding agents.
+Your neck, shoulders and eyes pay for the screen every day.
 
-A bird sits in your notch and watches your agents work. Each project gets one
-status light:
+You know you should look up now and then — roll your neck, let your eyes focus
+on something far away. The trouble is that most break reminders arrive while
+you are concentrating. They ask you to stop what you are doing, so you dismiss
+them.
 
-- 🟡 **yellow** — an agent is waiting for *your* approval
-- 🔵 **blue** — an agent is working
-- 🟢 **green** — the run finished
+But when you work with a coding agent, some pauses are already there. The task
+is handed off, the agent is running, and all you need to know is when it wants
+your approval and when it is done. **That pause doesn't ask you to stop
+anything — you have already stopped.**
 
-Hover the notch and it unfolds into a small card. While you wait for your agent,
-Perch offers short neck / eye / shoulder micro-exercises — half a minute each,
-30 to 40 seconds — with illustrated guides and a beat, and keeps a local log of
-what you actually did.
+Perch lives in that pause.
 
-Works with **Claude Code** and **codex** out of the box. Everything is local:
-one Unix socket in an App Group container, no network, no accounts, no telemetry.
+![Perch collapsed in the notch: one count per state](perch-status-key.svg)
+
+A bird sits in your Mac's notch and watches the agent for you: blue while it
+runs, yellow when it needs you, green when it finishes. You don't have to keep
+an eye on the terminal, so you can safely look up and spend 30 seconds rolling
+your neck, loosening your shoulders, or letting your eyes leave close range.
+
+Every move comes with an illustration and a beat, and leaves a line in a local
+log when you finish it. You don't have to carve out a separate block of time to
+look after your body — the agent has already left you these gaps.
+
+## How it works
+
+**1 · Perch takes over the watching.** Hooks in Claude Code and codex tell it
+when a run starts, when it needs you, and when it ends. Collapsed, it reports
+one number per state; hover the notch and it unfolds into one row per project.
+
+**2 · You look away.** That is what the lights are for. Nothing is slipping
+past you while your head is up — the yellow number is what calls you back.
+
+**3 · You get a 30-second move.** Neck, shoulders, or eyes. Illustrated, paced
+by a beat, and logged when you finish it, so over time you can see what you
+actually did rather than what you meant to do.
+
+<table>
+  <tr>
+    <td align="center" width="33%"><img src="Perch/Resources/Assets.xcassets/CareMoveSideNeckTiltLeft.imageset/CareMoveSideNeckTiltLeft.png" width="190" alt="Side neck tilt"><br><sub>neck</sub></td>
+    <td align="center" width="33%"><img src="Perch/Resources/Assets.xcassets/CareMoveTrapLeft.imageset/CareMoveTrapLeft.png" width="190" alt="Trapezius release"><br><sub>shoulders</sub></td>
+    <td align="center" width="33%"><img src="Perch/Resources/Assets.xcassets/CareMoveEyeOrbitalUnder.imageset/CareMoveEyeOrbitalUnder.png" width="190" alt="Orbital massage"><br><sub>eyes</sub></td>
+  </tr>
+</table>
+
+These are ordinary stretches and micro-movements for people who sit at a
+screen. Perch is not a medical device and makes no health claims — if
+something hurts, see someone who can actually look at you.
+
+## Agents
+
+**Claude Code** works as soon as you run its installer.
+
+**codex** delivers the finish signal out of the box, through its notify script.
+The running and waiting states go through `~/.codex/hooks.json`, and codex only
+runs hooks you have trusted in its own `/hooks` panel — so if the green number
+moves but blue and yellow never do, that trust is what is missing.
+
+## Local by construction
+
+Everything stays on your machine: one Unix socket inside an App Group
+container. `AF_UNIX` sockets cannot reach the network — that is enforced by the
+operating system, not by the code being polite. No accounts, no telemetry, and
+no network code anywhere in this package.
+
+One thing worth knowing: the agent event log records the **full path of every
+project** you ran an agent in. It never leaves your disk, but it is the file to
+delete if you would rather not keep that history — see [Uninstall](#uninstall).
 
 ## Install
 
@@ -28,7 +81,7 @@ You need:
   enough — nothing to install
 - an account that can write to `/Applications` (the usual admin account; no
   `sudo` anywhere)
-- **Node 18+** only if you want to run the test suite
+- **Node** only if you want to run the test suite — tested on 22
 
 ```bash
 python3 install-island-app.py        # build → /Applications/Perch.app → launch at login
@@ -79,9 +132,7 @@ rm -rf ~/Library/Group\ Containers/group.io.github.mossfinch.perch
 ```
 
 It holds the exercise log (`care-ledger.json`) and the agent event log
-(`agent-events/*.jsonl`). The event log records the **full path of every
-project** you ran an agent in — so if you care about that, this is the one to
-delete.
+(`agent-events/*.jsonl`) — the one that carries your project paths.
 
 ## If you change the App Group name
 

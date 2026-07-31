@@ -1,8 +1,11 @@
 # Perch
 
+**A Mac notch companion that watches your coding agents and turns their wait
+time into 30-second resets.**
+
 You give Claude Code or codex a task. Then you wait.
 
-That wait is awkward. It is usually too short to start anything real, and too
+That wait is awkward. It is often too short to start something else, and too
 unpredictable to walk away from — the agent may want an approval at any moment.
 So you open another tab, pick up your phone, and keep half an eye on the
 terminal.
@@ -13,9 +16,9 @@ It lives in your Mac's notch: blue while an agent is working, yellow when it
 needs you, green when it is done. You can look away without wondering whether
 you missed something.
 
-And while you are away from the terminal, it offers a 30-second move for your
-neck, shoulders or eyes — illustrated, paced by a beat, and logged when you
-finish it.
+And while the agent is running, it offers a 30-second move for your neck,
+shoulders or eyes — illustrated, paced by a beat, and logged when you finish
+it.
 
 **That waiting time is already part of your day. Perch turns it into a small
 reset instead of more screen time.**
@@ -27,9 +30,8 @@ reset instead of more screen time.**
 Plenty of things remind you to take a break. They arrive while you are
 concentrating and ask you to stop what you are doing, so you dismiss them.
 
-This pause asks you to stop nothing. You have already stopped — the task is
-handed off and the agent is running. The only thing still holding you to the
-screen was not knowing when it would need you.
+This pause interrupts nothing — the handoff already created it. The only thing
+still holding you to the screen was not knowing when the agent would need you.
 
 ## How Perch watches your agents
 

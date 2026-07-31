@@ -38,13 +38,7 @@ past you while your head is up — the yellow number is what calls you back.
 by a beat, and logged when you finish it, so over time you can see what you
 actually did rather than what you meant to do.
 
-<table>
-  <tr>
-    <td align="center" width="33%"><img src="Perch/Resources/Assets.xcassets/CareMoveSideNeckTiltLeft.imageset/CareMoveSideNeckTiltLeft.png" width="190" alt="Side neck tilt"><br><sub>neck</sub></td>
-    <td align="center" width="33%"><img src="Perch/Resources/Assets.xcassets/CareMoveTrapLeft.imageset/CareMoveTrapLeft.png" width="190" alt="Trapezius release"><br><sub>shoulders</sub></td>
-    <td align="center" width="33%"><img src="Perch/Resources/Assets.xcassets/CareMoveEyeOrbitalUnder.imageset/CareMoveEyeOrbitalUnder.png" width="190" alt="Orbital massage"><br><sub>eyes</sub></td>
-  </tr>
-</table>
+![Three of the illustrated moves: a side neck tilt, a trapezius release, and an orbital massage](perch-care-moves.png)
 
 These are ordinary stretches and micro-movements for people who sit at a
 screen. Perch is not a medical device and makes no health claims — if

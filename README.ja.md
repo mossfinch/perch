@@ -4,8 +4,8 @@
 
 # Perch
 
-**Mac のノッチに住む相棒。coding agent を代わりに見張り、
-あなたと agent が過ごした 1 週間を記録し、待ち時間を 30 秒の回復に変えます。**
+**Mac のノッチに住む相棒。coding agent を見張り、あなたと agent が過ごした
+1 週間を記録し、待ち時間を埋めます。**
 
 [![License: MIT](https://img.shields.io/badge/license-MIT-4C4238.svg)](LICENSE)
 ![Platform](https://img.shields.io/badge/macOS-15%2B-C86B4A.svg)
@@ -15,6 +15,21 @@
 [English](README.md) · [简体中文](README.zh-CN.md) · **日本語**
 
 </div>
+
+## 目次
+
+- [Perch を作った理由](#perch-を作った理由)
+- [agent を代わりに見張る](#agent-を代わりに見張る)
+- [小鳥の足元にある 1 週間](#小鳥の足元にある-1-週間)
+- [30 秒エクササイズ](#30-秒エクササイズ)
+- [ローカルデータとプライバシー](#ローカルデータとプライバシー)
+- [対応している agent](#対応している-agent)
+- [インストール](#インストール)
+- [アンインストールとデータの削除](#アンインストールとデータの削除)
+- [App Group 名を変更する場合](#app-group-名を変更する場合)
+- [開発](#開発)
+- [コントリビュート](#コントリビュート)
+- [ライセンス](#ライセンス)
 
 タスクを Claude Code や codex に渡します。あとは Perch が見ています。青は agent が動いている、
 黄色はあなたを待っている、緑は終わった、という意味です。承認を見逃さないために端末を見張り続ける
@@ -290,6 +305,14 @@ node --test tests/island.test.js                          # テストを実行
 テストに含まれるプライバシーガードは、このマニフェストが対象とするファイルをすべてスキャンします。
 
 ---
+
+## コントリビュート
+
+issue と pull request を歓迎します。[CONTRIBUTING.md](CONTRIBUTING.md) には
+テストが何を拒否し、なぜ拒否するのかが書いてあります。ここでつまずく人が多いところです。
+セキュリティやプライバシーの問題は公開 issue ではなく
+[非公開のアドバイザリ](https://github.com/mossfinch/perch/security/advisories/new)
+からお願いします（[SECURITY.md](SECURITY.md)）。
 
 ## ライセンス
 

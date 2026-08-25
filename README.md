@@ -4,8 +4,8 @@
 
 # Perch
 
-**A companion in your Mac's notch that watches your coding agents,
-keeps the week they and you had, and turns waiting into a 30-second reset.**
+**A Mac notch companion that watches your coding agents, keeps the week you
+spent with them, and fills the wait.**
 
 [![License: MIT](https://img.shields.io/badge/license-MIT-4C4238.svg)](LICENSE)
 ![Platform](https://img.shields.io/badge/macOS-15%2B-C86B4A.svg)
@@ -15,6 +15,21 @@ keeps the week they and you had, and turns waiting into a 30-second reset.**
 **English** · [简体中文](README.zh-CN.md) · [日本語](README.ja.md)
 
 </div>
+
+## Contents
+
+- [Why Perch exists](#why-perch-exists)
+- [Watching your agents for you](#watching-your-agents-for-you)
+- [The week under the bird](#the-week-under-the-bird)
+- [The 30-second moves](#the-30-second-moves)
+- [Local data and privacy](#local-data-and-privacy)
+- [Supported agents](#supported-agents)
+- [Install](#install)
+- [Uninstall and delete your data](#uninstall-and-delete-your-data)
+- [If you change the App Group name](#if-you-change-the-app-group-name)
+- [Development](#development)
+- [Contributing](#contributing)
+- [License](#license)
 
 You hand a task to Claude Code or codex. Perch watches it for you: blue means
 an agent is running, yellow means it needs you, green means it is done. You can
@@ -318,6 +333,14 @@ boundary. A privacy guard in the test suite scans every file the manifest
 covers.
 
 ---
+
+## Contributing
+
+Issues and pull requests are welcome. [CONTRIBUTING.md](CONTRIBUTING.md) says
+what the tests will refuse and why, which is the part that catches people out.
+Security or privacy problems go through a
+[private advisory](https://github.com/mossfinch/perch/security/advisories/new)
+rather than a public issue — see [SECURITY.md](SECURITY.md).
 
 ## License
 

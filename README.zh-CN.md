@@ -4,8 +4,8 @@
 
 # Perch
 
-**住在 Mac 刘海里的搭档：替你盯着 coding agent，
-记下你和它们一起度过的这一周，把等待变成 30 秒的小恢复。**
+**住在 Mac 刘海里的搭档：替你盯着 coding agent，记下你和它们一起度过的这一周，
+再把等待填上。**
 
 [![License: MIT](https://img.shields.io/badge/license-MIT-4C4238.svg)](LICENSE)
 ![Platform](https://img.shields.io/badge/macOS-15%2B-C86B4A.svg)
@@ -15,6 +15,21 @@
 [English](README.md) · **简体中文** · [日本語](README.ja.md)
 
 </div>
+
+## 目录
+
+- [为什么做 Perch](#为什么做-perch)
+- [替你看着 agent](#替你看着-agent)
+- [小鸟脚下的一周](#小鸟脚下的一周)
+- [30 秒动作](#30-秒动作)
+- [本地数据与隐私](#本地数据与隐私)
+- [支持的 agent](#支持的-agent)
+- [安装](#安装)
+- [卸载与删除数据](#卸载与删除数据)
+- [如果修改 App Group 名称](#如果修改-app-group-名称)
+- [开发](#开发)
+- [参与](#参与)
+- [许可证](#许可证)
 
 你把任务交给 Claude Code 或 codex。Perch 替你看着：蓝色表示 agent 正在运行，
 黄色表示它需要你，绿色表示已经完成。你可以把视线移开，不必为了错过一次批准而一直盯着终端。
@@ -261,6 +276,13 @@ node --test tests/island.test.js                          # 运行测试
 `perch-package.json` 是公开包文件边界的唯一清单。测试中的隐私守卫会扫描清单覆盖的全部文件。
 
 ---
+
+## 参与
+
+欢迎提 issue 和 PR。[CONTRIBUTING.md](CONTRIBUTING.md) 写清楚了测试会拒绝什么、
+为什么拒绝——那部分最容易让人栽跟头。安全或隐私问题请走
+[私密通报](https://github.com/mossfinch/perch/security/advisories/new)，
+不要开公开 issue，见 [SECURITY.md](SECURITY.md)。
 
 ## 许可证
 

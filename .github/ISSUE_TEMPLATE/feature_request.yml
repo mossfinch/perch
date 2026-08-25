@@ -1,0 +1,24 @@
+name: Idea
+description: Something Perch could do, or should refuse to do
+labels: ["idea"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What are you stuck with?
+      description: The situation, not the solution. What happens today that you wish did not.
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: What you have in mind
+      description: Rough is fine. So is "no idea, but here is the problem".
+  - type: markdown
+    attributes:
+      value: |
+        Worth knowing before you write: Perch measures one thing — how quickly
+        the next round is set going after an agent finishes — and it is
+        deliberate that it never reads your screen. Ideas that need it to know
+        what you are looking at are not a small change; they are a different
+        product. Say so anyway if you think it is worth it.

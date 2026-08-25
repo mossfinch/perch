@@ -1,0 +1,56 @@
+name: Bug report
+description: Something the island does that it should not, or does not do that it should
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        A note before you start: the island can only see what the hooks tell it.
+        If a state never changes colour, the first thing to check is whether the
+        hook for that state is installed and — on codex — trusted.
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened, and what you expected instead
+      placeholder: The bird stayed on Monday all Tuesday. I expected it to move.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: How to see it again
+      description: The shortest path you know of. "Not sure" is a fine answer.
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Perch version
+      description: Perch → About, or the version the installer printed.
+      placeholder: "2.0.1"
+    validations:
+      required: true
+  - type: input
+    id: macos
+    attributes:
+      label: macOS version, and whether the Mac has a notch
+      placeholder: "15.3, notch"
+    validations:
+      required: true
+  - type: dropdown
+    id: agent
+    attributes:
+      label: Which agent
+      multiple: true
+      options:
+        - Claude Code
+        - codex
+        - Not agent-specific
+    validations:
+      required: true
+  - type: markdown
+    attributes:
+      value: |
+        ⚠️ Screenshots are welcome, but the island sits at the top of your
+        screen — crop to the island before posting, or your menu bar and open
+        windows come along with it.

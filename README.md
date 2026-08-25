@@ -2,6 +2,10 @@
 
 English · [简体中文](README.zh-CN.md) · [日本語](README.ja.md)
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-black.svg)](LICENSE)
+![Platform: macOS 15+](https://img.shields.io/badge/Platform-macOS%2015%2B-black.svg)
+![Swift 6](https://img.shields.io/badge/Swift-6-black.svg)
+
 **A coding-agent companion that lives in your Mac's notch: it watches the run
 for you, records your focus rhythm, and turns waiting into a 30-second reset.**
 

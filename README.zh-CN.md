@@ -2,6 +2,10 @@
 
 [English](README.md) · 简体中文 · [日本語](README.ja.md)
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-black.svg)](LICENSE)
+![Platform: macOS 15+](https://img.shields.io/badge/Platform-macOS%2015%2B-black.svg)
+![Swift 6](https://img.shields.io/badge/Swift-6-black.svg)
+
 **一个住在 Mac 刘海里的 coding-agent 搭档：替你盯运行状态，记录专注节奏，
 把等待变成 30 秒的小恢复。**
 

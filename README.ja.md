@@ -2,6 +2,10 @@
 
 [English](README.md) · [简体中文](README.zh-CN.md) · 日本語
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-black.svg)](LICENSE)
+![Platform: macOS 15+](https://img.shields.io/badge/Platform-macOS%2015%2B-black.svg)
+![Swift 6](https://img.shields.io/badge/Swift-6-black.svg)
+
 **Mac のノッチに住む coding agent の相棒。実行状態を代わりに見張り、集中のリズムを記録し、
 待ち時間を 30 秒の小さな回復に変えます。**
 

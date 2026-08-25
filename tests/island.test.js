@@ -5476,3 +5476,24 @@ test("the three READMEs cannot drift apart", () => {
       `${name} 的打分阶梯数字和 ${base} 对不上`);
   }
 });
+
+test("the installer reads the product's version instead of naming one", () => {
+  // A version literal in the installer is a second place the product's version
+  // lives, and the second place is the one that goes stale — this one shipped
+  // `1.0.55` long after the work had been called 2.0 everywhere else, because
+  // a working installer is not a thing anybody reads.
+  const py = fs.readFileSync(pkgPath("install-island-app.py"), "utf8");
+  const stamped = py.match(/Set :CFBundleShortVersionString ([^"']+)/)?.[1] ?? "";
+  assert.ok(stamped, "the version stamp could not be found at all — this scan is reading nothing");
+  // Control: the shape being refused must be recognisable when it is there.
+  const looksNamed = (t) => /\d+\.\d+/.test(t);
+  assert.ok(looksNamed("Set :CFBundleShortVersionString 1.0.{version}".split("String ")[1]),
+    "control: the scanner cannot see a hard-coded version even when it is present");
+  assert.ok(!looksNamed(stamped),
+    `the installer names a version itself (${stamped}) — it must read it from Info.plist`);
+
+  // And the plist is where it actually lives.
+  const plist = fs.readFileSync(islandPath("Info.plist"), "utf8");
+  assert.match(plist, /<key>CFBundleShortVersionString<\/key>\s*<string>\d+\.\d+<\/string>/,
+    "Info.plist does not carry a major.minor version for the installer to read");
+});

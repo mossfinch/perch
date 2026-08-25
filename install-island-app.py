@@ -462,6 +462,25 @@ def _build_number(plist: Path) -> int:
         return 0
 
 
+def _marketing_version(plist: Path) -> str:
+    """The version a person reads, taken from the plist that was just built.
+
+    Read rather than written in here: a literal in this file is a second place
+    the product's version lives, and the second place is the one that goes
+    stale. It did — the island shipped as `1.0.55` while everything around it
+    had been calling the work 2.0 for weeks, because this function said `1.0.`
+    and nobody looks at a working installer.
+    """
+    try:
+        data = plistlib.loads(plist.read_bytes())
+    except (OSError, plistlib.InvalidFileException):
+        return "0"
+    # Major.minor only: the build counter supplies the third component, and a
+    # plist that already carries one (a re-read of an installed copy) must not
+    # grow a fourth.
+    return ".".join(str(data.get("CFBundleShortVersionString", "0")).split(".")[:2])
+
+
 def bump_build_version(app: Path) -> str:
     """Give this local build a version nobody's macOS has seen before.
 
@@ -486,10 +505,11 @@ def bump_build_version(app: Path) -> str:
     version = max(_build_number(INSTALLED / "Contents" / "Info.plist"),
                   _build_number(app / "Contents" / "Info.plist")) + 1
     plist = app / "Contents" / "Info.plist"
+    marketing = _marketing_version(plist)
     run(["/usr/libexec/PlistBuddy", "-c", f"Set :CFBundleVersion {version}", str(plist)], check=True)
-    run(["/usr/libexec/PlistBuddy", "-c", f"Set :CFBundleShortVersionString 1.0.{version}",
+    run(["/usr/libexec/PlistBuddy", "-c", f"Set :CFBundleShortVersionString {marketing}.{version}",
          str(plist)], check=True)
-    return f"1.0.{version}"
+    return f"{marketing}.{version}"
 
 
 LSREGISTER = ("/System/Library/Frameworks/CoreServices.framework/Frameworks"

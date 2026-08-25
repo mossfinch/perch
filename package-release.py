@@ -207,14 +207,12 @@ def read_structure(raw: bytes) -> list[dict]:
     lived in the local headers alone.
 
     Byte accounting rather than boundary checks, because checking boundaries is
-    the same losing game as naming bad fields. An earlier version verified three
-    of them — nothing before the first local header, nothing after the end
-    record, central directory reaching the end record — and still passed an
-    archive with the builder's paths sitting in the unchecked span between the
-    last file's data and the central directory, while printing "no bytes outside
-    the records". Every span has to be claimed by a record, or the claim is not
-    worth making: the cursor below starts at 0, is handed from one record to the
-    next, and must land exactly on EOF.
+    the same losing game as naming bad fields: a zip has spans no boundary
+    touches — between the last file's data and the central directory, for one —
+    and anything can sit there while every boundary holds. Every span has to be
+    claimed by a record, or the claim is not worth making: the cursor below
+    starts at 0, is handed from one record to the next, and must land exactly
+    on EOF.
     """
     eocd = len(raw) - EOCD_LEN
     if eocd < 0 or raw[eocd:eocd + 4] != EOCD_SIG:

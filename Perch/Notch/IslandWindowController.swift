@@ -11,7 +11,12 @@ final class IslandWindowController: NSWindowController {
         static let externalClosedHeight: CGFloat = 38
         static let externalOpenedWidth: CGFloat = 520
         static let notchedOpenedWidth: CGFloat = 540
-        static let openedResultHeight: CGFloat = 260
+        // ⚠️ The card grows rather than the figure strip shrinking. The top
+        // band's two rows take most of the strip's slack, and the figures are
+        // what a person is actually looking at while they move — so every time
+        // something is added above, the room comes with it or the squeeze has
+        // only been moved somewhere else.
+        static let openedResultHeight: CGFloat = 298
         static let openedShadowHorizontalInset: CGFloat = 18
         static let openedShadowBottomInset: CGFloat = 22
     }

@@ -11,9 +11,25 @@ import Foundation
 enum AppGroup {
     static let id: String = {
         let value = Bundle.main.object(forInfoDictionaryKey: "AppGroupID") as? String ?? ""
-        // Must look like group.<non-empty suffix>
-        guard value.hasPrefix("group."), value.count > "group.".count else {
-            fatalError("Invalid AppGroupID in Info.plist (got \"\(value)\"), expected group.xxx.")
+        // Two accepted shapes:
+        //   group.<non-empty suffix>            — the repo default, same for everyone
+        //   <TeamID>.group.<non-empty suffix>   — stamped in at install time
+        //
+        // ⚠️ The second shape exists because macOS 15+ TCC-protects group
+        // containers: containermanagerd only waves a process through when the
+        // group id carries the signature's Team ID. A UI app can fall back to a
+        // consent prompt, but a faceless extension cannot prompt and gets EPERM
+        // forever. The prefix never appears in the repo — the installer injects
+        // it into the BUILT product only.
+        let isPlain = value.hasPrefix("group.") && value.count > "group.".count
+        let isTeamPrefixed: Bool = {
+            guard let dot = value.firstIndex(of: ".") else { return false }
+            let team = value[value.startIndex..<dot]
+            let rest = String(value[value.index(after: dot)...])
+            return !team.isEmpty && rest.hasPrefix("group.") && rest.count > "group.".count
+        }()
+        guard isPlain || isTeamPrefixed else {
+            fatalError("Invalid AppGroupID in Info.plist (got \"\(value)\"), expected group.xxx or TEAMID.group.xxx.")
         }
         return value
     }()

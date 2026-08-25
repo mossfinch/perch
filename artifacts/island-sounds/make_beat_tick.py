@@ -1,19 +1,14 @@
-"""Generate BeatTick.aiff, the island's frame-change tick for guided sessions.
+"""Regenerate BeatTick.aiff, played whenever a guided session changes frames.
 
-Why synthesize instead of picking a stock sound: system sounds all carry
-error/notification semantics (Tink too hard, Bottle too thumpy), and
-bell/chime synths are bright but trail a long tail. What's wanted here is the
-DRY tick of a mechanical clock.
+Off-the-shelf system sounds are easily heard as a notification or an error, and a long tail
+gets in the way of a continuous move, so this synthesizes an 80 ms mechanical-clock tick
+instead: a 3 ms noise burst excites 950/1600 Hz resonators, with 150 Hz laid underneath. The
+random seed is fixed, so the PCM is reproducible under the same NumPy and afconvert toolchain.
 
-How: a 3 ms noise burst excites two resonators (950/1600 Hz), plus a touch of
-150 Hz for a low "thock", the whole thing over within 80 ms. The key is NO
-trailing tail — "bright and piercing" is really brightness plus long decay; a
-dry, short sound is bright without piercing.
-
-The random seed is fixed, so this script produces the identical file whenever
-it runs (the audio is committed; it must be reproducible).
-
-    python3 make_beat_tick.py --output <target directory>
+Usage: python3 make_beat_tick.py --output <target directory>. The script needs NumPy and
+macOS afconvert; it creates the target directory, writes a 44.1 kHz mono 16-bit AIFF, and
+deletes the temporary WAV once the conversion succeeds. It only produces the audio — adding
+the file to the Xcode project or the app's resources is not its job.
 """
 import argparse
 import os
@@ -23,13 +18,15 @@ from pathlib import Path
 import numpy as np
 
 SR = 44100
-PEAK = 0.85          # normalize to 0.85 full scale: loud enough, with a little headroom
+PEAK = 0.85          # leave 15% of headroom at the peak, so it never sits at digital full scale
 SEED = 5
 
 
 def resonator(exc: np.ndarray, freq: float, r: float) -> np.ndarray:
-    """Second-order resonator: gives the noise burst a "body" that shapes the
-    tick's timbre. The closer r is to 1, the longer the tail."""
+    """Run the excitation through a second-order resonator at freq Hz, same length out.
+
+    r controls the decay; the closer to 1, the longer the tail.
+    """
     w = 2 * np.pi * freq / SR
     a1 = 2 * r * np.cos(w)
     a2 = -r * r
@@ -44,6 +41,7 @@ def resonator(exc: np.ndarray, freq: float, r: float) -> np.ndarray:
 
 
 def beat_tick() -> np.ndarray:
+    """Return the 80 ms mono float waveform from the fixed seed; not yet normalized."""
     rng = np.random.default_rng(SEED)
     dur, burst_ms = 0.08, 3.0
     n = int(SR * dur)
@@ -55,7 +53,7 @@ def beat_tick() -> np.ndarray:
     x = resonator(exc, 950, 0.9968) + 0.20 * resonator(exc, 1600, 0.994)
 
     t = np.arange(n) / SR
-    x += 0.25 * np.sin(2 * np.pi * 150 * t) * np.exp(-80 * t)   # the low "thock"; keeps it from sounding hollow
+    x += 0.25 * np.sin(2 * np.pi * 150 * t) * np.exp(-80 * t)   # fill in the low end so a short tick doesn't sound hollow
 
     return x * np.exp(-np.linspace(0, 6, n))
 

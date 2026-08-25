@@ -36,6 +36,10 @@ final class AgentEventMonitor: @unchecked Sendable {
     var onWorking: (@MainActor (String, String) -> Void)?
     var onWaiting: (@MainActor (String, String) -> Void)?
     var onComplete: (@MainActor (String, String) -> Void)?
+    var onReconciliation: ((Data, Data) -> Void)?
+
+    private static let maxReconciliationBytes = 4 * 1024 * 1024
+    private static let maxHookLedgerBytes = 8 * 1024 * 1024
 
     private let queue = DispatchQueue(label: "io.github.mossfinch.perch.agent-socket")
     private var listenFD: Int32 = -1
@@ -106,16 +110,76 @@ final class AgentEventMonitor: @unchecked Sendable {
         // timeout on every event. The byte cap keeps a wedged peer from
         // growing this without bound.
         var message = [UInt8]()
-        var chunk = [UInt8](repeating: 0, count: 512)
-        while message.count < 4096 {
+        var chunk = [UInt8](repeating: 0, count: 65536)
+        while message.count < Self.maxReconciliationBytes {
             let n = read(client, &chunk, chunk.count)
             if n <= 0 { break }   // peer closed, or the receive timeout hit
             message.append(contentsOf: chunk[0..<n])
+            let isReconciliation = message.starts(with: Array("reconciliation\t".utf8))
+            if !isReconciliation && message.count > 4096 { return }
             let tabs = message.filter { $0 == UInt8(ascii: "\t") }.count
-            if n < chunk.count, tabs >= 3 { break }
+            if !isReconciliation && n < chunk.count, tabs >= 3 { break }
         }
         guard !message.isEmpty, let text = String(bytes: message, encoding: .utf8) else { return }
+        if text.hasPrefix("hook-ledger-request\t") {
+            let parts = text.split(separator: "\t", omittingEmptySubsequences: false)
+            guard parts.count == 4,
+                  parts[3].trimmingCharacters(in: .whitespacesAndNewlines) == "reconciler",
+                  let days = Int(parts[1]), (1...31).contains(days) else {
+                respond(Data("ERR\tbad-request".utf8), to: client)
+                return
+            }
+            respondWithHookLedger(to: client, lookbackDays: days)
+            return
+        }
         deliver(text)
+    }
+
+    private func respondWithHookLedger(to client: Int32, lookbackDays: Int) {
+        let directory = AppGroup.containerURL.appendingPathComponent("agent-events")
+        let keys: Set<URLResourceKey> = [.contentModificationDateKey, .isRegularFileKey]
+        let cutoff = Date().addingTimeInterval(-TimeInterval(lookbackDays + 1) * 86_400)
+        do {
+            let files = try FileManager.default.contentsOfDirectory(
+                at: directory,
+                includingPropertiesForKeys: Array(keys),
+                options: [.skipsHiddenFiles]
+            ).filter { url in
+                guard url.pathExtension == "jsonl",
+                      let values = try? url.resourceValues(forKeys: keys),
+                      values.isRegularFile == true else { return false }
+                return (values.contentModificationDate ?? .distantPast) >= cutoff
+            }.sorted { $0.lastPathComponent < $1.lastPathComponent }
+
+            var payload = Data("OK\n".utf8)
+            for file in files {
+                let bytes = try Data(contentsOf: file)
+                if payload.count + bytes.count + 1 > Self.maxHookLedgerBytes {
+                    respond(Data("ERR\ttoo-large".utf8), to: client)
+                    return
+                }
+                payload.append(bytes)
+                if payload.last != UInt8(ascii: "\n") { payload.append(UInt8(ascii: "\n")) }
+            }
+            respond(payload, to: client)
+        } catch {
+            respond(Data("ERR\tread-failed".utf8), to: client)
+        }
+    }
+
+    private func respond(_ payload: Data, to client: Int32) {
+        var noPipe: Int32 = 1
+        setsockopt(client, SOL_SOCKET, SO_NOSIGPIPE, &noPipe, socklen_t(MemoryLayout.size(ofValue: noPipe)))
+        payload.withUnsafeBytes { raw in
+            guard var base = raw.baseAddress else { return }
+            var remaining = raw.count
+            while remaining > 0 {
+                let written = write(client, base, remaining)
+                guard written > 0 else { return }
+                remaining -= written
+                base = base.advanced(by: written)
+            }
+        }
     }
 
     private func deliver(_ text: String) {
@@ -140,6 +204,11 @@ final class AgentEventMonitor: @unchecked Sendable {
         case "complete":
             let cb = onComplete
             Task { @MainActor in cb?(project, source) }
+        case "reconciliation":
+            guard source == "reconciler",
+                  let health = Data(base64Encoded: project),
+                  let canonical = Data(base64Encoded: field(2)) else { break }
+            onReconciliation?(health, canonical)
         default:
             break
         }

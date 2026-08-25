@@ -1,33 +1,26 @@
-// The island's sources are split by duty (AgentEvents / Notch / Interface /
-// Care / Resources).
-//
-// Files are found BY NAME here, never by pinned location — what tests care
-// about was never "where a file sits" but "what it contains". Directory
-// membership is guarded by the one "island sources split into 5 duty groups"
-// test: moving directories means editing that single test, and no other
-// assertion budges.
-//
-// A separate file because both test files need it; two copies would drift.
+// One shared way for the tests to resolve paths, in the mother repo and in the extracted
+// Perch repo alike.
+// This file only locates the package and its sources; which duty directory a source belongs
+// to is verified by the structure assertions in island.test.js.
 const fs = require("node:fs");
 const path = require("node:path");
 
 const ROOT = path.resolve(__dirname, "..");
 
-// Dual layout: the same tests run in two worlds —
-//   mother-repo layout: the package lives under apps/mac-widget/ (that
-//   directory later becomes the new repo's root)
-//   Perch layout: after extraction, the package IS the repo root
-// Tests always reach into the package via PKG/pkgPath and never count "how
-// many levels up is the repo root".
+// The mother repo keeps the package under apps/mac-widget/, while the public repo has the
+// package itself as its root. Detect the layout first, so the tests resolve everything from
+// PKG and never depend on how deep the mother repo's directories go.
 const PKG = fs.existsSync(path.join(ROOT, "apps", "mac-widget", "Perch"))
   ? path.join(ROOT, "apps", "mac-widget")
   : ROOT;
+// Joins relative segments onto the detected package root and returns an absolute path.
 const pkgPath = (...p) => path.join(PKG, ...p);
 
 const ISLAND_DIR = pkgPath("Perch");
 
-/// Relative paths of everything in the island. Does not descend into
-/// .xcassets (it counts as one item); skips dot-entries and local litter.
+// Lists a directory's contents recursively, always relative to ISLAND_DIR. Dot-entries are
+// skipped; an .xcassets bundle is returned as a single asset directory rather than having
+// its contents enumerated.
 function islandTree(dir = ISLAND_DIR) {
   const out = [];
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
@@ -39,8 +32,8 @@ function islandTree(dir = ISLAND_DIR) {
   return out;
 }
 
-/// Absolute path by file name. Ambiguity or absence throws — vaguely
-/// returning the first hit lets assertions pass against the wrong file.
+// Looks a file up by name and returns its absolute path. Both absence and duplicate names
+// throw, so an assertion can never quietly read the wrong file.
 function islandPath(name) {
   const hits = islandTree().filter((p) => path.basename(p) === name);
   if (hits.length !== 1) {

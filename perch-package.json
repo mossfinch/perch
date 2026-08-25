@@ -9,7 +9,9 @@
     "LICENSE",
     "Perch",
     "Perch.xcodeproj",
+    "README.ja.md",
     "README.md",
+    "README.zh-CN.md",
     "artifacts/island-sounds",
     "export-perch.py",
     "install-codex-island-hooks.py",
@@ -19,16 +21,21 @@
     "package-release.py",
     "perch-card.png",
     "perch-care-moves.png",
+    "perch-hook.sh",
     "perch-package.json",
+    "perch-reconcile.py",
     "perch-status-key.png",
+    "perch-week-hover.png",
+    "tests/export_perch_test.py",
     "tests/installer_marker.py",
     "tests/island-paths.js",
-    "tests/island.test.js"
+    "tests/island.test.js",
+    "tests/perch_reconcile_test.py"
   ],
   "neverCopy": {
-    "**/.omc/**": "Local editor/session state. Contains full /Users/<name>/... paths, executed commands, and session ids. gitignore keeps it out of this repo, but a cp -R extraction would drag it into the new repo, and one git add . puts it in public history.",
-    "**/.DS_Store": "Finder's per-machine file; carries directory-browsing traces.",
-    "**/__pycache__/**": "Python bytecode; embeds absolute paths.",
-    "**/*.pyc": "Same as above."
+    "**/.omc/**": "Local session state; it can carry home paths, executed commands and identifiers, and must never enter public git history.",
+    "**/.DS_Store": "Per-machine directory metadata written by Finder; it has nothing to do with what the public package does.",
+    "**/__pycache__/**": "Python bytecode cache directory; its contents can embed absolute paths from the build machine.",
+    "**/*.pyc": "Python bytecode file; its contents can embed absolute paths from the build machine."
   }
 }

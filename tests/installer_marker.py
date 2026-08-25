@@ -14,6 +14,7 @@ turns it into a syntax error.
 Cut by LINE, not by regex: the marker's pattern strings contain `)`, and a
 non-greedy regex truncates there.
 """
+import os
 import pathlib
 import re
 
@@ -55,10 +56,14 @@ def load_marker(rel_path):
     NameError when the test runs it.
     """
     lines = pathlib.Path(rel_path).read_text().split("\n")
-    ns = {"re": re}
+    ns = {"re": re, "os": os}
 
+    # ⚠️ The slice must reach the LAST constant the matcher reads, not the
+    # last one that existed when this was written. `is_perch_command` also
+    # consults LAUNCHER_PATTERN now; stopping at WIRE_PATTERN left it
+    # undefined and every test running the real matcher died with a NameError.
     a = next(i for i, l in enumerate(lines) if l.startswith("OWN_ARTIFACTS = "))
-    b = next(i for i, l in enumerate(lines[a:], a) if l.startswith("WIRE_PATTERN = "))
+    b = next(i for i, l in enumerate(lines[a:], a) if l.startswith("LAUNCHER_PATTERN = "))
     exec("\n".join(lines[a:b + 1]), ns)
 
     return load_functions(

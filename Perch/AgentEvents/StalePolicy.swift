@@ -1,30 +1,31 @@
 import Foundation
 
-/// Staleness policy for project status dots: how long without a new event
-/// before a dot gets removed.
+/// Decides when the island drops a project status that has stopped updating.
 ///
-/// Deliberately a pure-Foundation file taking Bool parameters instead of the
-/// status enum (which lives on the AppKit side): this lets behavior tests
-/// drive the policy directly — feed "state + quiet duration", assert keep or
-/// drop.
+/// Callers supply whether a project is waiting for approval and how many seconds have
+/// passed since its last event; this type only defines the timeout thresholds. It does not
+/// read events, keep state, or decide any color or style in the interface. Depending on
+/// Foundation alone and expressing the waiting state as a Bool keeps the policy reusable
+/// and testable without pulling in the interface layer.
 enum StalePolicy {
-    /// Blue (working) / green (done): drop after 15 minutes without events.
-    /// There is no reliable "session ended" signal, so prolonged silence is
-    /// the only way to conclude a run is over.
+    /// Projects that are working or just finished expire after 15 minutes of silence.
+    /// These states have no reliable end-of-session event, so a bounded quiet period is
+    /// what reclaims a status whose run has probably ended without sending anything more.
     static let busy: TimeInterval = 15 * 60
 
-    /// Yellow (waiting for approval) gets its own, longer limit: yellow means
-    /// "parked here waiting for a human", so it must survive a long absence.
-    /// But a session that simply gets closed sends no further events, and a
-    /// never-expiring dot would hang forever — 8 hours ≈ one workday; beyond
-    /// that, assume the human is gone.
+    /// Projects waiting for approval are allowed 8 hours of silence.
+    /// A long stretch without events is normal while waiting, so the threshold is longer
+    /// than the others. It still needs an upper bound: a session that is simply closed may
+    /// never send another event, and the leftover status would otherwise show forever.
     static let waiting: TimeInterval = 8 * 60 * 60
 
+    /// Returns the timeout, in seconds, that applies to the current state.
     static func limit(isWaiting: Bool) -> TimeInterval {
         isWaiting ? waiting : busy
     }
 
-    /// `age` = time since the last event.
+    /// Reports whether the time since the last event has passed the threshold.
+    /// Exactly at the threshold the status is kept; only strictly beyond it counts as stale.
     static func isStale(isWaiting: Bool, age: TimeInterval) -> Bool {
         age > limit(isWaiting: isWaiting)
     }

@@ -62,10 +62,18 @@ def app_group_id() -> str:
         )
     out = subprocess.run(["/usr/libexec/PlistBuddy", "-c", "Print :AppGroupID", plist],
                          capture_output=True, text=True).stdout.strip()
-    # Must look like group.<something>, with NO Team prefix: the Team ID gets
-    # stamped into the shipped binary via the entitlement, and creates a
-    # folder named after it on every user's machine.
-    if not out.startswith("group.") or not out.removeprefix("group."):
+    # Two shapes are accepted, mirroring AppGroup.swift:
+    #   group.<suffix>            — the repo default, prefix-free
+    #   <TeamID>.group.<suffix>   — install-island-app.py stamped a signing Team
+    #                               ID into this machine's build so the faceless
+    #                               desktop widget can read the container on
+    #                               macOS 15+ (containermanagerd's TCC rule).
+    # The socket lives in whichever container the installed app actually uses,
+    # so the full value (prefix included) is what we return. A Team ID never
+    # appears here as a literal — it rides in from the installed plist.
+    # Strip an optional "<TeamID>." prefix, then the core must be group.<suffix>.
+    core = out[out.index("group."):] if ".group." in out and not out.startswith("group.") else out
+    if not core.startswith("group.") or not core.removeprefix("group."):
         raise SystemExit(f"Bad App Group in the installed app (got {out!r}); rebuild and reinstall.")
     return out
 
@@ -117,8 +125,43 @@ ARTIFACT_PATTERN = re.compile(
 WIRE_PATTERN = re.compile("-\\$\\$(?:\\\\t|\\t)(?:claude|codex)")
 
 
+# The launcher's own path is the identity of every command written from now
+# on. It is ours by construction — no other tool invokes a binary out of
+# `~/.perch/bin` — so it needs no second condition the way an inline
+# `bridge.sock` did.
+LAUNCHER = os.path.expanduser("~/.perch/bin/perch-hook")
+LAUNCHER_PATTERN = re.compile(r"\.perch/bin/perch-hook")
+
+
 def is_perch_command(command: str) -> bool:
+    """⚠️ Recognizes BOTH shapes, and must keep doing so. Commands written
+    before the launcher carry the socket inline; if a reinstall stopped
+    recognizing those it would leave them in place and append the new ones
+    beside them — every hook firing twice, one of the two pushing at a socket
+    nobody listens on. On this side that would also shift positions and break
+    other tools' trust hashes."""
+    if LAUNCHER_PATTERN.search(command):
+        return True
     return bool(ARTIFACT_PATTERN.search(command) and WIRE_PATTERN.search(command))
+
+
+def install_launcher(source: str | None = None, target: str | None = None) -> str:
+    """Put `perch-hook` at its fixed path, executable.
+
+    Written atomically: this file is invoked by every hook, and a half-written
+    launcher would break codex's own tool calls, not just ours.
+    """
+    src = source or os.path.join(os.path.dirname(os.path.abspath(__file__)), "perch-hook.sh")
+    dst = target or LAUNCHER
+    os.makedirs(os.path.dirname(dst), exist_ok=True)
+    with open(src, encoding="utf-8") as f:
+        text = f.read()
+    tmp = dst + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        f.write(text)
+    os.chmod(tmp, 0o755)
+    os.replace(tmp, dst)
+    return dst
 
 # PostToolUse also pushes working: yellow would otherwise never exit —
 # approving emits NO event, and UserPromptSubmit only fires when the human
@@ -149,27 +192,22 @@ NOTIFY_SCRIPT = os.path.expanduser("~/.codex/hooks/codex-notify-sound.sh")
 NOTIFY_MARK = "Perch"
 
 
-def hook_command(event: str, socket: str | None = None, lastrun: str | None = None) -> str:
-    """Build one hook command. `socket`/`lastrun` default to the installed
-    island's paths; tests pass explicit ones so they never need Perch
-    installed (same testability seam as the ledger store's URL parameter)."""
-    escaped_socket = (socket or socket_path()).replace('"', '\\"')
-    escaped_lastrun = (lastrun or lastrun_path()).replace('"', '\\"')
-    # Project dir is $PWD: codex's native hooks fall back to process.cwd()
-    # when resolving cwd themselves, which means hooks start in the project
-    # directory.
-    # lastrun is a flight recorder: the hook runs inside the codex process
-    # with no visible output; when something breaks, it is the only evidence
-    # separating "codex never called it" from "called but the push failed".
-    # Single file, overwritten each time — never grows.
-    return (
-        "/bin/sh -c '"
-        f'printf "{event}\\t%s\\t%s-$$\\tcodex" "$PWD" "$(date +%s)" | '
-        f'/usr/bin/nc -U -w 1 "{escaped_socket}" 2>/dev/null; '
-        f'printf "%s {event} %s rc=%s\\n" "$(date +%H:%M:%S)" "$PWD" "$?" '
-        f'> "{escaped_lastrun}" 2>/dev/null; '
-        "exit 0'"
-    )
+def hook_command(event: str, launcher: str | None = None) -> str:
+    """Build one hook command.
+
+    ⚠️ **This string must never change again, and that is the whole point of
+    this shape.** codex records trust per command TEXT, so while the socket
+    path lived inline, every container rename turned all four hooks into
+    unrecognized commands and the owner had to approve them by hand — over and
+    over, for our convenience. Worse, an inline path is fixed at install time:
+    when the island moved to a Team-prefixed container, these hooks were the
+    writer nobody remembered to reinstall, and codex's events went nowhere for
+    a day without a single error anywhere.
+
+    Everything variable — the socket, the flight recorder — now lives inside
+    the launcher and is resolved at run time. `launcher` is a seam for tests.
+    """
+    return f"'{launcher or LAUNCHER}' {event} codex"
 
 
 def load_hooks() -> dict:
@@ -418,6 +456,7 @@ def foreign_hooks(hooks: dict) -> dict:
 def main() -> None:
     group = app_group_id()   # resolve once, up front: no island installed = stop before touching anything
     socket, lastrun = socket_path(group), lastrun_path(group)
+    launcher = install_launcher()   # before the hooks reference it, never after
     root = load_hooks()
     hooks_before = json.dumps(root.get("hooks", {}), sort_keys=True)
     foreign_before = foreign_hooks(root.get("hooks", {}))
@@ -429,7 +468,7 @@ def main() -> None:
 
     needs_trust = []
     for event_name, event in EVENTS.items():
-        where, retrust = upsert(root, event_name, hook_command(event, socket, lastrun))
+        where, retrust = upsert(root, event_name, hook_command(event))
         print(f"  {event_name:20} -> {event:9} {where}")
         if retrust:
             needs_trust.append(event_name)
@@ -455,7 +494,10 @@ def main() -> None:
     write_atomic(HOOKS, json.dumps(root, indent=2, ensure_ascii=False, sort_keys=True) + "\n")
 
     print("\nCompletion bell (notify chain, no trust needed):", install_notify_tail(group))
-    print("\nWired up ->", socket)
+    print("\nWired up ->", launcher)
+    print("  it resolves the socket itself; right now that is", socket)
+    print("  ⚠️ This is the LAST time these commands change. They no longer carry the")
+    print("     container path, so renaming it will never ask for trust again.")
     if needs_trust:
         # Report the entries that ACTUALLY changed this run, never a
         # hard-coded count: unchanged hashes are still trusted, clicking them

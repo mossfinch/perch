@@ -1,22 +1,20 @@
 import Foundation
 
-/// What an agent is doing in one project.
+/// The shared model the island uses for one project's current agent status.
 ///
-/// Deliberately pure Foundation, in its own file: both the view and the view
-/// model need it, and the tally below has to be reachable by tests. Left
-/// inside `IslandViewModel.swift` it would drag AppKit and the socket
-/// listener along, and a test could not compile it on its own — which is how
-/// display logic ends up "verified" by grepping the source for words.
+/// The view and the view model share these states, and the event log uses their protocol
+/// names. This file only defines the states and how they are tallied; it does not receive
+/// events, infer status, or draw anything. Depending on Foundation alone keeps AppKit and
+/// the socket listener out of anything that uses these models or compiles behavior tests.
 enum IslandAgentStatus: Hashable {
     case idle
     case working
-    case waiting   // needs your choice/approval (driven by PermissionRequest): yellow, pulsing
-    case done      // just finished, not yet seen: persists until the next interaction
+    case waiting   // waiting on the user to choose or approve; driven by PermissionRequest
+    case done      // a completion event arrived; held until this project's next event or a timeout
 
-    /// The name written into the event log. **Deliberately aligned with the
-    /// raw strings the hooks push** (working/waiting/complete), not with the
-    /// Swift case names — the log is read by outside scripts, and matching
-    /// the wire protocol avoids translating at both ends.
+    /// The protocol name written into the event log.
+    /// The return value must stay aligned with the `working`, `waiting`, and `complete` the
+    /// hooks send: outside scripts read these stable strings, not Swift's case names.
     var logName: String {
         switch self {
         case .idle: return "idle"
@@ -27,33 +25,29 @@ enum IslandAgentStatus: Hashable {
     }
 }
 
-/// One entry of the closed capsule: a state and how many projects sit in it.
+/// One entry of the capsule's tally: a state and how many projects sit in it.
 struct StatusCount: Equatable {
     let status: IslandAgentStatus
     let count: Int
 }
 
-/// How the closed capsule reports many projects at once.
+/// Aggregates many projects into the status counts the capsule displays.
 ///
-/// The capsule has a 44×29pt wing — room for about five dots, while an
-/// afternoon of parallel agents easily runs to a dozen projects. Past that
-/// point a dot per project stops being readable anyway: the dots carry no
-/// names, so "which one went green" was never answerable from the capsule.
-/// What is worth knowing at a glance is how many sit in each state, and that
-/// is at most three numbers no matter how many projects there are — so the
-/// wing can never overflow again.
+/// The size of the output depends on the finite set of lifecycle states, not on the number
+/// of projects: more parallel projects only change each group's number, never add new
+/// display entries. This type only tallies; it decides neither the colors nor the layout of
+/// those counts.
 enum StatusTally {
-    /// Lifecycle order, and the order the capsule renders in. Fixed rather
-    /// than sorted by count: a group that keeps changing places cannot be
-    /// read at a glance.
+    /// Lifecycle order, which is also the fixed order of the output and of the capsule's
+    /// rendering. Not sorted by count, so a state does not keep changing places as its
+    /// number moves.
     static let order: [IslandAgentStatus] = [.working, .waiting, .done]
 
-    /// Non-empty groups only.
+    /// Returns the non-empty states, with their project counts, in `order`.
     ///
-    /// `idle` never appears: it is the absence of news, and a "0 idle" would
-    /// be noise. Empty groups are dropped rather than shown as zero for the
-    /// same reason — with each group carrying its own color, position is not
-    /// what identifies them, so dropping one costs nothing.
+    /// `idle` is not in `order`, so it is never emitted, and states with a count of zero are
+    /// omitted too. Callers only receive the working, waiting, or done groups that currently
+    /// need to be shown.
     static func counts(_ statuses: [IslandAgentStatus]) -> [StatusCount] {
         order.compactMap { status in
             let n = statuses.filter { $0 == status }.count

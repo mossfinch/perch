@@ -61,10 +61,18 @@ def app_group_id() -> str:
         )
     out = subprocess.run(["/usr/libexec/PlistBuddy", "-c", "Print :AppGroupID", plist],
                          capture_output=True, text=True).stdout.strip()
-    # Must look like group.<something>, with NO Team prefix: the Team ID gets
-    # stamped into the shipped binary via the entitlement, and creates a
-    # folder named after it on every user's machine.
-    if not out.startswith("group.") or not out.removeprefix("group."):
+    # Two shapes are accepted, mirroring AppGroup.swift:
+    #   group.<suffix>            — the repo default, prefix-free
+    #   <TeamID>.group.<suffix>   — install-island-app.py stamped a signing Team
+    #                               ID into this machine's build so the faceless
+    #                               desktop widget can read the container on
+    #                               macOS 15+ (containermanagerd's TCC rule).
+    # The socket lives in whichever container the installed app actually uses,
+    # so the full value (prefix included) is what we return. A Team ID never
+    # appears here as a literal — it rides in from the installed plist.
+    # Strip an optional "<TeamID>." prefix, then the core must be group.<suffix>.
+    core = out[out.index("group."):] if ".group." in out and not out.startswith("group.") else out
+    if not core.startswith("group.") or not core.removeprefix("group."):
         raise SystemExit(f"Bad App Group in the installed app (got {out!r}); rebuild and reinstall.")
     return out
 
@@ -112,8 +120,42 @@ ARTIFACT_PATTERN = re.compile(
 WIRE_PATTERN = re.compile("-\\$\\$(?:\\\\t|\\t)(?:claude|codex)")
 
 
+# The launcher's own path is the identity of every command written from now
+# on. It is ours by construction — no other tool invokes a binary out of
+# `~/.perch/bin` — so it needs no second condition the way an inline
+# `bridge.sock` did.
+LAUNCHER = os.path.expanduser("~/.perch/bin/perch-hook")
+LAUNCHER_PATTERN = re.compile(r"\.perch/bin/perch-hook")
+
+
 def is_perch_command(command: str) -> bool:
+    """⚠️ Recognizes BOTH shapes, and must keep doing so. Commands written
+    before the launcher carry the socket inline; if a reinstall stopped
+    recognizing those, it would leave them in place and append the new ones
+    beside them — every hook firing twice, one of the two pushing at a socket
+    nobody listens on."""
+    if LAUNCHER_PATTERN.search(command):
+        return True
     return bool(ARTIFACT_PATTERN.search(command) and WIRE_PATTERN.search(command))
+
+
+def install_launcher(source: str | None = None, target: str | None = None) -> str:
+    """Put `perch-hook` at its fixed path, executable.
+
+    Written atomically: this file is invoked by every hook, and a half-written
+    launcher would break the agent's own tool calls, not just ours.
+    """
+    src = source or os.path.join(os.path.dirname(os.path.abspath(__file__)), "perch-hook.sh")
+    dst = target or LAUNCHER
+    os.makedirs(os.path.dirname(dst), exist_ok=True)
+    with open(src, encoding="utf-8") as f:
+        text = f.read()
+    tmp = dst + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        f.write(text)
+    os.chmod(tmp, 0o755)
+    os.replace(tmp, dst)
+    return dst
 
 # Order = write order; has no behavioral meaning (Claude's side has no
 # position-based trust hash like codex's).
@@ -127,18 +169,21 @@ EVENTS = {
 }
 
 
-def hook_command(event: str, socket: str | None = None) -> str:
-    """Build one hook command. `socket` defaults to the installed island's
-    socket; tests pass an explicit path so they never need Perch installed
-    (same testability seam as the ledger store's URL parameter)."""
-    escaped_socket = (socket or socket_path()).replace('"', '\\"')
-    return (
-        "/bin/sh -c '"
-        f"dir=\"${{CLAUDE_PROJECT_DIR:-$PWD}}\"; "
-        f"printf \"{event}\\t%s\\t%s-$$\\tclaude\" \"$dir\" \"$(date +%s)\" | "
-        f"/usr/bin/nc -U -w 1 \"{escaped_socket}\" 2>/dev/null; "
-        "exit 0'"
-    )
+def hook_command(event: str, launcher: str | None = None) -> str:
+    """Build one hook command.
+
+    ⚠️ **This string must never change again.** It used to carry the socket
+    path inline, so every container rename rewrote all four commands — which
+    on the codex side means the owner is asked to re-approve them by hand
+    (trust is recorded per command text), and on both sides means a writer
+    that nobody remembered to reinstall keeps pushing at a socket that moved.
+    That happened: codex's hooks were missed when the island moved to a
+    Team-prefixed container and a day of its events was lost, silently.
+
+    Everything variable now lives inside the launcher, which resolves the
+    socket at run time. `launcher` is a seam for tests only.
+    """
+    return f"'{launcher or LAUNCHER}' {event} claude"
 
 
 def load_settings() -> dict:
@@ -206,6 +251,7 @@ def write_atomic(path: str, text: str) -> None:
 
 def main() -> None:
     socket = socket_path()   # resolve once, up front: no island installed = stop before touching anything
+    launcher = install_launcher()   # before the hooks reference it, never after
     settings = load_settings()
     backup = backup_settings()
     if backup:
@@ -213,12 +259,13 @@ def main() -> None:
 
     for event_name, event in EVENTS.items():
         remove_perch_hooks(settings, event_name)   # clear any prior Perch hook first (file-writer or older socket version)
-        add_hook(settings, event_name, hook_command(event, socket))
+        add_hook(settings, event_name, hook_command(event))
 
     os.makedirs(os.path.dirname(SETTINGS), exist_ok=True)
     write_atomic(SETTINGS, json.dumps(settings, indent=2) + "\n")
 
-    print("installed socket hooks ->", socket)
+    print("installed hooks ->", launcher)
+    print("  it resolves the socket itself; right now that is", socket)
 
 
 if __name__ == "__main__":

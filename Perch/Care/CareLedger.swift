@@ -2,33 +2,38 @@ import Foundation
 
 // MARK: - Care ledger: the format contract
 //
-// The island is the ONLY writer; the ledger is the island's own data (which
-// care moves you have done). Other programs are readers — they read it from
-// the agreed location: **deliver in the agreed format, share no code**.
+// This file defines the v1 on-disk format of the care ledger and the entry points that
+// read and write it. The island writes a record whenever a guided move finishes, and other
+// programs read it as JSON. It does not time sessions, choose moves, or draw anything.
 //
-// File: `care-ledger.json` in the App Group container. The whole file is one
-// object:
+// The ledger lives at `care-ledger.json` in the App Group container. The root object is:
 //
-//     { "version": 1, "records": [ ...each as below... ] }
+//     { "version": 1, "records": [ ...each one as below... ] }
 //
-// A record has exactly seven fields. **Changing any of them changes the
-// contract and breaks the readers**:
+// A v1 record carries these seven fields; both the names and their meanings are part of
+// the persisted format contract:
 //
 //     date      "2026-07-27"           local date (not UTC — it asks about a human's day)
 //     moveId    "eye-orbital-massage"  move id
 //     category  "eyes"                 body area, CareCategory's raw string
-//     sets      1                      completed whole sets; partial sets don't round up
+//     sets      1                      completed whole sets; rounding happens at the writer
 //     seconds   40                     actual duration
-//     source    "island"               who wrote it; always "island" in v1
+//     source    "island"               who wrote it; the v1 writer always writes "island"
 //     at        "2026-07-27T01:59:27Z" ISO8601 timestamp
 //
-// ⚠️ Known readers use only date / sets / seconds. Deleting or renaming those
-// breaks them — and SILENTLY: whatever they cannot parse they treat as
-// absent, so a day quietly disappears from their view instead of raising.
-// Adding new fields is safe (readers ignore unknown keys); deleting and
-// renaming are not.
+// Downstream views rely on `date`, `sets` and `seconds`, and may treat a record they cannot
+// parse as absent — deleting, renaming, or changing the meaning of those fields makes a
+// day's data disappear silently. Before adding a field, confirm every reader ignores
+// unknown keys. Any incompatible change to an existing field requires a format version
+// bump and a migration of the old data.
+//
+// The current storage flow supports exactly one writer, the island. A second writer would
+// let two read-modify-write cycles overwrite each other; before allowing concurrent
+// writes, switch to a coordinated or genuinely append-only format first.
 
-/// Care categories — deliberately a standalone enum.
+/// The persisted category shared by ledger records and the move catalog.
+/// `rawValue` goes straight into the JSON, so renaming a case breaks the format and
+/// requires migrating existing records.
 enum CareCategory: String, Codable, CaseIterable, Equatable {
     case neck
     case shoulders
@@ -36,7 +41,7 @@ enum CareCategory: String, Codable, CaseIterable, Equatable {
     case face
 }
 
-/// One care record (see the format contract above).
+/// One v1 care record; see the format contract at the top of this file for field meanings.
 struct CareRecord: Codable, Equatable, Identifiable {
     var date: String
     var moveId: String
@@ -49,45 +54,48 @@ struct CareRecord: Codable, Equatable, Identifiable {
     var id: String { at + "-" + moveId }
 }
 
+/// The ledger's root object. Records are kept in append order, neither deduplicated nor
+/// sorted here.
 struct CareLedger: Codable, Equatable {
     var version: Int
     var records: [CareRecord]
 
     static let empty = CareLedger(version: 1, records: [])
 
+    /// Appends a record to the end of the in-memory ledger; writing to disk is
+    /// `CareLedgerStore`'s job.
     mutating func append(_ record: CareRecord) {
         records.append(record)
     }
 }
 
-/// Reads and writes `care-ledger.json`. The island is the only writer.
+/// Reads and replace-writes `care-ledger.json`.
 ///
-/// All three methods take a URL (defaulting to the real ledger). This seam
-/// exists so **real behavior can be tested with real code**: questions like
-/// "does an unparsable file get wiped?" must be answerable by feeding a fake
-/// file and asserting, not by grepping the source for words.
+/// Every method works on the real ledger in the App Group by default; `url` can point at a
+/// temporary or migration file instead, with identical parsing and writing semantics. This
+/// type does not coordinate multiple writers — callers must honor the single-writer
+/// constraint stated at the top of this file.
 enum CareLedgerStore {
-    /// Container: see `AppGroup.swift`. Does NOT depend on the socket
-    /// listener — the ledger has no business with the socket.
-
+    /// Where the real ledger sits inside the App Group container.
     static var ledgerURL: URL { AppGroup.containerURL.appendingPathComponent("care-ledger.json") }
 
-    /// Load the whole ledger. **"Missing" and "unreadable" are different
-    /// things and must stay separate**:
+    /// Loads the whole ledger.
     ///
-    /// - File absent → empty ledger. Normal state (no sessions yet).
-    /// - File present but unparsable → **throw**, never return empty.
+    /// A missing file means there are no records yet and yields an empty v1 ledger; a file
+    /// that exists but cannot be read or decoded throws.
     ///
-    /// If unparsable were swallowed into an empty ledger: recording goes
-    /// "load → append one → write back whole", so the next session would
-    /// overwrite the entire history with ONE new record, without a sound.
-    /// Hence: throw.
+    /// A corrupt file must never be treated as an empty ledger: the next append would then
+    /// replace the entire old ledger with one new record, silently losing the history.
     static func load(from url: URL = ledgerURL) throws -> CareLedger {
         guard FileManager.default.fileExists(atPath: url.path) else { return .empty }
         let data = try Data(contentsOf: url)
         return try JSONDecoder().decode(CareLedger.self, from: data)
     }
 
+    /// Writes the whole ledger to the given location.
+    /// Creates the parent directory, encodes the JSON with stable key order and a trailing
+    /// newline, and replaces the target file atomically; a failure to create the directory,
+    /// encode, or write throws.
     static func save(_ ledger: CareLedger, to url: URL = ledgerURL) throws {
         let directory = url.deletingLastPathComponent()
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
@@ -99,17 +107,13 @@ enum CareLedgerStore {
         try data.write(to: url, options: [.atomic])
     }
 
-    /// The only entry point for recording: load → append → save, replacing
-    /// the whole file atomically.
+    /// Loads the current ledger, appends a record at the end, writes it back atomically,
+    /// and returns the ledger as written.
     ///
-    /// If the load step cannot parse, it throws RIGHT THERE and save is never
-    /// reached — the old ledger keeps every byte. The caller
-    /// (`persistCareSession`) can handle it: hold on to the record, switch to
-    /// paused, make a sound.
-    ///
-    /// ⚠️ This is read-modify-write: valid only while the island is the sole
-    /// writer. A second writer would first require an append-only,
-    /// line-per-record format, or the two would overwrite each other.
+    /// A failed load never reaches the save step, so the original file is left untouched;
+    /// encoding and writing failures also propagate to the caller. Callers must hold on to
+    /// a record that has not been written successfully so it can be retried. Because the
+    /// whole file goes through read-modify-write, concurrent writes can still lose updates.
     @discardableResult
     static func append(_ record: CareRecord, to url: URL = ledgerURL) throws -> CareLedger {
         var ledger = try load(from: url)

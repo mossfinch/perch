@@ -7,6 +7,14 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		00A1CE0000000000000000FE /* GuidedCareCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00A1CE0000000000000000FD /* GuidedCareCard.swift */; };
+		00A1CE0000000000000000FC /* AgentActivityStrip.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00A1CE0000000000000000FB /* AgentActivityStrip.swift */; };
+		00A1CE0000000000000000FA /* TopWeekRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00A1CE0000000000000000F9 /* TopWeekRow.swift */; };
+		00A1CE0000000000000000F8 /* WeekPerch.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00A1CE0000000000000000F7 /* WeekPerch.swift */; };
+		00A1CE000000000000000A02 /* IslandViewModel+Week.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00A1CE000000000000000A01 /* IslandViewModel+Week.swift */; };
+		00A1CE000000000000000A04 /* CarouselClock.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00A1CE000000000000000A03 /* CarouselClock.swift */; };
+		00A1CE0000000000000000F6 /* ProjectCaption.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00A1CE0000000000000000F5 /* ProjectCaption.swift */; };
+		00A1CE0000000000000000F4 /* IslandPalette.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00A1CE0000000000000000F3 /* IslandPalette.swift */; };
 		00A1CE000000000000000002 /* AgentEventLog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00A1CE000000000000000001 /* AgentEventLog.swift */; };
 		00A1CE000000000000000004 /* AgentEventMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00A1CE000000000000000003 /* AgentEventMonitor.swift */; };
 		00A1CE000000000000000006 /* StalePolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00A1CE000000000000000005 /* StalePolicy.swift */; };
@@ -28,9 +36,23 @@
 		00A1CE000000000000000024 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 00A1CE000000000000000023 /* Assets.xcassets */; };
 		00A1CE000000000000000026 /* BeatTick.aiff in Resources */ = {isa = PBXBuildFile; fileRef = 00A1CE000000000000000025 /* BeatTick.aiff */; };
 		00A1CE000000000000000028 /* CompletionChime.aiff in Resources */ = {isa = PBXBuildFile; fileRef = 00A1CE000000000000000027 /* CompletionChime.aiff */; };
+		00A1CE000000000000000050 /* FlowMath.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00A1CE000000000000000051 /* FlowMath.swift */; };
+		00A1CE000000000000000069 /* DayScore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00A1CE00000000000000006A /* DayScore.swift */; };
+		00A1CE00000000000000006B /* FlowSense.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00A1CE00000000000000006C /* FlowSense.swift */; };
+00A1CE0000000000000000F2 /* DayFlow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00A1CE0000000000000000F1 /* DayFlow.swift */; };
+		00A1CE00000000000000006D /* FlowCorrectionLog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00A1CE00000000000000006E /* FlowCorrectionLog.swift */; };
+		00A1CE000000000000000070 /* SourceHealth.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00A1CE000000000000000071 /* SourceHealth.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		00A1CE0000000000000000FD /* GuidedCareCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GuidedCareCard.swift; sourceTree = "<group>"; };
+		00A1CE0000000000000000FB /* AgentActivityStrip.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentActivityStrip.swift; sourceTree = "<group>"; };
+		00A1CE0000000000000000F9 /* TopWeekRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TopWeekRow.swift; sourceTree = "<group>"; };
+		00A1CE0000000000000000F7 /* WeekPerch.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WeekPerch.swift; sourceTree = "<group>"; };
+		00A1CE000000000000000A01 /* IslandViewModel+Week.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "IslandViewModel+Week.swift"; sourceTree = "<group>"; };
+		00A1CE000000000000000A03 /* CarouselClock.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CarouselClock.swift; sourceTree = "<group>"; };
+		00A1CE0000000000000000F5 /* ProjectCaption.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProjectCaption.swift; sourceTree = "<group>"; };
+		00A1CE0000000000000000F3 /* IslandPalette.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IslandPalette.swift; sourceTree = "<group>"; };
 		00A1CE000000000000000001 /* AgentEventLog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentEventLog.swift; sourceTree = "<group>"; };
 		00A1CE000000000000000003 /* AgentEventMonitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentEventMonitor.swift; sourceTree = "<group>"; };
 		00A1CE000000000000000005 /* StalePolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StalePolicy.swift; sourceTree = "<group>"; };
@@ -55,6 +77,12 @@
 		00A1CE000000000000000029 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		00A1CE00000000000000002A /* Perch.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Perch.entitlements; sourceTree = "<group>"; };
 		00A1CE00000000000000002B /* Perch.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Perch.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		00A1CE000000000000000051 /* FlowMath.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FlowMath.swift; sourceTree = "<group>"; };
+		00A1CE00000000000000006A /* DayScore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DayScore.swift; sourceTree = "<group>"; };
+		00A1CE00000000000000006C /* FlowSense.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FlowSense.swift; sourceTree = "<group>"; };
+00A1CE0000000000000000F1 /* DayFlow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DayFlow.swift; sourceTree = "<group>"; };
+		00A1CE00000000000000006E /* FlowCorrectionLog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FlowCorrectionLog.swift; sourceTree = "<group>"; };
+		00A1CE000000000000000071 /* SourceHealth.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SourceHealth.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -73,6 +101,12 @@
 			children = (
 				00A1CE000000000000000001 /* AgentEventLog.swift */,
 				00A1CE000000000000000003 /* AgentEventMonitor.swift */,
+				00A1CE00000000000000006A /* DayScore.swift */,
+				00A1CE00000000000000006E /* FlowCorrectionLog.swift */,
+				00A1CE000000000000000051 /* FlowMath.swift */,
+				00A1CE00000000000000006C /* FlowSense.swift */,
+				00A1CE0000000000000000F1 /* DayFlow.swift */,
+				00A1CE000000000000000071 /* SourceHealth.swift */,
 				00A1CE000000000000000005 /* StalePolicy.swift */,
 			);
 			path = AgentEvents;
@@ -94,7 +128,15 @@
 			children = (
 				00A1CE00000000000000003F /* AgentStatus.swift */,
 				00A1CE00000000000000000F /* IslandView.swift */,
+				00A1CE0000000000000000FD /* GuidedCareCard.swift */,
+				00A1CE0000000000000000FB /* AgentActivityStrip.swift */,
+				00A1CE0000000000000000F9 /* TopWeekRow.swift */,
+				00A1CE0000000000000000F7 /* WeekPerch.swift */,
+				00A1CE0000000000000000F5 /* ProjectCaption.swift */,
+				00A1CE0000000000000000F3 /* IslandPalette.swift */,
 				00A1CE000000000000000011 /* IslandViewModel.swift */,
+				00A1CE000000000000000A01 /* IslandViewModel+Week.swift */,
+				00A1CE000000000000000A03 /* CarouselClock.swift */,
 			);
 			path = Interface;
 			sourceTree = "<group>";
@@ -232,11 +274,25 @@
 				00A1CE00000000000000001A /* IslandHoverMonitor.swift in Sources */,
 				00A1CE00000000000000001C /* IslandPresentationPhase.swift in Sources */,
 				00A1CE000000000000000010 /* IslandView.swift in Sources */,
+				00A1CE0000000000000000FE /* GuidedCareCard.swift in Sources */,
+				00A1CE0000000000000000FC /* AgentActivityStrip.swift in Sources */,
+				00A1CE0000000000000000FA /* TopWeekRow.swift in Sources */,
+				00A1CE0000000000000000F8 /* WeekPerch.swift in Sources */,
+				00A1CE0000000000000000F6 /* ProjectCaption.swift in Sources */,
+				00A1CE0000000000000000F4 /* IslandPalette.swift in Sources */,
 				00A1CE000000000000000040 /* AgentStatus.swift in Sources */,
 				00A1CE000000000000000012 /* IslandViewModel.swift in Sources */,
+				00A1CE000000000000000A02 /* IslandViewModel+Week.swift in Sources */,
+				00A1CE000000000000000A04 /* CarouselClock.swift in Sources */,
 				00A1CE00000000000000001E /* IslandWindowController.swift in Sources */,
 				00A1CE000000000000000022 /* PerchApp.swift in Sources */,
 				00A1CE000000000000000006 /* StalePolicy.swift in Sources */,
+				00A1CE000000000000000050 /* FlowMath.swift in Sources */,
+				00A1CE000000000000000069 /* DayScore.swift in Sources */,
+				00A1CE00000000000000006B /* FlowSense.swift in Sources */,
+				00A1CE0000000000000000F2 /* DayFlow.swift in Sources */,
+				00A1CE00000000000000006D /* FlowCorrectionLog.swift in Sources */,
+				00A1CE000000000000000070 /* SourceHealth.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

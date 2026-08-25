@@ -14,6 +14,8 @@
 
 [English](README.md) · **简体中文** · [日本語](README.ja.md)
 
+[每个版本改了什么](CHANGELOG.md)
+
 </div>
 
 ## 目录

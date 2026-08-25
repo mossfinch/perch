@@ -14,6 +14,8 @@ spent with them, and fills the wait.**
 
 **English** · [简体中文](README.zh-CN.md) · [日本語](README.ja.md)
 
+[What changed in each version](CHANGELOG.md)
+
 </div>
 
 ## Contents

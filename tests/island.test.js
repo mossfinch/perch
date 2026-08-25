@@ -5662,3 +5662,37 @@ test("a correction discards the snapshot it argues with, not the week it does no
   assert.match(week, /let correctionsAt = correctionGeneration/,
     "the corrections counter is not sampled when the read starts");
 });
+
+test("the changelog knows about the version that ships", () => {
+  // A changelog nobody updates is worse than none: it reads as a complete
+  // history right up until the moment it silently stops being one. The version
+  // in Info.plist is what actually ships, so that is the one it must name.
+  const log = fs.readFileSync(pkgPath("CHANGELOG.md"), "utf8");
+  const plist = fs.readFileSync(islandPath("Info.plist"), "utf8");
+  const version = plist.match(
+    /<key>CFBundleShortVersionString<\/key>\s*<string>([^<]+)<\/string>/)?.[1];
+  assert.ok(version, "control: the shipping version could not be read at all");
+
+  const headings = [...log.matchAll(/^## \[([^\]]+)\]/gm)].map((m) => m[1]);
+  assert.ok(headings.length >= 2, `only ${headings.length} entries — this scan is reading nothing`);
+  assert.equal(headings[0], "Unreleased",
+    "the top entry must be Unreleased, so finished work has somewhere to wait");
+  assert.ok(headings.includes(version),
+    `Info.plist ships ${version} and the changelog has never heard of it: ${headings.join(", ")}`);
+
+  // Newest first, and every released entry dated the way the format asks.
+  for (const h of headings.slice(1)) {
+    const line = log.match(new RegExp(`^## \\[${h.replace(/\./g, "\\.")}\\][^\n]*`, "m"))[0];
+    assert.match(line, /— \d{4}-\d{2}-\d{2}$/,
+      `${h} has no ISO date — "3/4" cannot be told from "4/3" by a reader elsewhere`);
+  }
+  // Control: the date check must be able to fail.
+  assert.doesNotMatch("## [9.9] — 25/08/2026", /— \d{4}-\d{2}-\d{2}$/,
+    "control: the date shape check accepts anything");
+
+  // Every version heading needs a link definition, or the compare links rot
+  // silently and nobody notices until they click one.
+  for (const h of headings) {
+    assert.ok(log.includes(`[${h}]: https://`), `${h} has no link definition at the bottom`);
+  }
+});

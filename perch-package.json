@@ -10,6 +10,7 @@
     ".github/ISSUE_TEMPLATE/feature_request.yml",
     ".github/pull_request_template.md",
     ".gitignore",
+    "CHANGELOG.md",
     "CODE_OF_CONDUCT.md",
     "CONTRIBUTING.md",
     "LICENSE",

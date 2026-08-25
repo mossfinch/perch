@@ -3614,10 +3614,15 @@ test("the week is recomputed when it is looked at, and when the date rolls over"
     "the week is read and then dropped on the floor — the branch never updates from disk");
   assert.match(landing, /self\.weekCorrections = read\.corrections/,
     "corrections are read and then dropped — a corrected day redraws as the machine's own reading");
-  // ⑥ A correction must invalidate a read already in flight, or an older
-  //    snapshot lands over the correction just written.
+  // ⑥ A correction must invalidate the SNAPSHOT half of a read already in
+  //    flight, or an older snapshot lands over the correction just written.
+  //    ⚠️ This used to demand `weekGeneration`, the read counter — which threw
+  //    away that read's seven days as well, and no press makes a measurement
+  //    stale. The two reasons to discard now have a counter each; the days-half
+  //    of the split is pinned in "a correction discards the snapshot it argues
+  //    with, not the week it does not".
   const correct = body("correctDay");
-  assert.match(correct, /weekGeneration &\+= 1/,
+  assert.match(correct, /correctionGeneration &\+= 1/,
     "a press does not invalidate an in-flight read: the correction is wiped ~0.8s later");
   //    The invalidation must complete synchronously, before this function
   //    returns; deferred by even one turn, an in-flight read still lands first.
@@ -3697,8 +3702,15 @@ test("the week you have had lives on a branch in the top band, and never floats 
   //    days painted onto it. Same invariants, new geometry.
   assert.match(perch, /\.fill\(tint\(index\)\)/,
     "a day's fill stopped being purely its own reading");
-  assert.match(perch, /guard !isFuture\(index\) else \{ return IslandPalette\.paper \}/,
+  // ⚠️ This used to pin `guard !isFuture(index)` — the day's hue turned on
+  // future-ness alone, which painted an unjudged day at 1/5 while its own text
+  // read `—`. The invariant is unchanged (a day with no reading gets no hue);
+  // what moved is the question being asked, from "has it happened" to "is
+  // there anything to show", which is the one a reader actually cares about.
+  assert.match(perch, /guard paints\(index\) else \{ return IslandPalette\.paper \}/,
     "lived and unlived days stopped being told apart by hue");
+  assert.match(perch, /private func paints\([\s\S]{0,400}!isFuture\(index\)/,
+    "the future is no longer part of what decides a day's hue");
   // ⚠️ This used to ban opacity outright, which was too broad and hid the
   //    actual rule. What fails is opacity over the GROUND: on pure black,
   //    opacity IS brightness (coral at 30% over black is the same pixels as a
@@ -5481,6 +5493,22 @@ test("the three READMEs cannot drift apart", () => {
     assert.equal(rungs(md), rungs(baseText),
       `${name} 的打分阶梯数字和 ${base} 对不上`);
   }
+
+  // ⚠️ Agreeing with each other is not enough: all three could point at a
+  // picture nobody has, and this test would stay green while the published
+  // README renders three broken images. So every LOCAL reference must exist on
+  // disk AND be carried by the manifest — a file that exists but is not listed
+  // never reaches the package, which looks identical to a reader.
+  const manifest = JSON.parse(fs.readFileSync(pkgPath("perch-package.json"), "utf8"));
+  const shipped = new Set(manifest.include.map((i) => path.basename(i)));
+  const local = [...new Set(docs.flatMap(([, md]) => images(md)))]
+    .filter((src) => !/^https?:\/\//.test(src));
+  assert.ok(local.length >= 4, `only ${local.length} local pictures found — the scan collapsed`);
+  for (const src of local) {
+    assert.ok(fs.existsSync(pkgPath(src)), `README points at ${src}, which is not in the package directory`);
+    assert.ok(shipped.has(path.basename(src)),
+      `${src} exists but the manifest does not carry it — it would not reach the published package`);
+  }
 });
 
 test("the installer reads the product's version instead of naming one", () => {
@@ -5502,4 +5530,135 @@ test("the installer reads the product's version instead of naming one", () => {
   const plist = fs.readFileSync(islandPath("Info.plist"), "utf8");
   assert.match(plist, /<key>CFBundleShortVersionString<\/key>\s*<string>\d+\.\d+<\/string>/,
     "Info.plist does not carry a major.minor version for the installer to read");
+});
+
+test("a day too thin to judge is not a day with the lowest reading", () => {
+  // `seconds == 0` had two meanings wearing one face. A day with plenty of
+  // handoffs and none of them quick really measured zero; a day with fewer
+  // than `window` pickups was never judged at all. The branch painted the
+  // second one at 1/5 (a colour claiming a reading nobody took) while the text
+  // showed `—` on the first (claiming no data about a day that was measured).
+  // Both halves are pinned here because fixing one alone just moves the lie.
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "perch-judged-"));
+  const main = path.join(tmp, "main.swift");
+  fs.writeFileSync(main, `
+import Foundation
+
+let day = Calendar.current.startOfDay(for: Date()).addingTimeInterval(-86400)
+func at(_ s: Double) -> Date { day.addingTimeInterval(3600 + s) }
+
+// One quick round trip is not enough evidence: below FlowSense.window pickups
+// the verdict refuses to answer, so this day has no reading at all.
+let thin = (0..<2).map { i in
+  FlowMath.Turn(start: at(Double(i) * 100), end: at(Double(i) * 100 + 30),
+                project: "/p/a", source: "claude", truncated: false)
+}
+// Enough pickups to answer, every one of them far too slow: measured zero.
+let slow = (0..<8).map { i in
+  FlowMath.Turn(start: at(Double(i) * 1200), end: at(Double(i) * 1200 + 60),
+                project: "/p/a", source: "claude", truncated: false)
+}
+// Enough pickups, all quick: a real reading.
+let quick = (0..<8).map { i in
+  FlowMath.Turn(start: at(Double(i) * 90), end: at(Double(i) * 90 + 30),
+                project: "/p/a", source: "claude", truncated: false)
+}
+
+// ⚠️ Go through DayFlow.week, not through a judged-ness recomputed here.
+// A harness that works the answer out for itself pins its own arithmetic and
+// lets the shipped field say anything it likes — the first draft of this test
+// did exactly that, and mutating DayFlow's line stayed green.
+func events(_ turns: [FlowMath.Turn]) -> [FlowMath.Event] {
+  turns.flatMap { [
+    FlowMath.Event(time: $0.start, event: "working", project: $0.project, source: $0.source),
+    FlowMath.Event(time: $0.end, event: "complete", project: $0.project, source: $0.source),
+  ] }
+}
+func report(_ name: String, _ turns: [FlowMath.Turn]) -> String {
+  let week = DayFlow.week(now: Date(), calendar: .current) { _, _ in events(turns) }
+  // The turns were laid on yesterday, so read yesterday's segment.
+  let key = DayScore.dayFormatter.string(from: day)
+  guard let d = week.first(where: { $0.date == key }) else { return "{\\"name\\":\\"\\(name)\\",\\"missing\\":true}" }
+  return "{\\"name\\":\\"\\(name)\\",\\"seconds\\":\\(Int(d.seconds)),\\"judged\\":\\(d.judged)}"
+}
+print("[" + [report("thin", thin), report("slow", slow), report("quick", quick)].joined(separator: ",") + "]")
+`);
+  const binary = path.join(tmp, "judged-check");
+  execFileSync("swiftc", [islandPath("FlowMath.swift"), islandPath("FlowSense.swift"),
+                          islandPath("DayScore.swift"), islandPath("DayFlow.swift"),
+                          islandPath("AgentEventLog.swift"), APP_GROUP_SWIFT,
+                          main, "-o", binary], { stdio: "pipe" });
+  const rows = JSON.parse(execFileSync(binary, { encoding: "utf8" }));
+  const by = Object.fromEntries(rows.map((r) => [r.name, r]));
+
+  // Control: the three shapes must actually differ, or the assertions below
+  // are all describing the same case.
+  assert.equal(by.thin.judged, false, "too few pickups must leave the day unjudged");
+  assert.equal(by.slow.judged, true, "enough pickups is enough to answer, however slow they were");
+  assert.equal(by.quick.judged, true);
+  assert.equal(by.thin.seconds, 0, "control: the thin day is one of the zeros");
+  assert.equal(by.slow.seconds, 0, "control: the slow day is the OTHER zero");
+  assert.ok(by.quick.seconds > 0, "control: the quick day must not be a zero at all");
+
+  // The text half: a measured zero reads 0m, an unjudged day reads nothing.
+  const row = fs.readFileSync(islandPath("TopWeekRow.swift"), "utf8");
+  assert.match(row, /static func flowLabel\([\s\S]{0,200}guard day\.judged else \{ return nil \}/,
+    "flowLabel must refuse a day that was never judged");
+  assert.match(row, /label\(seconds: day\.seconds\) \?\? "0m"/,
+    "a judged day measuring zero must read 0m, not the missing-data dash");
+  assert.doesNotMatch(row, /Self\.label\(seconds: (today|day)\.seconds\)/,
+    "a flow reading still goes through the plain label, which cannot tell the two zeros apart");
+
+  // The colour half: the branch must ask the same question.
+  const perch = fs.readFileSync(islandPath("WeekPerch.swift"), "utf8");
+  assert.match(perch, /private func paints\([\s\S]{0,400}day\.judged \|\| corrections\[day\.date\] != nil/,
+    "the branch must paint only a day with a reading, or one a person corrected");
+  assert.doesNotMatch(perch, /if !isFuture\(index\) \{\s*\n\s*UnevenRoundedRectangle/,
+    "the branch still paints on future-ness alone, which cannot tell the two zeros apart");
+});
+
+test("a correction discards the snapshot it argues with, not the week it does not", () => {
+  // Two different reasons to throw a landing read away, and only one of them
+  // makes its seven days stale:
+  //   · a newer read owns the week now — its days really are older, drop them;
+  //   · someone pressed a day while this read walked — its CORRECTIONS
+  //     snapshot predates the press, but no press changes a measurement.
+  // One counter could not tell those apart, so a single press threw away a
+  // whole week of fresh readings and left the other six days on the previous
+  // read until the card was opened again.
+  const week = fs.readFileSync(islandPath("IslandViewModel+Week.swift"), "utf8");
+  const vm = viewModelSource();
+
+  // Control: both counters must exist and be distinct, or every assertion
+  // below is describing the same variable twice.
+  assert.match(vm, /var weekGeneration = 0/, "control: the read counter is gone");
+  assert.match(vm, /var correctionGeneration = 0/, "the correction counter is gone — one counter is back");
+
+  // A press bumps the corrections counter and nothing else.
+  const correct = week.match(/func correctDay\([\s\S]*?\n    \}/)?.[0] ?? "";
+  assert.ok(correct, "correctDay not found");
+  assert.match(correct, /correctionGeneration &\+= 1/, "a press no longer invalidates the snapshot it argues with");
+  assert.doesNotMatch(correct, /weekGeneration &\+= 1/,
+    "a press invalidates the whole read again — the other six days go with it");
+
+  // The publish takes the two guards in order, and the days land between them.
+  const publish = week.match(/await MainActor\.run \{[\s\S]*?\n            \}/)?.[0] ?? "";
+  assert.ok(publish, "the publish block not found");
+  const iDays = publish.indexOf("self.week = read.days");
+  const iReadGuard = publish.indexOf("self.weekGeneration == generation");
+  const iCorrGuard = publish.indexOf("self.correctionGeneration == correctionsAt");
+  const iCorr = publish.indexOf("self.weekCorrections = read.corrections");
+  assert.ok(iReadGuard >= 0 && iDays >= 0 && iCorrGuard >= 0 && iCorr >= 0,
+    "the publish block lost one of its four moving parts");
+  assert.ok(iReadGuard < iDays,
+    "the days publish before the newer-read check — stale over fresh is back");
+  assert.ok(iDays < iCorrGuard,
+    "the days are behind the corrections guard again, so a press still drops them");
+  assert.ok(iCorrGuard < iCorr,
+    "the corrections publish unguarded — a snapshot older than the press wins");
+
+  // The read has to capture the corrections counter at START, or comparing it
+  // at landing time compares a value with itself.
+  assert.match(week, /let correctionsAt = correctionGeneration/,
+    "the corrections counter is not sampled when the read starts");
 });

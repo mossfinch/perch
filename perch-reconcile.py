@@ -413,6 +413,19 @@ def _is_replayed_turn(turn):
 
 
 def scan_codex(root, modified_since=None):
+    """Reconstruct turns from Codex ``rollout-*.jsonl`` files without reading conversation bodies.
+
+    A missing ``root`` returns an empty result. ``modified_since`` uses file
+    modification times only to prune the scan; an unparseable value is treated
+    as no boundary. The caller still decides whether turns fall inside its
+    settlement window using provider timestamps. Replayed turns in a resumed
+    session must not overwrite their original end times, and turns without a
+    terminal event remain ``open`` rather than receiving an inferred end.
+
+    Returns a turn mapping keyed by stable ``record_id`` plus scan diagnostics.
+    Complete malformed rows count as ``parse_errors``; an incomplete tail still
+    being appended counts only as ``partial_lines``.
+    """
     turns = {}
     available, selected = _paths_for_window(root, codex=True, modified_since=modified_since)
     diagnostics = {
@@ -520,6 +533,22 @@ def _is_claude_prompt(record):
 
 
 def scan_claude(root, modified_since=None):
+    """Reconstruct human-initiated turns from Claude transcript JSONL metadata.
+
+    A missing ``root`` returns an empty result. ``modified_since`` uses file
+    modification times only to prune the scan; an unparseable value is treated
+    as no boundary and does not replace the caller's provider-timestamp filter.
+    Meta messages, tool results, and tool-generated user rows do not start
+    turns. ``end_turn`` settles a turn as ``completed`` and an API error as
+    ``failed``. Within one transcript file, the next human prompt in the same
+    session interrupts the preceding unsettled turn. Each turn also records
+    whether it belongs to the root conversation or a sidechain.
+
+    Returns a turn mapping keyed by stable ``record_id`` plus scan diagnostics.
+    Complete malformed rows and an incomplete tail still being appended are
+    counted separately so an ordinary in-progress write is not reported as
+    source corruption.
+    """
     turns = {}
     available, selected = _paths_for_window(root, codex=False, modified_since=modified_since)
     diagnostics = {
@@ -683,6 +712,19 @@ def _turn_is_covered(turn, hook_index):
 
 
 def build_source_health(turns, hook_events, diagnostics, generated_at):
+    """Compare provider-native turns with Perch hooks to build per-source health.
+
+    ``turns`` and ``hook_events`` must already cover the same time window;
+    ``diagnostics`` supplies available and scanned file counts plus parse errors
+    for Codex and Claude. A hook proves only that the real-time channel was
+    visible while a native turn existed; it does not own the turn's outcome.
+
+    Each source is classified as ``missing``, ``healthy``,
+    ``recovered_with_gap``, or ``degraded``; any provider parse error forces a
+    degraded result. The snapshot also preserves coverage gaps, freshness,
+    incomplete tails, and replay counts. ``generated_at`` labels only when the
+    snapshot was produced.
+    """
     sources = {}
     alerts = []
     hook_index = _hook_coverage_index(hook_events)
@@ -892,6 +934,21 @@ def reconcile(
     window_start=None,
     window_end=None,
 ):
+    """Rebuild the turn ledger for a time window and assess real-time hook coverage.
+
+    ``codex_root`` and ``claude_root`` contain provider-native JSONL files;
+    ``hook_ledgers`` may contain files or directories. Turns are selected by
+    start time in the half-open interval ``[window_start, window_end)``, and
+    hooks use the same window. A missing or unparseable boundary leaves that
+    side unbounded. Every call rebuilds from the selected provider files rather
+    than trusting a prior derived cache or incremental cursor.
+
+    Returns sorted ``turns``, ``health``, and hook scan diagnostics. Supplying
+    ``out_dir`` writes ``canonical-turns.jsonl`` and ``source-health.json``;
+    otherwise the result stays in memory. Each file is replaced atomically, but
+    the pair is not a cross-file transaction. Read or write failures propagate
+    to the caller.
+    """
     # The provider timestamp remains the record filter.  Passing the same lower
     # boundary to the scanners only avoids opening files whose last append was
     # safely before it; every run still rebuilds from selected source files and

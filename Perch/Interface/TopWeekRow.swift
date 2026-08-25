@@ -65,10 +65,22 @@ private struct TodayFlowCell: View {
     /// Today's readings on the resting cycle, each duration wearing its name.
     /// The labels are what keep flow and agent run time from being read as
     /// hours worked.
+    /// A day's flow reading, or nil when there is none to give.
+    ///
+    /// The two zeros are different answers and used to look alike: a day that
+    /// really measured zero showed `—`, which claims no data about a day that
+    /// was measured; and a day too thin to judge was painted 1/5 on the branch,
+    /// which claims a reading that was never taken. This is the text half —
+    /// `WeekPerch.paints` is the colour half, and they must agree.
+    static func flowLabel(_ day: DayFlow.Day) -> String? {
+        guard day.judged else { return nil }
+        return label(seconds: day.seconds) ?? "0m"
+    }
+
     private var todayReadings: [String] {
         guard let today = week.first(where: { $0.date == todayKey }) else { return [] }
         var out: [String] = []
-        if let flow = Self.label(seconds: today.seconds) { out.append("in flow \(flow)") }
+        if let flow = Self.flowLabel(today) { out.append("in flow \(flow)") }
         if let ran = Self.label(seconds: today.workSeconds) { out.append("agents ran \(ran)") }
         return out
     }
@@ -103,7 +115,7 @@ private struct TodayFlowCell: View {
         // stays the machine's measurement.
         let level = corrections[day.date] ?? day.level
         let flow: String
-        if let time = Self.label(seconds: day.seconds) {
+        if let time = Self.flowLabel(day) {
             flow = "\(name) \(level)/5 · \(time)"
         } else {
             // A corrected day still reports its corrected level even with no

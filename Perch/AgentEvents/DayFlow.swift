@@ -30,6 +30,18 @@ enum DayFlow {
         var workSeconds: TimeInterval   // time the verdict was true
         /// 1…5. 1 is "barely there", 5 is "in it all day".
         var level: Int
+        /// Whether the verdict was answerable at all that day.
+        ///
+        /// `seconds == 0` has two meanings and they must not look alike: a day
+        /// with plenty of handoffs, none of them quick, really did measure
+        /// zero; a day with fewer than `FlowSense.window` pickups was never
+        /// judged, because the verdict refuses to answer on that little.
+        /// Painting the second one at 1/5 says "a little flow" about a day
+        /// nothing was measured on.
+        ///
+        /// ⚠️ Defaults to false so a caller that forgets shows nothing rather
+        /// than showing a level it cannot back.
+        var judged: Bool = false
     }
 
     /// The week and whatever corrections argue with it, in one call.
@@ -138,7 +150,7 @@ enum DayFlow {
             if dayStart > now {
                 // Not lived yet: asking for a future window would be a lie
                 // about what was measured.
-                out.append(Day(date: date, seconds: 0, workSeconds: 0, level: 1))
+                out.append(Day(date: date, seconds: 0, workSeconds: 0, level: 1, judged: false))
                 continue
             }
             // Today is still running: read it up to now, not to midnight.
@@ -150,8 +162,11 @@ enum DayFlow {
             // counted in both days.
             let turns = FlowMath.settle(events(dayStart, min(dayEnd.addingTimeInterval(-1), now)))
             let seconds = seconds(turns: turns)
+            // The same bar the verdict itself sets: below it `inFlow` returns
+            // false for lack of evidence, not because the day was slow.
+            let judged = FlowSense.pickupGaps(turns).count >= FlowSense.window
             out.append(Day(date: date, seconds: seconds, workSeconds: workSeconds(turns: turns),
-                           level: level(forSeconds: seconds)))
+                           level: level(forSeconds: seconds), judged: judged))
         }
         return out
     }

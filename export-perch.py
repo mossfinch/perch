@@ -197,10 +197,34 @@ def ran_count(output: str) -> int:
     return int(m.group(1)) if m else -1
 
 
+USAGE = """Usage: python3 {name} <empty target directory>
+
+Copies the public Perch package out of this working repository into a fresh
+directory: the files the manifest lists, agent notes stripped, tests run inside
+the copy, and a scan that refuses anything carrying local identity.
+
+It never runs `git init` and never publishes. Look at the result yourself, then
+put it wherever it is going.
+"""
+
+
 def main() -> None:
-    if len(sys.argv) != 2:
-        raise SystemExit(f"Usage: python3 {Path(sys.argv[0]).name} <empty target directory>")
-    target = Path(sys.argv[1]).resolve()
+    name = Path(sys.argv[0]).name
+    args = sys.argv[1:]
+    if args and args[0] in ("-h", "--help", "help"):
+        print(USAGE.format(name=name))
+        return
+    if len(args) != 1:
+        raise SystemExit(USAGE.format(name=name))
+    # ⚠️ Anything option-shaped is refused rather than taken literally. Without
+    # this, `--help` was not a request for help — it was a directory named
+    # `--help`, created and filled, which is the least expected thing a script
+    # can do to somebody reading it for the first time.
+    if args[0].startswith("-"):
+        raise SystemExit(f"{name}: '{args[0]}' looks like an option, not a directory.\n"
+                         f"Run `python3 {name} --help` for what this does, or pass a path "
+                         f"that does not start with '-'.")
+    target = Path(args[0]).resolve()
     if target.exists() and any(target.iterdir()):
         raise SystemExit(f"Target directory is not empty; refusing to pour into it: {target}\n"
                          "Extraction must start from an empty directory — with stray files mixed in, "

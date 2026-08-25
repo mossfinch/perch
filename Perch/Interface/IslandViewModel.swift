@@ -68,6 +68,15 @@ final class IslandViewModel: ObservableObject {
     @Published var todayKey: String = ""
     /// Which week read is the current one. ⚠️ Not `@Published` — nothing draws it.
     var weekGeneration = 0
+    /// Bumped by a correction, never by a read.
+    ///
+    /// ⚠️ Deliberately NOT the same counter as `weekGeneration`. A read can be
+    /// worth discarding for two different reasons — a newer read owns the week
+    /// now, or a person argued with it while it walked — and only the first one
+    /// makes its SEVEN DAYS stale. One counter cannot tell them apart, so a
+    /// correction used to throw away a whole week of fresh measurements along
+    /// with the snapshot it actually invalidated.
+    var correctionGeneration = 0
 
     /// The island's own last answer, kept because a correction has to be filed
     /// against it. What the wave is SHOWING may already be a correction, and

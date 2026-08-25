@@ -161,6 +161,33 @@ class PrivateHitTest(unittest.TestCase):
                 self.ep.private_hit(b"<string>Z9Y8X7W6V5.group.io.example.x</string>", terms),
                 "the bare value must be refused once it is a term")
 
+    def test_help_is_help_and_not_a_directory_name(self):
+        # `--help` used to be taken as the target: the script created a
+        # directory literally named `--help` and started filling it. Refusing
+        # anything option-shaped is the half that matters — a typo'd flag must
+        # not quietly become a directory either.
+        import subprocess, sys, tempfile, pathlib as _p
+        script = str(PKG / "export-perch.py")
+        with tempfile.TemporaryDirectory() as d:
+            for flag in ("--help", "-h"):
+                r = subprocess.run([sys.executable, script, flag], cwd=d,
+                                   capture_output=True, text=True)
+                self.assertEqual(r.returncode, 0, f"{flag} should print usage and succeed")
+                self.assertIn("Usage:", r.stdout, flag)
+                self.assertFalse(any(_p.Path(d).iterdir()),
+                                 f"{flag} created something on disk")
+            for bad in ("-x", "--target"):
+                r = subprocess.run([sys.executable, script, bad], cwd=d,
+                                   capture_output=True, text=True)
+                self.assertNotEqual(r.returncode, 0, f"{bad} should be refused")
+                self.assertIn("looks like an option", r.stderr + r.stdout, bad)
+                self.assertFalse(any(_p.Path(d).iterdir()),
+                                 f"{bad} created something on disk")
+            # Control: a plain path is still accepted as a target — a guard that
+            # refuses everything would pass the assertions above for free.
+            r = subprocess.run([sys.executable, script], cwd=d, capture_output=True, text=True)
+            self.assertNotEqual(r.returncode, 0, "no argument must still be a usage error")
+
     def test_a_stranger_home_path_is_caught_too(self):
         # The exact term list covers this machine only; the general pattern must
         # recognise a macOS home path from another clone.

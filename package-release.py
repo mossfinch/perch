@@ -398,6 +398,42 @@ def prove_extractable(zip_path: Path, app_name: str) -> None:
         if not os.access(app / EXEC_SUBPATH, os.X_OK):
             raise SystemExit(f"{app_name} unpacks without an executable bit — it would not launch")
         run(["codesign", "--verify", "--deep", "--strict", str(app)])
+        refuse_team_signature(app)
+
+
+def refuse_team_signature(app: Path) -> None:
+    """Refuse an archive whose signature names a development team.
+
+    A local install is DELIBERATELY signed with the owner's team: macOS gives a
+    prefixed App Group container to a team-signed app, and the desktop widget
+    needs that container. `install-island-app.py` injects it at install time
+    from a gitignored file, and nothing about it reaches the repository.
+
+    None of that may leave the machine. A Team ID is registered to a named
+    person, so a released binary carrying one links a pseudonymous repository
+    to whoever pays for the developer account — and `codesign -dv` reads it out
+    of the download in one command.
+
+    ⚠️ Until now this held because the release build path simply never signed
+    with a team (the project sets CODE_SIGNING_ALLOWED = NO, and `sign_adhoc`
+    is what runs without a config). That is a habit, not a guard: pointing this
+    script at the copy in /Applications would have packaged the team signature
+    with everything else and reported success.
+    """
+    out = subprocess.run(["codesign", "-dv", str(app)],
+                         capture_output=True, text=True).stderr
+    for line in out.splitlines():
+        key, _, value = line.partition("=")
+        if key.strip() != "TeamIdentifier":
+            continue
+        if value.strip() and value.strip() != "not set":
+            raise SystemExit(
+                f"{app.name} is signed by a development team, which names a real person.\n"
+                "A release build must be ad-hoc signed. Build without Config.xcconfig, "
+                "or point this script at a build that was.")
+        return
+    raise SystemExit("codesign said nothing about a TeamIdentifier — this check read nothing "
+                     "and its silence proves nothing.")
 
 
 def main() -> None:

@@ -91,13 +91,30 @@ struct WeekPerch: View {
         return index > todayIndex
     }
 
+    /// Whether this day has a reading to show at all.
+    ///
+    /// Three ways to have none: it has not happened yet; the verdict was never
+    /// answerable on it (too few pickups); or the days array is shorter than
+    /// the branch. A corrected day always paints — the correction IS the
+    /// reading, and it is the one case where a person outranks the measurement.
+    ///
+    /// ⚠️ An unjudged day drawing nothing looks like a future day, and that is
+    /// the intended reading: the bird says which side of today you are on, so
+    /// "left of the bird and bare" says "this happened, and nothing could be
+    /// read on it" without a fourth colour nobody would learn.
+    private func paints(_ index: Int) -> Bool {
+        guard !isFuture(index), index < days.count else { return false }
+        let day = days[index]
+        return day.judged || corrections[day.date] != nil
+    }
+
     /// One day painted onto the branch. Square where it meets its neighbours and
     /// rounded only at the branch's two ends, so it reads as wood not as pills.
     @ViewBuilder
     private func dayMark(_ index: Int, isFirst: Bool, isLast: Bool) -> some View {
         let lit = hovering == index || focused == index
         ZStack {
-            if !isFuture(index) {
+            if paints(index) {
                 UnevenRoundedRectangle(
                     topLeadingRadius: isFirst ? Self.segment.height / 2 : 0,
                     bottomLeadingRadius: isFirst ? Self.segment.height / 2 : 0,
@@ -119,7 +136,7 @@ struct WeekPerch: View {
 
     /// Hue carries "did this day happen at all"; level carries how much of it.
     private func tint(_ index: Int) -> Color {
-        guard !isFuture(index) else { return IslandPalette.paper }
+        guard paints(index) else { return IslandPalette.paper }
         return Self.composited(level: level(days[index]))
     }
 

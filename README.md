@@ -1,13 +1,20 @@
+<div align="center">
+
+<img src="perch-logo.png" alt="" width="112">
+
 # Perch
 
-English · [简体中文](README.zh-CN.md) · [日本語](README.ja.md)
+**A companion in your Mac's notch that watches your coding agents,
+keeps the week they and you had, and turns waiting into a 30-second reset.**
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-black.svg)](LICENSE)
-![Platform: macOS 15+](https://img.shields.io/badge/Platform-macOS%2015%2B-black.svg)
-![Swift 6](https://img.shields.io/badge/Swift-6-black.svg)
+[![License: MIT](https://img.shields.io/badge/license-MIT-4C4238.svg)](LICENSE)
+![Platform](https://img.shields.io/badge/macOS-15%2B-C86B4A.svg)
+![Swift 6](https://img.shields.io/badge/Swift-6-C86B4A.svg)
+![No network code](https://img.shields.io/badge/network%20code-none-4C4238.svg)
 
-**A coding-agent companion that lives in your Mac's notch: it watches the run
-for you, records your focus rhythm, and turns waiting into a 30-second reset.**
+**English** · [简体中文](README.zh-CN.md) · [日本語](README.ja.md)
+
+</div>
 
 You hand a task to Claude Code or codex. Perch watches it for you: blue means
 an agent is running, yellow means it needs you, green means it is done. You can

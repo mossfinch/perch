@@ -1,13 +1,20 @@
+<div align="center">
+
+<img src="perch-logo.png" alt="" width="112">
+
 # Perch
 
-[English](README.md) · 简体中文 · [日本語](README.ja.md)
+**住在 Mac 刘海里的搭档：替你盯着 coding agent，
+记下你和它们一起度过的这一周，把等待变成 30 秒的小恢复。**
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-black.svg)](LICENSE)
-![Platform: macOS 15+](https://img.shields.io/badge/Platform-macOS%2015%2B-black.svg)
-![Swift 6](https://img.shields.io/badge/Swift-6-black.svg)
+[![License: MIT](https://img.shields.io/badge/license-MIT-4C4238.svg)](LICENSE)
+![Platform](https://img.shields.io/badge/macOS-15%2B-C86B4A.svg)
+![Swift 6](https://img.shields.io/badge/Swift-6-C86B4A.svg)
+![No network code](https://img.shields.io/badge/network%20code-none-4C4238.svg)
 
-**一个住在 Mac 刘海里的 coding-agent 搭档：替你盯运行状态，记录专注节奏，
-把等待变成 30 秒的小恢复。**
+[English](README.md) · **简体中文** · [日本語](README.ja.md)
+
+</div>
 
 你把任务交给 Claude Code 或 codex。Perch 替你看着：蓝色表示 agent 正在运行，
 黄色表示它需要你，绿色表示已经完成。你可以把视线移开，不必为了错过一次批准而一直盯着终端。

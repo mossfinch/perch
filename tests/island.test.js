@@ -5441,7 +5441,13 @@ test("the three READMEs cannot drift apart", () => {
   // a subsection without changing the total, which a first draft of this
   // guard let through.
   const headings = (md) => [2, 3].map((n) => (md.match(new RegExp(`^#{${n}} `, "gm")) ?? []).length);
-  const images = (md) => [...md.matchAll(/!\[[^\]]*\]\(([^)]+)\)/g)].map((m) => m[1]);
+  // Both spellings: the badges and screenshots are markdown, but a centred
+  // header needs `<img>`, and a picture the scanner cannot see is a picture
+  // that can drift in one language only.
+  const images = (md) => [
+    ...[...md.matchAll(/!\[[^\]]*\]\(([^)]+)\)/g)].map((m) => m[1]),
+    ...[...md.matchAll(/<img\s[^>]*src="([^"]+)"/g)].map((m) => m[1]),
+  ];
   // The COMMANDS must be identical; the `#` comment after one is prose and gets
   // translated, and so does a <placeholder> the reader is meant to replace.
   // Comparing raw blocks would refuse a correct translation, which would train

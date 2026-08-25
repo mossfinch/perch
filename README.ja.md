@@ -1,13 +1,20 @@
+<div align="center">
+
+<img src="perch-logo.png" alt="" width="112">
+
 # Perch
 
-[English](README.md) · [简体中文](README.zh-CN.md) · 日本語
+**Mac のノッチに住む相棒。coding agent を代わりに見張り、
+あなたと agent が過ごした 1 週間を記録し、待ち時間を 30 秒の回復に変えます。**
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-black.svg)](LICENSE)
-![Platform: macOS 15+](https://img.shields.io/badge/Platform-macOS%2015%2B-black.svg)
-![Swift 6](https://img.shields.io/badge/Swift-6-black.svg)
+[![License: MIT](https://img.shields.io/badge/license-MIT-4C4238.svg)](LICENSE)
+![Platform](https://img.shields.io/badge/macOS-15%2B-C86B4A.svg)
+![Swift 6](https://img.shields.io/badge/Swift-6-C86B4A.svg)
+![No network code](https://img.shields.io/badge/network%20code-none-4C4238.svg)
 
-**Mac のノッチに住む coding agent の相棒。実行状態を代わりに見張り、集中のリズムを記録し、
-待ち時間を 30 秒の小さな回復に変えます。**
+[English](README.md) · [简体中文](README.zh-CN.md) · **日本語**
+
+</div>
 
 タスクを Claude Code や codex に渡します。あとは Perch が見ています。青は agent が動いている、
 黄色はあなたを待っている、緑は終わった、という意味です。承認を見逃さないために端末を見張り続ける

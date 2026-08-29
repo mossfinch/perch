@@ -23,7 +23,7 @@ enum FlowVerdict: String {
 /// front of the screen — a judgment that read looking something up as being
 /// absent would convict every minute of research.
 ///
-/// ⚠️ The three numbers below are provisional (n=1) and are re-derived from
+/// ⚠️ The three numbers below are provisional and are re-derived from
 /// recorded corrections, never nudged by hand.
 enum FlowSense {
     /// The median must come in under this for the verdict to be yes.
@@ -83,8 +83,7 @@ enum FlowSense {
     /// the next one was set going", so the moment it belongs to is the FINISH.
     /// Ordering by start files a long-running turn as old news when its pickup
     /// only just happened, and lets turns that began later but finished sooner
-    /// push it out of the window. Measured over 21 real days that flatters: the
-    /// start order read higher on 15 of them.
+    /// push it out of the window, which flatters the reading.
     ///
     /// ⚠️ Not by landing time either, tempting as it is. That key is
     /// `end + gap`, so a slower pickup counts as more recent purely for being

@@ -14,7 +14,7 @@ import Foundation
 /// append-only file without standing on each other.
 ///
 /// ⚠️ `island-day-report.py`'s `day_scores()` reads the same file by the same
-/// rule. Two readers, one file, and only tests/island.test.js holds the ends
+/// rule. Two readers, one file, and only the island suite holds the ends
 /// together.
 enum DayScore {
     /// ⚠️ The raw value is the LEDGER KEY and is permanent. The words shown on
@@ -94,7 +94,24 @@ enum DayScore {
             var answers = out[date] ?? DayAnswers()
             var carried = false
             for field in Field.allCases {
-                if let value = row[field.rawValue] as? Int {
+                // Absent and null are DIFFERENT answers, and the difference is
+                // the whole of taking an answer back. A line carries only the
+                // keys it names, so an absent key must leave the field alone;
+                // an explicit null is a line that names the field in order to
+                // empty it. Reading both as "no integer here" would make it
+                // impossible to say anything but a number.
+                //
+                // ⚠️ …but only where emptying is a thing that can be said. The
+                // writer refuses to empty anything except `flow`, and a rule
+                // enforced at one end of a file is not a rule: a hand-edited or
+                // future line carrying `rhythm: null` would silently erase an
+                // answer nothing else in the world can supply. Here the same
+                // limit is read back — for the other fields a null is not an
+                // answer, so it changes nothing, exactly as an absent key does.
+                if row[field.rawValue] is NSNull, field == .flow {
+                    answers[field] = nil
+                    carried = true
+                } else if let value = row[field.rawValue] as? Int {
                     answers[field] = value
                     carried = true
                 }
@@ -118,6 +135,33 @@ enum DayScore {
         let stamp = ISO8601DateFormatter()
         stamp.formatOptions = [.withInternetDateTime]
         let row: [String: Any] = ["date": date, field.rawValue: value,
+                                  "at": stamp.string(from: now)]
+        guard var data = try? JSONSerialization.data(withJSONObject: row, options: [.sortedKeys])
+        else { return false }
+        data.append(0x0A)
+        if let handle = try? FileHandle(forWritingTo: url) {
+            defer { try? handle.close() }
+            guard (try? handle.seekToEnd()) != nil else { return false }
+            return (try? handle.write(contentsOf: data)) != nil
+        }
+        return (try? data.write(to: url)) != nil
+    }
+
+    /// Take an answer back: appended like every other line, because the file is
+    /// a record of what was said and unsaying is something said.
+    ///
+    /// ⚠️ Only `flow` can be taken back, and only because it is the one field
+    /// that argues with a reading the island recomputes anyway — take away the
+    /// argument and the reading is still there. `rhythm` and `progress` answer
+    /// questions nothing else can answer, so an empty one is a hole, not a
+    /// default.
+    @discardableResult
+    static func clear(date: String, field: Field,
+                      now: Date = Date(), to url: URL = fileURL) -> Bool {
+        guard field == .flow else { return false }
+        let stamp = ISO8601DateFormatter()
+        stamp.formatOptions = [.withInternetDateTime]
+        let row: [String: Any] = ["date": date, field.rawValue: NSNull(),
                                   "at": stamp.string(from: now)]
         guard var data = try? JSONSerialization.data(withJSONObject: row, options: [.sortedKeys])
         else { return false }

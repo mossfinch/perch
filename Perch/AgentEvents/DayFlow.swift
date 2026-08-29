@@ -23,11 +23,13 @@ enum DayFlow {
     struct Day: Equatable {
         var date: String            // yyyy-MM-dd, local, same key as DayScore
         var seconds: TimeInterval
-        /// Agents' running time that day, wall clock — a DIFFERENT duration
-        /// from `seconds` and named apart on screen, because the two were read
-        /// as one number: working eight hours is not eight hours in flow. The
-        /// branch's colour stays flow-only; this rides the cell's carousel.
-        var workSeconds: TimeInterval   // time the verdict was true
+        /// Agents' running time that day, wall clock: the union of every turn
+        /// under `FlowMath.maxTurn`, so parallel work counts once. Truncated
+        /// turns count through their last observed event. This is a DIFFERENT
+        /// duration from `seconds`: working eight hours is not eight hours in
+        /// flow. The branch's colour stays flow-only; this rides the cell's
+        /// carousel.
+        var workSeconds: TimeInterval
         /// 1…5. 1 is "barely there", 5 is "in it all day".
         var level: Int
         /// Whether the verdict was answerable at all that day.

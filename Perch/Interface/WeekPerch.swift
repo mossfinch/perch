@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 
 /// The week, as a branch under a bird.
@@ -12,6 +13,9 @@ struct WeekPerch: View {
     let corrections: [String: Int]
     let today: String
     let onCorrect: (String, Int) -> Void
+    /// Take back this day's correction. Separate from `onCorrect` because it is
+    /// not a value: the ladder has no rung for "nothing said".
+    let onClear: (String) -> Void
     /// Which day the cursor is on, so the cell beside it can say what that day
     /// reads. ⚠️ Needed because one step along `alphas` is not perceptible on a
     /// 6pt bar: the colour is the reading and must not be exaggerated to be
@@ -192,6 +196,17 @@ struct WeekPerch: View {
             }
         }
         .onTapGesture { correct(hovering ?? focused) }
+        // Secondary click undoes, and undoes at once. A confirming menu was
+        // weighed and turned down: what this exists to repair is a stray
+        // PRIMARY click, and a stray secondary click costs only a correction
+        // that primary clicks can put back — the asymmetry runs the other way
+        // from the usual argument for confirmation.
+        //
+        // ⚠️ Not `TapGesture().modifiers(.control)`: that is control-click,
+        // which macOS treats AS a secondary click but which the right mouse
+        // button never produces. A right button press arrives only as
+        // `rightMouseDown`, so the catcher below is what actually hears it.
+        .overlay(SecondaryClickCatcher { clear(hovering ?? focused) })
         .focusable()
         .onMoveCommand { direction in
             guard let count = days.indices.last else { return }
@@ -225,9 +240,56 @@ struct WeekPerch: View {
 
     }
 
+    private func clear(_ index: Int?) {
+        guard let index, !isFuture(index) else { return }
+        let day = days[index]
+        guard corrections[day.date] != nil else { return }
+        onClear(day.date)
+        onInspect(day)   // the day has to be able to announce what it now reads
+
+    }
+
     static func spoken(days: [DayFlow.Day], corrections: [String: Int]) -> String {
         days.map { day in
             "\(day.date): flow \(corrections[day.date] ?? day.level) of 5"
         }.joined(separator: ", ")
+    }
+}
+
+/// Hears the right mouse button, which no SwiftUI gesture does.
+///
+/// It reports only that a secondary click happened; WHICH day it landed on
+/// comes from the same hover state the primary click reads, so the two can
+/// never disagree about what is under the pointer.
+///
+/// ⚠️ Hit testing stays off for everything else: an overlay that swallowed
+/// ordinary clicks would take the primary press with it.
+private struct SecondaryClickCatcher: NSViewRepresentable {
+    let onSecondaryClick: () -> Void
+
+    final class Catcher: NSView {
+        var onSecondaryClick: (() -> Void)?
+        override func rightMouseDown(with event: NSEvent) { onSecondaryClick?() }
+
+        /// ⚠️ Claim the click ONLY while the event in hand is a secondary one.
+        /// Returning nil always would keep every event out, this one included;
+        /// returning self always would swallow the primary click the branch
+        /// under here is listening for.
+        override func hitTest(_ point: NSPoint) -> NSView? {
+            switch NSApp.currentEvent?.type {
+            case .rightMouseDown, .rightMouseUp: return super.hitTest(point)
+            default: return nil
+            }
+        }
+    }
+
+    func makeNSView(context: Context) -> Catcher {
+        let view = Catcher()
+        view.onSecondaryClick = onSecondaryClick
+        return view
+    }
+
+    func updateNSView(_ view: Catcher, context: Context) {
+        view.onSecondaryClick = onSecondaryClick
     }
 }

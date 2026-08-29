@@ -14,17 +14,19 @@ import Foundation
 /// Why turns need settling at all: pairing "first working after a complete"
 /// with "the next complete" gets whole days wrong. An interrupted agent (Esc, a
 /// closed window) leaves a turn with no `complete`, and pure pairing welds it to
-/// the NEXT session — on one measured day a single weld inflated a 92-second
-/// stretch to 3h55m and the day's total from 6h10m to 11h29m.
+/// the NEXT session, so a stretch of seconds comes out hours long and takes the
+/// day's total with it.
 enum FlowMath {
     /// An OPEN turn whose conversation stays quiet this long is truncated at
     /// its last event. A complete is trusted across silence behind a `working`
-    /// event — a tool running quietly, and one real tool went 578 seconds
-    /// without a word — but not behind a `waiting` one, which is a person who
+    /// event — a tool can run quietly for many minutes — but not behind a
+    /// `waiting` one, which is a person who
     /// walked away from an approval prompt.
     ///
-    /// Measured: working events arrive median 10–16s apart, 93% within 30s, so
-    /// 120s is 4–12× the normal beat.
+    /// ⚠️ This has to sit WELL beyond the gap between one working event and the
+    /// next while an agent is going. A cut only a little past that gap would
+    /// truncate live turns; the boundary itself is pinned by behaviour tests,
+    /// not by this number looking reasonable.
     static let idleCut: TimeInterval = 120
 
     /// A turn longer than this is implausible — the machine slept, or the

@@ -124,6 +124,31 @@ private struct TodayFlowCell: View {
         }
         var pages = [flow]
         if let ran = Self.label(seconds: day.workSeconds) { pages.append("\(name) agents ran \(ran)") }
+        // A day carrying a hand correction says so BEFORE it says the number,
+        // because the number alone is what sends someone looking for an
+        // explanation: 4/5 beside a day that measured 3/5 reads like the
+        // island's own verdict, and nothing on screen said otherwise.
+        // The pencil marks the score; the rest of the line says how to take it
+        // back, which is the one thing a marker alone cannot tell you.
+        if corrections[day.date] != nil {
+            // ⚠️ No weekday here, and not for brevity's sake alone: this page is
+            // an instruction about the mark, while the two below it are
+            // readings about the day and keep their name. Measured at the
+            // caption's own font it is 119pt against the 140 the cell gives —
+            // with the name it came to 145 and the sentence lost its last word
+            // on screen, which is the one that said what right-click does.
+            // ⚠️ The SCORE rides on this page, not just the mark. A press
+            // confirms itself in words here because one step of the paint is
+            // not perceptible on a 6pt bar — so the page a press lands on has
+            // to carry the number it just set, or pressing answers nothing.
+            // Shorter than the fuller sentence on purpose, and shorter than
+            // the widest page this cell already prints: at this font
+            // `right-click to undo` puts the line at 139.9pt inside 140pt,
+            // which is not a margin but a coin toss between two different
+            // pieces of text-measuring code. No middle dot either — the mark
+            // already separates the score from the instruction.
+            pages.insert("\(level)/5 ✎ undo: right-click", at: 0)
+        }
         return pages
     }
 
@@ -184,7 +209,29 @@ struct TopWeekRow: View {
                 WeekPerch(days: viewModel.week,
                           corrections: viewModel.weekCorrections,
                           today: viewModel.todayKey,
-                          onCorrect: viewModel.correctDay,
+                          onCorrect: { date, value in
+                              viewModel.correctDay(date, value)
+                              // Same reason as the undo below: the cell keeps
+                              // its own clock, so without this the page that
+                              // reports the new score arrives whenever the
+                              // rotation next comes round rather than when the
+                              // press happened.
+                              inspectOrigin = Date()
+                          },
+                          onClear: { date in
+                              viewModel.clearDay(date)
+                              // ⚠️ Say it in the cell, now. Taking the
+                              // correction back changes what this day reads AND
+                              // drops a page, but the carousel keeps its own
+                              // clock: left alone, the line rolls on as if
+                              // nothing happened and the page that offered the
+                              // undo just vanishes whenever the rotation next
+                              // comes round. Restarting the pages puts the
+                              // restored reading on screen at the moment of the
+                              // press — the answer to "did that work?" is the
+                              // number itself.
+                              inspectOrigin = Date()
+                          },
                           onInspect: { day in
                               // Reset the resting cycle on hover-exit only;
                               // resetting on every move would pin it to slot

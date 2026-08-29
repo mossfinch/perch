@@ -16,8 +16,8 @@ extension IslandViewModel {
         weekGeneration &+= 1
         let generation = weekGeneration
         let correctionsAt = correctionGeneration
-        // ⚠️ OFF the main actor: a week of log measured ~0.8s against a real
-        // history, and this runs inside the panel's own opening animation.
+        // ⚠️ OFF the main actor: walking a week of log takes long enough to be
+        // seen, and this runs inside the panel's own opening animation.
         Task.detached(priority: .userInitiated) {
             let read = DayFlow.read(now: now)
             await MainActor.run { [read] in
@@ -70,6 +70,21 @@ extension IslandViewModel {
         //
         // Bumping `weekGeneration` here instead would also discard that read's
         // seven days, which no press invalidates.
+        correctionGeneration &+= 1
+    }
+
+    /// Take back a correction: the day goes back to reading what the island
+    /// measured. Not a step along the ladder — a press walks 1…5 and can never
+    /// arrive back at "nothing said", which is why an argument once started
+    /// could not be ended.
+    ///
+    /// ⚠️ Same in-flight guard as `correctDay`, and for the same reason: a read
+    /// that began before this lands after it, carrying corrections that predate
+    /// it, and the day would silently come back.
+    func clearDay(_ date: String) {
+        guard weekCorrections[date] != nil else { return }
+        guard DayScore.clear(date: date, field: .flow) else { return }
+        weekCorrections.removeValue(forKey: date)
         correctionGeneration &+= 1
     }
 }

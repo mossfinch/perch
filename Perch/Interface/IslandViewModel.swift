@@ -47,13 +47,13 @@ final class IslandViewModel: ObservableObject {
 
     /// The events the verdict is read back from, settled into turns on demand.
     ///
-    /// Held in memory while running, and **seeded from the log at launch**
-    /// (107). It used to start empty, on the argument that a fresh launch
-    /// showing "not in flow" is the conservative answer — but conservatism is
-    /// for not knowing, and the island did know: the same window was on disk
-    /// the whole time. Measured cost of the old behaviour: after three installs
-    /// in half an hour the island sat 19.5 minutes at "not in flow" with 2 of
-    /// the 5 pickups it needs, while its owner was in flow by its own rule.
+    /// Held in memory while running, and **seeded from the log at launch**.
+    /// Starting empty would look like the conservative answer — a fresh launch
+    /// says "not in flow" until it has seen enough — but conservatism is
+    /// for not knowing, and the island does know: the same window is on disk
+    /// the whole time. Starting empty costs a stretch of every launch: the
+    /// island says "not in flow" until enough pickups have landed again, and a
+    /// day with several launches in it loses that stretch several times over.
     private var recentEvents: [FlowMath.Event] = []
 
     /// The last seven days, for the branch under the bird. Recomputed rather
@@ -326,8 +326,6 @@ final class IslandViewModel: ObservableObject {
         AgentEventLog.append(project: dir, source: source, event: status.logName)
         // Unlike the line above it, this one DOES change what is on screen:
         // it is what makes the wave a reading instead of decoration.
-        // (There used to be a third line here, feeding the desktop widget's
-        // summary. It left with the widget in 096.)
         noteForFlow(project: dir, source: source, event: status.logName, at: Date())
         let wasBusy = anyBusy()
         let key = ProjectStatus.key(source: source, dir: dir)

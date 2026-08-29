@@ -300,7 +300,7 @@ python3 install-island-app.py --migrate-from <以前の-app-group-id>
 
 ```bash
 xcodebuild -project Perch.xcodeproj -scheme Perch build   # または Xcode で開く
-node --test tests/island.test.js                          # テストを実行
+node --test tests/island-*.test.js                        # テストを実行
 ```
 
 `perch-package.json` は、公開パッケージに含めるファイルの境界を定める唯一のマニフェストです。

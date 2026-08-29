@@ -9,7 +9,7 @@
      green" is enough for a small fix; a behaviour change wants a sentence
      about what you watched the island actually do. -->
 
-- [ ] `node --test tests/island.test.js` passes
+- [ ] `node --test tests/island-*.test.js` passes
 - [ ] `python3 -m unittest discover tests` passes
 
 ## Does the README still tell the truth?

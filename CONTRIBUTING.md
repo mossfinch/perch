@@ -13,7 +13,7 @@ a typo, a broken path, a wrong number — need no discussion; just send them.
 ## Running the tests
 
 ```bash
-node --test tests/island.test.js
+node --test tests/island-*.test.js
 ```
 
 ```bash

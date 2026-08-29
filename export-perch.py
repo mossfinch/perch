@@ -121,6 +121,28 @@ def local_team_ids(root: Path) -> list:
     return found
 
 
+# Text does not stay UTF-8 once it is inside a built product: plists and some
+# resource formats store it as UTF-16, and UTF-32 sails past a search written
+# for the other two. The sibling scripts in this package (`package-release.py`,
+# `install-island-app.py`) already search all five for exactly this reason —
+# this one searched UTF-8 alone, so a path that had been through a wide encoder
+# read as clean and the export printed "zero private-term hits" over it.
+#
+# ⚠️ Literals only. The patterns below stay UTF-8 on purpose: a regex over
+# UTF-16 needs a different engine, not a different needle, and a half-ported
+# one would be worse than an honest gap — it would look like coverage.
+SCAN_ENCODINGS = ("utf-8", "utf-16-le", "utf-16-be", "utf-32-le", "utf-32-be")
+# The one general shape worth carrying into the wide encodings: a home path
+# belonging to some OTHER machine is not in `terms`, so only this catches it.
+# Assembled, because the privacy guard scans this file too.
+WIDE_LITERALS = ("/Users" + "/",)
+
+
+def _needles(text: str):
+    """The same text in every encoding a built product might have stored it in."""
+    return [(text.encode(enc), enc) for enc in SCAN_ENCODINGS]
+
+
 def private_hit(buf: bytes, terms):
     """Return the first thing in these bytes that must never ship; None when
     nothing hits.
@@ -131,8 +153,18 @@ def private_hit(buf: bytes, terms):
     prove every matching branch really does refuse its input.
     """
     for t in terms:
-        if t and t.encode() in buf:
-            return f"local identity ({t})"
+        if not t:
+            continue
+        for raw, enc in _needles(t):
+            if raw in buf:
+                return (f"local identity ({t})" if enc == "utf-8"
+                        else f"local identity ({t}) encoded as {enc}")
+    for literal in WIDE_LITERALS:
+        for raw, enc in _needles(literal):
+            if enc == "utf-8":
+                continue        # the patterns below already read this one
+            if raw in buf:
+                return f"{literal!r} encoded as {enc}"
     for p in PRIVATE_PATTERNS:
         m = p.search(buf)
         if m:
@@ -178,12 +210,26 @@ def scan_for_leaks(target: Path, landed, terms, matcher=private_hit):
     probes = [b"x " + b"/Users" + b"/someone/y",
               b"x someone" + b"@" + b"example.com y",
               b"DEVELOPMENT" + b"_TEAM = " + b"A1B2C3D4E5",
+              # One per matching branch, and the wide branch needs its own:
+              # without it the encodings above are a claim, not a test.
+              ("/Users" + "/someone").encode("utf-16-le"),
               (terms[0] or "?").encode()]
     for probe in probes:
         if matcher(probe, terms) is None:
             return (f"Control group failed: the scan let {probe[:40]!r} through. It is not "
                     "detecting anything, so its silence on the real files means nothing.")
     return None
+
+
+def node_ran_count(output: str) -> int:
+    """How many tests node actually executed; -1 when it printed no known summary.
+
+    `node --test` exits 0 after running nothing at all, so the return code cannot
+    tell "everything passed" from "nothing ran". TAP prints `# tests`; Node's
+    spec reporter prints `ℹ tests`.
+    """
+    m = re.search(r"^(?:#|ℹ) tests (\d+)$", output, re.M)
+    return int(m.group(1)) if m else -1
 
 
 def ran_count(output: str) -> int:
@@ -289,9 +335,30 @@ def main() -> None:
     print("Running the tests inside the copied directory...")
     import os
     env = dict(os.environ, PYTHONDONTWRITEBYTECODE="1")
-    r = subprocess.run(["node", "--test", "tests/island.test.js"], cwd=target, env=env)
+    # ⚠️ Discovered by pattern, never by filename. The island suite is six files as
+    # of 2026-08-27, and a seventh named here by hand would be a file that exists,
+    # holds real tests, and is executed by nobody — the same shape the Python side
+    # below already avoids.
+    js_tests = sorted(p.name for p in (target / "tests").glob("*.test.js"))
+    if not js_tests:
+        raise SystemExit(
+            "No JavaScript test file in the copied package's tests/ — this gate would "
+            "wave the package through without running anything. Fix the manifest, then "
+            "extract again.")
+    r = subprocess.run(["node", "--test", "--test-reporter=tap",
+                        *[f"tests/{n}" for n in js_tests]],
+                       cwd=target, env=env, capture_output=True, text=True)
+    sys.stdout.write(r.stdout)
+    sys.stderr.write(r.stderr)
     if r.returncode != 0:
         raise SystemExit("Tests fail in the copied package — this directory is unusable; fix and extract again.")
+    js_ran = node_ran_count(r.stdout)
+    if js_ran < 1:
+        raise SystemExit(
+            f"The {len(js_tests)} JavaScript file(s) reported {js_ran} tests — a green that "
+            "means nothing. The files were found but nothing in them executed. Fix them, "
+            "then extract again.")
+    print(f"JavaScript suite really ran {js_ran} tests across {len(js_tests)} files.")
 
     # Both the JavaScript and the Python suite must run after extraction, or the
     # package can keep a failing test nobody ever executes.

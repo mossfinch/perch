@@ -327,7 +327,7 @@ atomically.
 
 ```bash
 xcodebuild -project Perch.xcodeproj -scheme Perch build   # or open in Xcode
-node --test tests/island.test.js                          # run the tests
+node --test tests/island-*.test.js                        # run the tests
 ```
 
 `perch-package.json` is the single manifest of the public package's file

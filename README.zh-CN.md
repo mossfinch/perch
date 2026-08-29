@@ -272,7 +272,7 @@ python3 install-island-app.py --migrate-from <旧的-app-group-id>
 
 ```bash
 xcodebuild -project Perch.xcodeproj -scheme Perch build   # 或使用 Xcode 打开
-node --test tests/island.test.js                          # 运行测试
+node --test tests/island-*.test.js                        # 运行测试
 ```
 
 `perch-package.json` 是公开包文件边界的唯一清单。测试中的隐私守卫会扫描清单覆盖的全部文件。

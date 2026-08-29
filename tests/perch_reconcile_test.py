@@ -3,6 +3,7 @@ import importlib.util
 import io
 import json
 import os
+import re
 import base64
 import socket
 import tempfile
@@ -28,6 +29,56 @@ def load_module():
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
+
+
+# The scheduled job does not run this file. The installer takes a byte copy to
+# `~/.perch/bin/perch-reconcile` and launchd runs that, so editing the source
+# changes nothing until the installer runs again -- and every other test here
+# reads the source, which means a fully green suite can sit beside a deployed
+# copy that is months behind and quietly seeing fewer rows.
+# Both helper scripts are deployed the same way and go stale the same way: a
+# byte copy under ~/.perch/bin that a scheduler or a provider hook runs instead
+# of the file you just edited. They are checked in one place so that neither can
+# be remembered without the other.
+DEPLOYED_COPIES = (
+    ("the history rebuild", Path.home() / ".perch" / "bin" / "perch-reconcile", MODULE_PATH),
+    ("the hook launcher", Path.home() / ".perch" / "bin" / "perch-hook", PKG / "perch-hook.sh"),
+)
+
+
+def _code_only(path):
+    """The file with its agent sticky notes taken out.
+
+    ⚠️ Sticky notes are BY DEFINITION the lines that do not ship: the publishing
+    step strips them, so a published copy and the tree it came from differ in
+    exactly those lines and in no others. Comparing raw bytes therefore calls a
+    freshly published package "stale" against the very install it was made from
+    — which is not a stale install, it is the same code wearing fewer notes.
+    Everything that decides behaviour survives this, so a real drift still shows.
+    """
+    # ⚠️ The SAME rule the publishing step uses, not a looser one of our own: it
+    # drops a line only when the line IS a note — leading space, a comment
+    # marker, then the tag. Dropping every line that merely CONTAINS the tag
+    # would also swallow a line of real code that mentions it, and a genuine
+    # drift on that line would then be normalised away into "same".
+    # ⚠️ The tag is spelled in halves for the same reason export-perch.py spells
+    # it that way: a file carrying it whole fails the residue check.
+    tag = "AIDEV"
+    note = re.compile(r"\s*(#|//)\s*" + tag + r"-(NOTE|TODO|QUESTION)\b", re.I)
+    return "\n".join(line for line in path.read_text(encoding="utf-8").split("\n")
+                     if not note.match(line))
+
+
+def deployed_copy_verdict(installed, source):
+    """Say whether the copy that runs is the CODE in this tree.
+
+    "absent" when nothing is installed, "same" when the two carry the same code,
+    and "stale" for anything else. Not mtime: a checkout resets mtime, so a fresh
+    clone of older code would look newer than the copy running it.
+    """
+    if not installed.is_file():
+        return "absent"
+    return "same" if _code_only(installed) == _code_only(source) else "stale"
 
 
 def write_jsonl(path, records, partial_tail=None):
@@ -78,6 +129,22 @@ def codex_session(session_id, cwd, turns):
     return records
 
 
+def with_ordinal(records):
+    """Re-emit Codex records the way a newer Codex writes them.
+
+    Codex began putting an ``ordinal`` between ``timestamp`` and ``type`` on
+    2026-08-21.  Nothing about the record's meaning changed — but a scanner
+    that assumes the two fields touch stops seeing the record at all, and says
+    nothing, because in its eyes the line was never a lifecycle row.
+    """
+    out = []
+    for index, record in enumerate(records):
+        moved = {"timestamp": record["timestamp"], "ordinal": index}
+        moved.update({k: v for k, v in record.items() if k != "timestamp"})
+        out.append(moved)
+    return out
+
+
 def claude_prompt(session_id, prompt_id, uuid, timestamp, cwd):
     return {
         "type": "user",
@@ -87,6 +154,31 @@ def claude_prompt(session_id, prompt_id, uuid, timestamp, cwd):
         "timestamp": timestamp,
         "cwd": cwd,
         "message": {"role": "user", "content": "fixture content is ignored"},
+    }
+
+
+def claude_assistant_real_order(session_id, uuid, timestamp, cwd, stop_reason, answer_chars):
+    """An assistant record in the field order a real transcript writes.
+
+    The fixtures above put ``type`` first, which is why they never noticed the
+    scanner reading only the head of a line: in a real transcript the whole
+    message body — the answer text and every tool input — sits BEFORE the
+    top-level ``type``, so the longer the answer, the further out that field
+    lands.  And the field that settles a turn only ever rides a long line: a
+    turn ends when the model stops talking, which is when it has said the most.
+    """
+    return {
+        "parentUuid": "parent-" + uuid,
+        "sessionId": session_id,
+        "cwd": cwd,
+        "message": {
+            "role": "assistant",
+            "content": [{"type": "text", "text": "x" * answer_chars}],
+            "stop_reason": stop_reason,
+        },
+        "type": "assistant",
+        "uuid": uuid,
+        "timestamp": timestamp,
     }
 
 
@@ -484,6 +576,70 @@ class PerchReconcileTest(unittest.TestCase):
         self.assertEqual(turns["prompt-1"]["ended_at"], "2026-08-12T10:01:00.000Z")
         self.assertEqual(turns["prompt-2"]["outcome"], "completed")
 
+    def test_codex_records_settle_when_a_new_field_lands_between_two_old_ones(self):
+        """A provider adding a field must not silently empty the rebuild.
+
+        Both sessions here are the same work written by two Codex versions and
+        differ only by an ``ordinal`` the newer one inserts.  A scanner keyed to
+        the two fields touching sees one session and not the other, and reports
+        no error either way: the rows it drops were never lifecycle rows to it.
+        The control is the old shape — green before this test existed, so it
+        cannot be what makes this test fail.
+        """
+        write_jsonl(
+            self.codex / "sessions" / "rollout-old-shape.jsonl",
+            codex_session("session-old", "/work/old",
+                          [("turn-old", "2026-08-12T10:00:00Z", "2026-08-12T10:05:00Z", "completed")]),
+        )
+        write_jsonl(
+            self.codex / "sessions" / "rollout-new-shape.jsonl",
+            with_ordinal(codex_session(
+                "session-new", "/work/new",
+                [("turn-new", "2026-08-12T11:00:00Z", "2026-08-12T11:05:00Z", "completed")])),
+        )
+        write_jsonl(self.hooks, [])
+
+        self.run_reconcile()
+        turns = {turn["turn_id"]: turn for turn in self.read_turns()}
+
+        self.assertEqual(turns["turn-old"]["outcome"], "completed")
+        self.assertEqual(turns["turn-new"]["outcome"], "completed")
+        self.assertEqual(turns["turn-new"]["ended_at"], "2026-08-12T11:05:00.000Z")
+        self.assertEqual(turns["turn-new"]["project"], "/work/new")
+
+    def test_a_long_claude_answer_still_settles_its_turn(self):
+        """Scanning one end of a line only is the same as not scanning it.
+
+        Both sessions here end the same way — the model finishes talking — and
+        differ only in how much it said.  A scanner that reads a bounded head
+        keeps every prompt (prompts are short) and drops every completion
+        (completions are long), so every turn stays open until the NEXT prompt
+        closes it as interrupted, wearing that prompt's clock.  Resume a
+        session days later and the turn reads days long.
+        """
+        write_jsonl(
+            self.claude / "project" / "claude.jsonl",
+            [
+                # Control: a short answer. It settles even when only the head is
+                # read, so on its own it can never show this bug.
+                claude_prompt("session-short", "prompt-short", "u-1", "2026-08-12T10:00:00Z", "/work/c"),
+                claude_assistant_real_order(
+                    "session-short", "a-short", "2026-08-12T10:00:30Z", "/work/c", "end_turn", 20),
+                # The same ending, said at length.
+                claude_prompt("session-long", "prompt-long", "u-2", "2026-08-12T10:00:00Z", "/work/c"),
+                claude_assistant_real_order(
+                    "session-long", "a-long", "2026-08-12T10:02:00Z", "/work/c", "end_turn", 4096),
+            ],
+        )
+        write_jsonl(self.hooks, [])
+
+        self.run_reconcile()
+        turns = {turn["turn_id"]: turn for turn in self.read_turns()}
+
+        self.assertEqual(turns["prompt-short"]["outcome"], "completed")
+        self.assertEqual(turns["prompt-long"]["outcome"], "completed")
+        self.assertEqual(turns["prompt-long"]["ended_at"], "2026-08-12T10:02:00.000Z")
+
     def test_claude_api_error_is_failed_and_open_tail_stays_open(self):
         write_jsonl(
             self.claude / "project" / "claude.jsonl",
@@ -671,6 +827,74 @@ class PerchReconcileTest(unittest.TestCase):
         self.assertEqual(result["alerts"], 2)
         self.assertEqual(result["sources"]["codex"]["status"], "missing")
         self.assertEqual(result["sources"]["claude"]["status"], "missing")
+
+    def test_deployed_copy_verdict_separates_absent_same_and_stale(self):
+        source = self.base / "perch-reconcile.py"
+        source.write_bytes(b"print('scan')\n")
+        installed = self.base / "bin" / "perch-reconcile"
+
+        self.assertEqual(deployed_copy_verdict(installed, source), "absent")
+
+        installed.parent.mkdir(parents=True)
+        installed.write_bytes(source.read_bytes())
+        self.assertEqual(deployed_copy_verdict(installed, source), "same")
+
+        # One byte is the whole point: the field that went unread in the drift
+        # this guard exists for was a single word in a regular expression.
+        source.write_bytes(b"print('scan')\n\n")
+        self.assertEqual(deployed_copy_verdict(installed, source), "stale")
+
+    def test_a_published_copy_is_not_stale_merely_for_having_lost_its_notes(self):
+        # What publishing does to a file, done here by hand: the sticky notes go
+        # and nothing else moves. This is the shape that broke the export once —
+        # the copied package was compared against the install it came from and
+        # declared out of date.
+        source = self.base / "perch-reconcile.py"
+        installed = self.base / "bin" / "perch-reconcile"
+        installed.parent.mkdir(parents=True)
+        note = "# " + "AIDEV" + "-NOTE: kept for the next reader"   # halves: see _code_only
+        installed.write_text(note + "\nprint('scan')\n", encoding="utf-8")
+        source.write_text("print('scan')\n", encoding="utf-8")
+        self.assertEqual(deployed_copy_verdict(installed, source), "same")
+
+        # Control: with the code itself changed it must still read stale, or the
+        # rule above has quietly excused everything.
+        source.write_text("print('scan twice')\n", encoding="utf-8")
+        self.assertEqual(deployed_copy_verdict(installed, source), "stale")
+
+    def test_a_line_that_merely_mentions_the_tag_is_still_compared(self):
+        # The publishing step drops a line only when the line IS a note. A rule
+        # that dropped every line MENTIONING the tag would erase this drift.
+        tag = "AIDEV" + "-NOTE"
+        source = self.base / "perch-reconcile.py"
+        installed = self.base / "bin" / "perch-reconcile"
+        installed.parent.mkdir(parents=True)
+        installed.write_text(f'marker = "{tag}"\nprint("scan")\n', encoding="utf-8")
+        source.write_text(f'marker = "{tag}!"\nprint("scan")\n', encoding="utf-8")
+        self.assertEqual(deployed_copy_verdict(installed, source), "stale")
+
+        # Control: identical code mentioning the tag must still read same, or
+        # the assertion above would pass for the wrong reason.
+        source.write_text(f'marker = "{tag}"\nprint("scan")\n', encoding="utf-8")
+        self.assertEqual(deployed_copy_verdict(installed, source), "same")
+
+    def test_what_the_schedulers_run_is_what_this_tree_holds(self):
+        checked = 0
+        for label, installed, source in DEPLOYED_COPIES:
+            with self.subTest(label):
+                verdict = deployed_copy_verdict(installed, source)
+                if verdict == "absent":
+                    continue
+                checked += 1
+                self.assertEqual(
+                    verdict,
+                    "same",
+                    f"{installed} differs from {source}: {label} is running older code than "
+                    "this tree holds. Re-run the installer that put it there.",
+                )
+        if checked == 0:
+            raise unittest.SkipTest(
+                "no helper copies installed on this machine; none of them can be stale")
 
 
 if __name__ == "__main__":

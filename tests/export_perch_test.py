@@ -37,26 +37,21 @@ def load_module():
 
 
 class RanCountTest(unittest.TestCase):
-    """Pins that a unittest discovery finding nothing still exits 0.
-    And that the counter tells zero discovery, a real count and no summary
-    apart."""
+    """Distinguish zero discovery, a real count and a missing summary."""
 
     def setUp(self):
         self.ep = load_module()
 
-    def test_the_vacuous_pass_is_real_and_is_detected(self):
-        # Runs the real unittest discover, and pins both halves at once: finding
-        # nothing exits 0 and reports zero tests.
+    def test_zero_discovery_is_detected_across_python_versions(self):
+        # Python 3.11 reports zero discovery as OK/0; Python 3.14 reports
+        # NO TESTS RAN/5. Both summaries must still parse as zero.
         with tempfile.TemporaryDirectory() as tmp:
             (Path(tmp) / "tests").mkdir()
             r = subprocess.run([sys.executable, "-B", "-m", "unittest", "discover",
                                 "-s", "tests", "-p", "no_such_file_test.py"],
                                cwd=tmp, capture_output=True, text=True)
-        self.assertEqual(r.returncode, 0,
-                         "control: this test exists because discovery-finds-nothing exits 0")
-        self.assertIn("OK", r.stderr, "control: it also prints OK")
-        # The counter must recognise zero discovery, or the gate waves through a
-        # suite that executed no test at all.
+        self.assertIn(r.returncode, (0, 5), r.stderr)
+        self.assertTrue("OK" in r.stderr or "NO TESTS RAN" in r.stderr, r.stderr)
         self.assertEqual(self.ep.ran_count(r.stderr), 0,
                          "the count parser cannot see a zero-test run, so the gate would wave it through")
 
@@ -89,6 +84,10 @@ class RanCountTest(unittest.TestCase):
         # plural blocks a valid release.
         self.assertEqual(self.ep.ran_count("Ran 1 test in 0.001s\n\nOK\n"), 1)
 
+    def test_node_spec_reporter_count_is_not_mistaken_for_no_tests(self):
+        output = "✔ example (1.2ms)\nℹ tests 93\nℹ pass 93\nℹ fail 0\n"
+        self.assertEqual(self.ep.node_ran_count(output), 93)
+
     def test_the_gate_refuses_a_suite_that_ran_nothing(self):
         # Parsing the count is not enough; main() must discover by pattern and
         # refuse a count below 1.
@@ -117,6 +116,32 @@ class PrivateHitTest(unittest.TestCase):
     def test_the_local_identity_is_caught(self):
         self.assertIsNotNone(self.ep.private_hit(b"/Users" + b"/someuser/Developer/x", self.terms))
         self.assertIsNotNone(self.ep.private_hit(b"logged in as someuser today", self.terms))
+
+    def test_the_local_identity_is_caught_in_wide_encodings(self):
+        """A path is not always UTF-8 once it is inside a built product.
+
+        Plists and some resource formats store text as UTF-16, and UTF-32 sails
+        past a search written for the other two.  The sibling scripts in this
+        same package (`package-release.py`, `install-island-app.py`) already
+        search five encodings for exactly this reason; this scanner searched
+        one, so a home path that had been through a wide encoder read as clean
+        and the export printed "zero private-term hits" over it.
+
+        The UTF-8 case is covered by `test_the_local_identity_is_caught` above
+        and is the control: it passed before this test existed, so it cannot be
+        what makes this one fail.
+        """
+        for enc in ("utf-16-le", "utf-16-be", "utf-32-le", "utf-32-be"):
+            probe = b"pad" + ("/Users" + "/someuser").encode(enc) + b"pad"
+            self.assertIsNotNone(self.ep.private_hit(probe, self.terms), enc)
+            bare = b"pad" + "someuser".encode(enc) + b"pad"
+            self.assertIsNotNone(self.ep.private_hit(bare, self.terms), enc)
+            # A home path belonging to some OTHER machine is not in `terms`, so
+            # this is the only branch that can catch it. Without its own probe
+            # the branch is guarded solely by the export's control group, and a
+            # unit test that cannot fail when it is deleted is not guarding it.
+            stranger = b"pad" + ("/Users" + "/nobodyhere").encode(enc) + b"pad"
+            self.assertIsNotNone(self.ep.private_hit(stranger, self.terms), enc)
 
     def test_an_assigned_team_id_is_caught(self):
         # A Team ID names the person who registered it. This is the shape that

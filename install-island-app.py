@@ -290,9 +290,9 @@ def strip_debug_symbols(app: Path) -> None:
     ⚠️ Order: stripping edits the executable, so it must run BEFORE signing.
     Run it after and the signature it invalidates is the one just made.
 
-    One Mach-O, because the bundle holds one program: the app extension that
-    used to sit in PlugIns/ left with the desktop widget in 096. Anything that
-    still carried those paths would be caught by `verify_shipped_bytes`.
+    One Mach-O, because the bundle holds one program: there is no app extension
+    in PlugIns/ and nothing here signs one. Anything that still carried those
+    paths would be caught by `verify_shipped_bytes`.
     """
     run(["strip", "-S", str(app / EXEC_SUBPATH)], check=True)
 
@@ -353,8 +353,8 @@ def sign_adhoc(app: Path) -> None:
     container I/O work, and a signature without the app-group entitlement gets
     denied by the sandbox on the spot.
 
-    One signature, because the bundle is one program. Until 096 an embedded
-    widget extension had to be signed FIRST — signing the app seals everything
+    One signature, because the bundle is one program. An embedded extension
+    would have to be signed FIRST — signing the app seals everything
     under Contents/, PlugIns included — and that ordering rule is gone with it.
     """
     run(["codesign", "--force", "--sign", "-",
@@ -441,8 +441,8 @@ def inject_team_prefix(app: Path, group: str) -> None:
     identical for everyone; only this local build carries the prefix, exactly
     like the debug-strip step only touches the product.
 
-    ⚠️ Why prefix at all, now that the faceless desktop widget it was introduced
-    for is gone (096): a Team-signed build's container IS `<TeamID>.group.…`,
+    ⚠️ Why prefix at all, when nothing here reads an App Group from outside the
+    app any more: a Team-signed build's container IS `<TeamID>.group.…`,
     and that is where this machine's ledger, event log and day scores already
     sit. Point Info.plist at the bare name instead and the island opens a
     different, empty folder — moving between the two shapes is what
@@ -495,7 +495,7 @@ def bump_build_version(app: Path) -> str:
     ⚠️ It was introduced for a sharper reason, worth keeping written down: macOS
     cached the desktop widget's descriptor per VERSION, so with the version
     frozen at 1 the gallery served the previous build's name and sizes while the
-    fresh extension drew today's chart. The widget left in 096; the version
+    fresh extension drew today's chart. There is no widget now; the version
     counter stays because "which build is installed" is still a question.
 
     Local-only, exactly like the Team-prefixed App Group: the committed plist
@@ -694,6 +694,33 @@ def install_app(built: Path) -> None:
     print("Installed to", INSTALLED)
 
 
+def island_launch_agent_spec(app: Path, owner: Path = Path.home()) -> dict:
+    """The island's own launchd job. Pure so tests inspect the real contract.
+
+    ⚠️ The log paths are not a debugging convenience. Without them the island's
+    standard error goes nowhere at all: a crash, a refused write, a Swift
+    precondition — none of it can be read after the fact, by anyone. The
+    reconciler beside it has had both paths since the day it was installed, and
+    the difference was an oversight rather than a decision.
+    """
+    log_dir = owner / "Library" / "Logs" / "Perch"
+    return {
+        # Literals here, as in the reconciler's spec beside it: a contract that
+        # reaches for module state cannot be lifted out and inspected on its own.
+        "Label": "io.github.mossfinch.perch",
+        "ProgramArguments": [str(app / "Contents/MacOS/Perch")],
+        "RunAtLoad": True,
+        # KeepAlive must be False. A manually quit island should stay quit;
+        # and the single-instance guard makes a launchd-spawned copy kill
+        # itself whenever an instance already runs — KeepAlive would turn that
+        # into a start→exit→start flap until someone strangles it.
+        "KeepAlive": False,
+        "ProcessType": "Interactive",
+        "StandardOutPath": str(log_dir / "perch.log"),
+        "StandardErrorPath": str(log_dir / "perch-error.log"),
+    }
+
+
 def install_launch_agent() -> None:
     PLIST.parent.mkdir(parents=True, exist_ok=True)
     # Old plists must be deleted; bootout alone is not enough — the file still
@@ -702,17 +729,8 @@ def install_launch_agent() -> None:
     for _, stale in stale_agents():
         stale.unlink()
         print("Removed an old LaunchAgent pointing at the same app:", stale)
-    spec = {
-        "Label": LABEL,
-        "ProgramArguments": [str(INSTALLED / EXEC_SUBPATH)],
-        "RunAtLoad": True,
-        # KeepAlive must be False. A manually quit island should stay quit;
-        # and the single-instance guard makes a launchd-spawned copy kill
-        # itself whenever an instance already runs — KeepAlive would turn that
-        # into a start→exit→start flap until someone strangles it.
-        "KeepAlive": False,
-        "ProcessType": "Interactive",
-    }
+    spec = island_launch_agent_spec(INSTALLED)
+    Path(spec["StandardOutPath"]).parent.mkdir(parents=True, exist_ok=True)
     with open(PLIST, "wb") as f:
         plistlib.dump(spec, f)
     print("Wrote", PLIST)

@@ -42,24 +42,48 @@ FILE_MTIME_MARGIN = timedelta(days=1)
 # turn is re-emitted carrying the instant of the replay instead of the instant
 # it ran.  A file holding more than one session_meta is therefore a resume, and
 # inside it a "turn" that begins and ends within one write burst is a copy of
-# history, not work.  Measured over this machine's 204 rollouts: 74% of turns in
-# resumed files are that degenerate, against 1.3% in single-session files.
+# history, not work.  A file that was never resumed replays nothing, so the test
+# only ever has to fire inside one that was.
 REPLAY_BURST = timedelta(seconds=1)
+# Keyed to the five words that name a lifecycle row, and to nothing about where
+# they sit relative to each other. The previous pattern required `timestamp` to
+# TOUCH `type`; Codex began writing an `ordinal` between them on 2026-08-21 and
+# every record from the newer build stopped being seen — silently, because a
+# row the pattern rejects was never a lifecycle row to count as dropped.
+# ⚠️ A provider adding a field is ordinary; a scanner that goes blind when one
+# does is not.
+#
+# The head slice stays: unlike a transcript, a rollout names its kind in its
+# header, well inside the first few hundred bytes, while a single rollout line
+# can carry a response body of enormous size.
 CODEX_METADATA_LINE = re.compile(
-    rb'^\{\s*"timestamp"\s*:\s*"[^"]+"\s*,\s*"type"\s*:\s*'
-    rb'(?:(?:"session_meta"|"turn_context")|'
-    rb'"event_msg"\s*,\s*"payload"\s*:\s*\{\s*"type"\s*:\s*'
-    rb'"(?:task_started|task_complete|turn_aborted)")'
+    rb'"type"\s*:\s*"(?:session_meta|turn_context|task_started|task_complete|turn_aborted)"'
 )
-CLAUDE_LIFECYCLE_LINE = re.compile(
-    rb'^\{.{0,1024}?"type"\s*:\s*"(?:user|assistant)"', re.DOTALL)
+# A transcript line carries its top-level `type` wherever the message body
+# leaves room: near the front on a short record, and behind the whole answer
+# and every tool input on a long one. Bounding the search to the head is
+# therefore not a cheaper version of this test but a different one — it keeps
+# prompts, which are short, and drops completions, which are long, because a
+# turn ends where the model has said the most. Every turn then stays open until
+# the next prompt closes it as interrupted, wearing that prompt's clock; resume
+# a session days later and the turn reads days long.
+#
+# ⚠️ The bound was not even a saving: a lazy `.{0,1024}` denies the engine the
+# literal fast path it would otherwise take, so the bounded form is the slower
+# one as well as the blinder one.
+CLAUDE_LIFECYCLE_LINE = re.compile(rb'"type"\s*:\s*"(?:user|assistant)"')
+# Same five words as CODEX_METADATA_LINE, and unanchored for the same reason
+# the Claude pattern is, and for the same two reasons. Rows that reach the
+# parser without being lifecycle rows are refused there.
 CODEX_RG_PATTERN = (
-    r'^\{\s*"timestamp"\s*:\s*"[^"]+"\s*,\s*"type"\s*:\s*'
-    r'(("session_meta"|"turn_context")|'
-    r'"event_msg"\s*,\s*"payload"\s*:\s*\{\s*"type"\s*:\s*'
-    r'"(task_started|task_complete|turn_aborted)")'
+    r'"type"\s*:\s*"(session_meta|turn_context|task_started|task_complete|turn_aborted)"'
 )
-CLAUDE_RG_PATTERN = r'^\{.{0,1024}"type"\s*:\s*"(user|assistant)"'
+# Unanchored for the same two reasons as CLAUDE_LIFECYCLE_LINE above, and
+# for the same two reasons. A nested `type` inside message content can now
+# reach the
+# parser, which already refuses records whose top-level type is neither user
+# nor assistant.
+CLAUDE_RG_PATTERN = r'"type"\s*:\s*"(user|assistant)"'
 
 
 def _find_rg():
@@ -75,7 +99,7 @@ def _codex_metadata_line(payload):
 
 
 def _claude_lifecycle_line(payload):
-    return CLAUDE_LIFECYCLE_LINE.search(payload[:2048]) is not None
+    return CLAUDE_LIFECYCLE_LINE.search(payload) is not None
 
 
 JSON_STRING = rb'"((?:\\.|[^"\\])*)"'

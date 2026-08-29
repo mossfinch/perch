@@ -1,18 +1,14 @@
 #!/usr/bin/env python3
 """Package a built Perch.app into the release zip, and prove the zip is exactly that bundle.
 
-Why this is a separate script and not a line in the installer: **the zip is
-what ships**, and until now every check in this project ran against something
-else — the repository, or the bundle. A bundle can be spotless while the
-archive beside it carries the debug symbols, because they are siblings on disk
-and a check that walks the bundle cannot see them.
+This is separate from installation because the zip is the released artifact.
+A bundle-only audit cannot detect extra siblings added during packaging.
 
 So the input here is one `.app` path, never a directory to sweep. Anything that
 is not inside that bundle is structurally unable to end up in the archive.
 
-**The archive is written here rather than shelled out to a packer.** Measured
-on this machine, every packer stamps the archive with something about the
-machine that ran it:
+The archive is written here rather than delegated to a generic packer because
+standard archive formats can preserve build-machine metadata:
 
     tar -czf                 ustar header writes the owner's account name
     zip -r                   0x7875 extra carries the numeric uid; the DOS
@@ -25,11 +21,9 @@ machine that ran it:
                              header carrying the packer's uid and gid
     hdiutil (dmg)            all of the above
 
-The last row is why this script no longer calls a packer at all. Chasing it
-with one more banned field would repeat the mistake that produced it: the old
-gate refused 0x7875 because that is what `zip` writes, the packing command
-later changed to `ditto`, and the needle stayed pointed at the previous
-packer's field. Naming known-bad fields cannot terminate. Declaring the whole
+The script therefore owns the archive bytes instead of chasing packer-specific
+fields. A gate tied to one packer's metadata field does not protect output from
+another packer. Naming known-bad fields cannot terminate. Declaring the whole
 archive can, so every entry below is written with its extra and comment
 explicitly empty, and the audit refuses anything it did not declare.
 
@@ -367,10 +361,7 @@ def audit(zip_path: Path, want: dict[str, Entry]) -> None:
     if not exe["mode"] & 0o111:
         raise SystemExit(f"{exe['name']}: no execute bit survived packing; the app would not launch")
 
-    # Say only what was checked. The previous message asserted "no bytes outside
-    # the records" while never having looked at one of the spans — a gate that
-    # overstates its own coverage is worse than a missing gate, because the
-    # overstatement is what people act on.
+    # Success text must match audited coverage because callers act on the claim.
     print(f"Audited {zip_path.name}: {len(entries)} entries. Every byte from 0 to EOF belongs "
           "to a record; every entry matches the bundle's own name, mode, timestamp and sha256; "
           "no extra field, no comment, no entry the bundle does not have.\n"

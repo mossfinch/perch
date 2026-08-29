@@ -28,12 +28,12 @@ agents running in two projects in parallel are two independent conversations.
 and reports exactly what the log shows, open ends included. `settled()` sits
 on top and holds the judgment calls, because the raw cut alone gets whole
 days wrong: interrupting an agent (Esc, closed window) leaves a turn with no
-`complete`, and pure pairing then welds it to the NEXT session — measured on
-a real day, one such weld inflated a 92-second stretch to 3h55m and the day's
-total from 6h10m to 11h29m. The settle rules:
+`complete`, and pure pairing then welds it to the NEXT session, so a stretch of
+seconds can come out hours long and drag the whole day's total with it.
+The settle rules:
   · `complete` settles a turn, and the silence before it is trusted whenever
-    the last thing seen was `working` — a real 9½-min tool ran with 578 quiet
-    seconds mid-turn, and truncating across that silence would have cut a
+    the last thing seen was `working` — a single tool can run for many quiet
+    minutes mid-turn, and truncating across that silence would have cut a
     genuine turn in half;
   · unless that last event was `waiting` and the complete came more than
     IDLE_CUT later. Then the silence is an empty chair, not a tool: the agent
@@ -41,8 +41,9 @@ total from 6h10m to 11h29m. The settle rules:
     event and is truncated. Answering half an hour later does not turn the
     half hour into work;
   · an open turn whose conversation goes quiet longer than IDLE_CUT is
-    truncated at its last event (measured: working events arrive median
-    10–16s apart, 93% within 30s, so 120s is 4–12× the normal beat).
+    truncated at its last event (the cut has to sit WELL beyond the gap between
+    one working event and the next, or it would truncate live turns; the
+    boundary is pinned by behaviour tests).
 
 **Flow** is the island's own verdict, laid over the day — the same words the
 wave on screen is saying, not a second idea wearing the same name. Someone is in
@@ -53,10 +54,12 @@ side can hold its own opinion). `flow_spans` walks that verdict along the day �
 the answer can only change where a turn STARTS, or 4.5 minutes after the last
 one did — and the `flow` column is their total.
 
-⚠️ **That column changed meaning in 097, and got much smaller.** It used to
-say "how long were agents running, with every gap under FLOW_BRIDGE welded
-shut", which counted an agent grinding away alone all evening as flow. It now
-counts only the stretches where orders were really going out fast.
+⚠️ **`flow` and the bridged measure answer different questions.** `flow` counts
+only the stretches where orders were really going out fast. The bridged measure
+asks "how long were agents running, with every gap under FLOW_BRIDGE welded
+shut", which counts an agent grinding away alone all evening — it survives only
+inside the shadow features, and reading one as a version of the other is the
+mistake this split exists to prevent.
 
 The old measure is still computed, under its own names and never called flow:
 `flow_stretches` (bridged wall-clock) and `run_intervals` (no bridging at all)
@@ -69,6 +72,13 @@ Usage:
     python3 island-day-report.py --list     # which days have data
     python3 island-day-report.py --summary  # every day: flow, busy, score
     python3 island-day-report.py --features [day|--all]   # one raw JSON line per day
+    python3 island-day-report.py --reading  [day|--all]   # the shipped readings, machine-readable
+
+⚠️ `--reading` and `--features` are not two views of the same thing. `--reading`
+carries what the island shows; `--features` carries a shadow experiment computed
+with different bridge thresholds, and the two do not agree. Anything that acts on a
+number takes `--reading` — a day with no log prints no line there, so a caller
+can tell "nothing recorded" from "measured zero".
 """
 from __future__ import annotations   # so `X | None` annotations parse on macOS's stock python 3.9
 
@@ -133,10 +143,9 @@ FLOW_BRIDGE = timedelta(minutes=5)
 
 # The island's own three numbers, for the verdict the `flow` column now reports.
 # ⚠️ COPIED FROM `FlowSense.swift` — quickPickup / window / dropOut, in that
-# order — and compared against it by tests/island.test.js. They are one number
+# order — and compared against it by the island suite. They are one number
 # each living in two files; this side gets no opinion of its own. Like
-# FLOW_BRIDGE they are provisional (n=1, one afternoon of holding real logs
-# against how the day felt) and get re-derived from recorded corrections, never
+# FLOW_BRIDGE they are provisional, and get re-derived from recorded corrections, never
 # nudged by hand.
 QUICK_PICKUP = timedelta(seconds=90)
 FLOW_WINDOW = 5
@@ -209,8 +218,8 @@ def settled(events, idle_cut=IDLE_CUT):
             if e["event"] == "complete":
                 if start is not None:
                     # Which silence just ended? Behind a `working` event it is a
-                    # tool running quietly (a real 9½-min tool went 578 seconds
-                    # without a word), so the complete is trusted whole. Behind a
+                    # tool running quietly (one can go many minutes without a
+                    # word), so the complete is trusted whole. Behind a
                     # `waiting` event it is an empty chair — the agent asked for
                     # approval and nobody was there — and the answer, whenever it
                     # finally came, does not make those minutes work. End the turn
@@ -240,13 +249,13 @@ def settled(events, idle_cut=IDLE_CUT):
 def flow_stretches(settled_turns, bridge=FLOW_BRIDGE, max_turn=MAX_TURN):
     """THE OLD MEASURE, kept for comparison — **not what "flow" means here**.
 
-    ⚠️ Until 097 this WAS the report's flow column. It answers "how long were
-    agents running today, with every gap under `bridge` welded shut", which
-    counts an agent grinding away alone all evening as flow and has no opinion
-    at all about the person. The product meaning of the word moved to
+    ⚠️ It answers "how long were agents running today, with every gap under
+    `bridge` welded shut", which counts an agent grinding away alone all evening
+    as flow and has no opinion at all about the person. The product meaning of
+    the word lives in
     `in_flow` / `flow_spans` (the island's own verdict). This one stays because
-    090's shadow features record it and 091 has to hold the two readings side
-    by side before deciding which was actually being felt — the name is
+    the shadow features record it, and the two readings have to sit side by side
+    before anyone can say which was actually being felt — the name is
     deliberately unchanged so that everything already written down about it
     still points at the same number.
 
@@ -277,8 +286,8 @@ def run_intervals(settled_turns, max_turn=MAX_TURN):
     """When an agent was actually running, as non-overlapping spans.
 
     Also an OLD-measure companion, kept for the same reason as
-    `flow_stretches`: 090's shadow features record it (`net_agent_min`) and 091
-    needs it. It is machine runtime, never a claim about the person.
+    `flow_stretches`: the shadow features record it (`net_agent_min`) and the
+    comparison needs it. It is machine runtime, never a claim about the person.
 
     Unlike `flow_stretches` this bridges NOTHING — the gaps between spans are
     real gaps — and unlike summing turn durations it counts parallel work once.
@@ -424,8 +433,8 @@ def flow_spans(settled_turns):
     So each start that judges "in flow" holds until the next start (which gets
     judged on its own) or until it times out, whichever comes first; touching
     spans merge. ⚠️ **Nothing is bridged.** A silence is a break, full stop —
-    welding gaps shut is what the old `flow_stretches` does, and confusing the
-    two is what 097 exists to end. A span may therefore reach up to DROP_OUT
+    welding gaps shut is what `flow_stretches` does, and the two must never be
+    read as versions of each other. A span may therefore reach up to DROP_OUT
     past the day's last start: that is the island still saying "in flow" with
     nothing new to go on yet, which is exactly what it does on screen.
     """
@@ -479,6 +488,33 @@ def _nearest_rank(values, q):
         return None
     s = sorted(values)
     return s[min(len(s), max(1, math.ceil(q * len(s)))) - 1]
+
+
+def daily_reading(day, events):
+    """The island's own readings for one day, in one machine-readable line.
+
+    This is the SHIPPED arithmetic — the same `flow_spans` total that the human
+    report prints as `flow  5h20m`, and the same `net_ran` behind `agents ran`.
+    Anything that acts on these numbers reads them from here.
+
+    ⚠️ Not `--features`. That line carries `flow2/5/10_min` from a shadow
+    experiment: different bridge thresholds, a different answer, and
+    `flow5_min` reads like the field an integrator would reach for.
+    Taking it would put a third reading into circulation with nothing on screen
+    to say so. The two outputs are pinned together by a test.
+
+    `judged` answers a question a spender cannot ask of the minutes alone:
+    fewer than FLOW_WINDOW pickups means the day was never measured, which is a
+    different thing from a day that measured zero.
+    """
+    st = settled(events)
+    flow_total = sum((b - a for a, b in flow_spans(st)), timedelta())
+    return {
+        "date": day,
+        "flow_minutes": int(flow_total.total_seconds() // 60),
+        "agents_ran_minutes": int(net_ran(st).total_seconds() // 60),
+        "judged": len(pickup_gaps(st)) >= FLOW_WINDOW,
+    }
 
 
 def day_features(day, events):
@@ -580,7 +616,7 @@ def day_scores():
     knocking the others out.
 
     ⚠️ Same rule, byte for byte, as `DayScore.swift`'s `scores()`. Two readers,
-    one file, and nothing but tests/island.test.js holding the ends together.
+    one file, and nothing but the island suite holding the ends together.
 
     Read-only here: the report lays the derived number beside the stated one
     and computes nothing from it — the check must stay a check.
@@ -746,14 +782,30 @@ def main():
             flow_total = sum((b - a for a, b in flow_spans(st)), timedelta())
             print(f"  {d:<12} {hm(flow_total):>8} {hm(net_ran(st)):>8} {len(st):>6}  {score_mark(scores.get(d))}")
         # r and p are not self-explanatory, and a column nobody can read is a
-        # column nobody checks. Neither is "flow" any more — it changed meaning
-        # in 097, and a reader who remembers the old column would read these
-        # numbers as a collapse rather than as a different question.
+        # column nobody checks. Neither is "flow" on its own: without the line
+        # below, a reader carrying the bridged meaning in their head would read
+        # these numbers as a collapse rather than as a different question.
         print("\n  r = rhythm (did the day hold together)"
               "   p = progress (did anything move)")
         print("  flow = how long the island judged you IN flow (five pickups running quick),"
               "   agents = wall-clock time with at least one agent running")
         print()
+        return
+    if "--reading" in args:
+        # One line per day, shipped readings only. A day with no log at all
+        # prints nothing rather than a zero: "nothing was recorded" and "the
+        # day measured zero" are different answers, and a reader that gets 0
+        # for both cannot tell which it was holding.
+        rest = [a for a in args if a != "--reading"]
+        if "--all" in rest:
+            wanted = days
+        else:
+            wanted = [rest[0]] if rest else [datetime.now().strftime("%Y-%m-%d")]
+        for d in wanted:
+            evs = load(d, directory)
+            if evs is None:
+                continue
+            print(json.dumps(daily_reading(d, evs), sort_keys=True))
         return
     if "--features" in args:
         # Shadow observation: one raw JSON line per day, straight to stdout.

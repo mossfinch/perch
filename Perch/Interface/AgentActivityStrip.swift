@@ -140,9 +140,8 @@ private struct ActiveProjectLabel: View {
         ZStack(alignment: .trailing) {   // old and new lines overlap during the cross-fade instead of pushing each other
             Text(current.map(ProjectCaption.caption) ?? "")
                 .font(ProjectCaption.font)
-                // The colour carries the state, so the text never has to
-                // spell it out. As asked for: "I can tell waiting from working by
-                // the colour — just draw the dots."
+                // The colour carries the state, so the caption never has to spell it
+                // out: it names the project and nothing else.
                 .foregroundStyle(IslandPalette.color(for: current?.status ?? .idle))
                 .lineLimit(1)
                 .truncationMode(.tail)

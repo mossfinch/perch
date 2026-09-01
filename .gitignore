@@ -1,18 +1,22 @@
-# Once Perch is extracted into its own public repo, this file is the root .gitignore. Inside
-# the mother repo it overlaps with the rules a layer above, and it still has to cover
-# everything the public repo needs on its own.
-# A .gitignore only keeps Git from tracking things; the public export additionally excludes
-# sensitive or machine-generated files via neverCopy in perch-package.json.
+# This file serves both sides: the Perch working repo, and the public package that
+# is exported out of it. It is on the shipping manifest, so after export it becomes
+# the public repo's root .gitignore.
+#
+# ⚠️ .gitignore only stops git from TRACKING a file. Keeping something out of the
+# public package is a different mechanism entirely: neverCopy and excludedOnPurpose
+# in perch-package.json. Do not use one to reason about the other.
 
-# macOS metadata and Python caches; bytecode can embed absolute paths from this machine.
+# macOS and Python litter. Bytecode can embed absolute paths from this machine.
 .DS_Store
 __pycache__/
 *.pyc
 
-# Local session state, which can contain absolute paths, executed commands, and session ids.
+# Local agent session state: can contain absolute paths, executed commands, session ids.
 .omc/
+**/.omc/
 
 # Xcode user state and build products.
 xcuserdata/
 DerivedData/
 build/
+*.zip

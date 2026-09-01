@@ -826,7 +826,12 @@ test("a day too thin to judge is not a day with the lowest reading", () => {
   fs.writeFileSync(main, `
 import Foundation
 
-let day = Calendar.current.startOfDay(for: Date()).addingTimeInterval(-86400)
+// ⚠️ TODAY, not yesterday. The week runs Monday…Sunday, so on a Monday
+// "yesterday" is Sunday and belongs to the PREVIOUS week — DayFlow.week would
+// not contain it, report() would fall through to its missing branch, and the
+// assertions below would read undefined instead of a verdict. This test was
+// green six days a week and red every Monday. Today is always in this week.
+let day = Calendar.current.startOfDay(for: Date())
 func at(_ s: Double) -> Date { day.addingTimeInterval(3600 + s) }
 
 // One quick round trip is not enough evidence: below FlowSense.window pickups
@@ -856,7 +861,7 @@ func events(_ turns: [FlowMath.Turn]) -> [FlowMath.Event] {
 }
 func report(_ name: String, _ turns: [FlowMath.Turn]) -> String {
   let week = DayFlow.week(now: Date(), calendar: .current) { _, _ in events(turns) }
-  // The turns were laid on yesterday, so read yesterday's segment.
+  // The turns were laid on today, so read today's segment (see the note above).
   let key = DayScore.dayFormatter.string(from: day)
   guard let d = week.first(where: { $0.date == key }) else { return "{\\"name\\":\\"\\(name)\\",\\"missing\\":true}" }
   return "{\\"name\\":\\"\\(name)\\",\\"seconds\\":\\(Int(d.seconds)),\\"judged\\":\\(d.judged)}"

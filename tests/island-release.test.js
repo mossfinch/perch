@@ -9,7 +9,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 const { execFileSync } = require("node:child_process");
 const ROOT = require("node:path").resolve(__dirname, "..");
-const { ISLAND_VIEW_FILES, islandTree, islandPath, pkgPath } = require("./island-paths");
+const { ISLAND_VIEW_FILES, WORKING, islandTree, islandPath, pkgPath } = require("./island-paths");
 
 test("the release audit compares the archive against the bundle, not against a list of known-bad shapes", () => {
   // ⚠️ What this replaces, and why the shape of the check changed: the gate used
@@ -604,13 +604,20 @@ test("no island test file may be invisible: shipped, discovered, and never named
 
   // Discover JavaScript tests from the filesystem, as Python tests are; a
   // hard-coded roster can let a newly shipped test go unexecuted.
-  const exporter = fs.readFileSync(pkgPath("export-perch.py"), "utf8");
-  assert.match(exporter, /glob\("\*\.test\.js"\)/,
-    "the exporter stopped discovering the JS tests by pattern");
-  assert.doesNotMatch(exporter, /"tests\/island[-\w]*\.test\.js"/,
-    "the exporter names an island test file by hand — the next file added will not run in the package");
-  assert.match(exporter, /node_ran_count/,
-    "the exporter stopped checking that the JS suite really executed something");
+  // ⚠️ WORKING only. Since 2026-09-01 the exporter does not ship: it serves
+  // one direction — this private repo into the public package — and whoever clones the
+  // package is already standing on the far side of it, with nothing left to export. Same
+  // sentence the manifest uses to keep the publish gate out. These three assertions guard
+  // the exporter, so they belong wherever the exporter is, and that is here only.
+  if (WORKING) {
+    const exporter = fs.readFileSync(pkgPath("export-perch.py"), "utf8");
+    assert.match(exporter, /glob\("\*\.test\.js"\)/,
+      "the exporter stopped discovering the JS tests by pattern");
+    assert.doesNotMatch(exporter, /"tests\/island[-\w]*\.test\.js"/,
+      "the exporter names an island test file by hand — the next file added will not run in the package");
+    assert.match(exporter, /node_ran_count/,
+      "the exporter stopped checking that the JS suite really executed something");
+  }
 });
 
 // Every command the documents hand a reader must name a file that exists. A document
@@ -628,7 +635,19 @@ test("no live document tells a reader to run a test file that does not exist", (
   const docs = path.join(ROOT, "docs");
   if (!fs.existsSync(docs)) return;   // extracted package: nothing to check
 
-  const ARCHIVE = path.join(docs, "ops", "process");
+  // Archives, all of them: what they quote was true on the day it was written.
+  // `ops/process` is the work-order archive; `ops/archive` is frozen review history;
+  // `40-worklog`, `plans` and `superpowers` are finished plans and specs kept for the
+  // record. Rewriting any of them to satisfy a guard would be falsifying the record.
+  const ARCHIVES = ["ops/process", "ops/archive", "40-worklog", "plans", "superpowers"]
+    .map((d) => path.join(docs, ...d.split("/")));
+  const ARCHIVE = ARCHIVES[0];
+  // ⚠️ Three FILES are frozen too, not directories: AGENTS.md says STATUS.md and
+  // REVIEW.md are read for what happened and never for what to do now, and DESIGN.md
+  // is the same shape. A frozen file naming a test that has since moved is telling the
+  // truth about its own day.
+  const FROZEN = ["ops/STATUS.md", "ops/REVIEW.md", "ops/DESIGN.md"]
+    .map((f) => path.join(docs, ...f.split("/")));
   // ⚠️ `30-roadmap.md` is excluded too, and the reason is different from the archive's.
   // It is the LEDGER: thousands of lines where an open debt and the closed history of a
   // fixed one sit under sibling headings, sometimes in the same table. "on that day X was
@@ -638,13 +657,16 @@ test("no live document tells a reader to run a test file that does not exist", (
   // human has to read. Do not "fix" it by widening the sweep and rewriting what it finds:
   // that falsifies the record.
   const LEDGER = path.join(docs, "30-roadmap.md");
-  const walk = (dir) => dir === ARCHIVE ? [] :
+  const walk = (dir) => ARCHIVES.includes(dir) ? [] :
     fs.readdirSync(dir, { withFileTypes: true }).flatMap((e) =>
     e.isDirectory() ? walk(path.join(dir, e.name))
-      : e.name.endsWith(".md") && path.join(dir, e.name) !== LEDGER ? [path.join(dir, e.name)] : []);
+      : e.name.endsWith(".md") && path.join(dir, e.name) !== LEDGER
+        && !FROZEN.includes(path.join(dir, e.name)) ? [path.join(dir, e.name)] : []);
   const files = walk(docs);
   assert.ok(files.length >= 4, `control: only ${files.length} live documents found — the sweep collapsed`);
-  assert.ok(!files.some((f) => f.startsWith(ARCHIVE)), "control: the archive leaked into the live sweep");
+  for (const a of ARCHIVES) {
+    assert.ok(!files.some((f) => f.startsWith(a + "/")), `control: ${path.relative(docs, a)} leaked into the live sweep`);
+  }
 
   // ⚠️ Commands are not the only way a document points at a test file. The SOP said things
   // like "the nine-case behaviour test in island.test.js" — no command, just a name, and a
@@ -654,8 +676,46 @@ test("no live document tells a reader to run a test file that does not exist", (
   // now, wherever it sits on the line. (This comment deliberately writes that old name
   // WITHOUT its directory: a guard that trips over its own explanation is a guard whose
   // explanation gets deleted.)
-  const TESTS_PATH = /(?<![\w/.-])tests\/[\w*-]+\.(?:test\.js|js|py)/g;
-  const pathsIn = (line) => [...line.matchAll(TESTS_PATH)].map((m) => m[0]);
+  // ⚠️ This started as `tests/…` ONLY, and that hole shipped: on 2026-08-31 the tree was
+  // flattened out of `apps/mac-widget/`, and five commands in `docs/10-spine.md` and
+  // `docs/20-modules.md` kept pointing at the old location. Every one of them was a path
+  // a reader would follow, and every one of them walked straight past this guard because
+  // the regex was anchored to one directory name. Same family as the sticky-note guard
+  // that only caught one of three shapes: FIXING ONE SHAPE IS NOT WELDING THE CLASS SHUT.
+  //
+  // So: any path-looking token, then TWO judgements decide whether it is this repo's
+  // business. They were tuned by running the widened sweep over the real tree and reading
+  // every hit — 125 kinds of noise on the naive version, 9 real ones here.
+  const TOKEN = /(?<![\w/.~-])(?!https?:)[A-Za-z_][\w.-]*(?:\/[\w.*-]+)+/g;
+  const TOP = new Set(fs.readdirSync(ROOT).filter((n) => !n.startsWith(".")));
+  const pathsIn = (line, isDoc) => {
+    const out = [];
+    for (const m of line.matchAll(TOKEN)) {
+      // `<spec/design/decision path>` and `<name>/<source>.md` are template placeholders in
+      // the work-order form, not paths. They are the single largest source of noise.
+      const before = line[m.index - 1], after = line[m.index + m[0].length];
+      if (before === "<" || after === "<" || after === ">") continue;
+      const raw = m[0].replace(/[.,;:)]+$/, "");        // prose punctuation, not the path
+      if (raw.split("/")[0].includes(".")) continue;    // `github.com/mossfinch/perch` is a URL
+      // ① first segment is a real top-level entry ⇒ it names something here, check it.
+      // ② first segment is NOT ⇒ the whole directory moved or never existed. Only trusted
+      //    in DOCUMENTS: source files legitimately carry synthetic paths as fixtures
+      //    (`export_perch_test.py` really does assert on `apps/sub/a.py`), and a guard that
+      //    reds on a test's own fixture teaches people to weaken the guard.
+      if (TOP.has(raw.split("/")[0]) || (isDoc && raw.split("/").length >= 3)) out.push(raw);
+    }
+    return out;
+  };
+
+  // Absent ON PURPOSE, each with the reason a reader would otherwise come asking for.
+  // ⚠️ This list is checked below: if one of these ever comes back, the exemption is stale
+  // and must go. An allowlist nobody re-checks is how a guard quietly stops guarding.
+  const DELIBERATELY_ABSENT = {
+    "docs/60-minimap.md": "no generator exists; the slot stays empty on purpose (in 30-roadmap)",
+    "docs/40-worklog": "the five pages here were Formmark's; deleted at the split, kept in training",
+    "artifacts/designs/formmark-open-skill-wall-dashboard-2026-07-04.png":
+      "a Formmark design file that stayed in training; named by frozen background prose",
+  };
 
   // A heading marked ✅ opens a CLOSED entry: what it quotes is what really happened on
   // the day it was written, filenames of that day included. Live entries above and below
@@ -666,7 +726,7 @@ test("no live document tells a reader to run a test file that does not exist", (
     for (const line of fs.readFileSync(f, "utf8").split("\n")) {
       if (/^#{1,6} /.test(line)) closed = line.includes("✅");
       if (closed) continue;
-      for (const raw of pathsIn(line)) named.push([path.relative(ROOT, f), raw]);
+      for (const raw of pathsIn(line, true)) named.push([path.relative(ROOT, f), raw]);
     }
   }
   assert.ok(named.length > 3, `control: only ${named.length} run commands found in the documents`);
@@ -679,8 +739,7 @@ test("no live document tells a reader to run a test file that does not exist", (
   const READABLE = /\.(md|py|js|swift|sh|ya?ml|json)$/;
   const shipping = [];
   const walkShip = (rel) => {
-    const abs = path.join(ROOT, "apps", "mac-widget", rel.replace(/^apps\/mac-widget\//, ""));
-    const full = rel.startsWith("tests/") ? path.join(ROOT, rel) : abs;
+    const full = path.join(ROOT, rel);
     if (!fs.existsSync(full)) return;
     if (fs.statSync(full).isDirectory()) {
       for (const e of fs.readdirSync(full)) walkShip(path.join(rel, e));
@@ -693,17 +752,30 @@ test("no live document tells a reader to run a test file that does not exist", (
 
   for (const [rel, full] of shipping) {
     for (const line of fs.readFileSync(full, "utf8").split("\n")) {
-      for (const raw of pathsIn(line)) named.push([rel, raw]);
+      for (const raw of pathsIn(line, false)) named.push([rel, raw]);
     }
   }
 
-  const exists = (raw) => raw.includes("*")
-    ? fs.readdirSync(path.join(ROOT, "tests"))
-        .some((n) => new RegExp("^" + path.basename(raw).replace(/\*/g, ".*") + "$").test(n))
-    : fs.existsSync(path.join(ROOT, raw));
-  const missing = named.filter(([, raw]) => !exists(raw));
+  const exists = (raw) => {
+    if (!raw.includes("*")) return fs.existsSync(path.join(ROOT, raw));
+    // ⚠️ The glob branch used to read `tests/` no matter what the path said, so a glob
+    // anywhere else was answered by the wrong directory. Ask the path's own directory.
+    const dir = path.join(ROOT, path.dirname(raw));
+    if (!fs.existsSync(dir)) return false;
+    const re = new RegExp("^" + path.basename(raw).replace(/\*/g, ".*") + "$");
+    return fs.readdirSync(dir).some((n) => re.test(n));
+  };
+
+  // Control for the exemption list itself: every entry must still be absent. If one comes
+  // back, the reason above is a lie and the entry has to go — otherwise this list is a
+  // place where a real break can hide forever.
+  const resurrected = Object.keys(DELIBERATELY_ABSENT).filter((p) => fs.existsSync(path.join(ROOT, p)));
+  assert.deepEqual(resurrected, [],
+    `these are exempted as "absent on purpose" but exist now — drop the exemption: ${resurrected.join(", ")}`);
+
+  const missing = named.filter(([, raw]) => !exists(raw) && !(raw in DELIBERATELY_ABSENT));
   assert.deepEqual(missing, [],
-    `these name a test file that no longer exists: ${missing.map(([d, r]) => `${d} → ${r}`).join(", ")}`);
+    `these name a path that no longer exists: ${missing.map(([d, r]) => `${d} → ${r}`).join(", ")}`);
 
   // ⚠️ And a document may not lie about HOW MANY there are. `docs/10-spine.md` said 90
   // within the same commit that made it 92 — a snapshot table whose number nobody

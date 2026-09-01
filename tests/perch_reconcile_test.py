@@ -16,11 +16,11 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 # Dual layout, the same two worlds tests/island-paths.js resolves: upstream the
-# package sits under apps/mac-widget/, and after extraction that directory IS
+# Since the 2026-08-31 split both the working repo and the package are flat, so
 # the repo root. Probed by a directory only the package has — never by counting
 # levels up from this file, which is what pinned these tests to one layout and
 # left them unable to run inside the extracted package at all.
-PKG = ROOT / "apps" / "mac-widget" if (ROOT / "apps" / "mac-widget" / "Perch").is_dir() else ROOT
+PKG = ROOT
 MODULE_PATH = PKG / "perch-reconcile.py"
 
 

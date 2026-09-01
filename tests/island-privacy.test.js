@@ -10,7 +10,7 @@ const os = require("node:os");
 const path = require("node:path");
 const { execFileSync } = require("node:child_process");
 const ROOT = require("node:path").resolve(__dirname, "..");
-const { islandViews, viewModelSource, islandTree, islandPath, pkgPath, PKG } = require("./island-paths");
+const { WORKING, islandViews, viewModelSource, islandTree, islandPath, pkgPath, PKG } = require("./island-paths");
 const { islandTestFiles } = require("./island-roster");
 
 test("the island neither says where you are nor speaks Chinese", () => {
@@ -178,13 +178,13 @@ test("no Team ID anywhere in the island's files — it links to the registrant's
   // package must contain no .xcconfig at all — that layer belongs to the
   // mother repo's signing side.
   const xcc = fs.readdirSync(PKG).filter((f) => f.endsWith(".xcconfig"));
-  if (PKG === ROOT) {
+  if (!WORKING) {
     assert.deepEqual(xcc, [], `no xcconfig belongs in the public package: ${xcc.join(", ")}`);
   } else {
     // Upstream layout: a template file still lives here, and the real-value
     // file must be blocked by gitignore
     const ignore = fs.readFileSync(path.join(ROOT, ".gitignore"), "utf8");
-    assert.match(ignore, /apps\/mac-widget\/Config\.xcconfig/, "the real-value file must be gitignored");
+    assert.match(ignore, /^Config\.xcconfig$/m, "the real-value file must be gitignored");
   }
 
   // Info.plist and the entitlements are two declarations of one fact and must
@@ -332,9 +332,30 @@ test("nothing in the public package may locate the author — the scan surface c
   //   · anything the manifest does not account for must not be here at all.
   // Only meaningful in the package layout: the mother repo is full of files
   // that are legitimately none of this package's business.
-  if (PKG === ROOT) {
+  if (true) {   // 两种布局都查；分支在 covered() 里
     const onDisk = walk(ROOT, "", []).filter((f) => !f.startsWith(".git/"));
-    const covered = (rel) => manifest.include.some((r) => rel === r || rel.startsWith(r + "/"));
+    // ⚠️ Two shapes, one rule each. Since the split this working repo has the same
+    // flat layout as the package, so `PKG === ROOT` no longer tells them apart —
+    // `docs/` does: the exporter never copies it.
+    //
+    // In the WORKING repo the manifest's `excludedOnPurpose` entries are SUPPOSED to be
+    // on disk; that field exists to say so, and this guard never read it before. In the
+    // PACKAGE they must be absent, because the export left them behind — so there the
+    // same list is an alarm rather than a pass.
+    const working = WORKING;
+    const excluded = Object.keys(manifest.excludedOnPurpose || {}).map((k) => k.replace(/\/\*\*$/, ""));
+    const inList = (list) => (rel) => list.some((r) => rel === r || rel.startsWith(r + "/"));
+    const isExcluded = inList(excluded);
+    const covered = working ? (rel) => inList(manifest.include)(rel) || isExcluded(rel)
+                            : inList(manifest.include);
+    if (!working) {
+      const left = onDisk.filter(isExcluded);
+      assert.deepEqual(left, [], `the package carries files the manifest excludes on purpose: ${left.join(", ")}`);
+    } else {
+      // Control: the exclusion list must be doing work here, or this branch is a rubber
+      // stamp that would pass on a repo full of undeclared files.
+      assert.ok(onDisk.some(isExcluded), "control: nothing on disk matched excludedOnPurpose — the list drifted");
+    }
     const litter = onDisk.filter((f) => neverCopy.some((re) => re.test(f)));
     assert.deepEqual(litter, [], `litter the extraction never copied: ${litter.join(", ")}`);
     const unaccounted = onDisk.filter((f) => !covered(f));
@@ -451,12 +472,12 @@ test("nothing in the public package may locate the author — the scan surface c
     // The tag is assembled in pieces in this test, so this file is not itself
     // a residue sample.
     const AIDEV_LINE = new RegExp("^\\s*(\\/\\/|#)\\s*" + "AIDEV" + "-(NOTE|TODO|QUESTION)\\b");
-    const shippedText = PKG === ROOT ? utf8
+    const shippedText = !WORKING ? utf8
       : utf8.split("\n").filter((l) => !AIDEV_LINE.test(l)).join("\n");
     for (const re of historyNeedles) {
       // The manifest's own upstream record is stripped by the export script;
       // in the package layout there is no such exemption.
-      if (PKG !== ROOT && path.basename(rel) === "perch-package.json") continue;
+      if (WORKING && path.basename(rel) === "perch-package.json") continue;
       assert.ok(!re.test(shippedText), `${rel} carries upstream vocabulary (it does not ship): ${shippedText.match(re)?.[0]}`);
     }
   }
@@ -474,8 +495,8 @@ test("the working repo cannot be pushed by accident", () => {
   // and this test is what stops that hook from quietly disappearing.
   // The extracted package is meant to be pushed, so the guard runs in the
   // upstream layout only.
-  // (PKG === ROOT means package layout, and there this test is skipped.)
-  if (PKG === ROOT) return;
+  // (In the package layout this test is skipped.)
+  if (!WORKING) return;
 
   const hook = path.join(ROOT, ".githooks", "pre-push");
   assert.ok(fs.existsSync(hook), "the pre-push guard is gone");

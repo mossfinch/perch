@@ -8,12 +8,17 @@ const path = require("node:path");
 
 const ROOT = path.resolve(__dirname, "..");
 
-// The mother repo keeps the package under apps/mac-widget/, while the public repo has the
-// package itself as its root. Detect the layout first, so the tests resolve everything from
-// PKG and never depend on how deep the mother repo's directories go.
-const PKG = fs.existsSync(path.join(ROOT, "apps", "mac-widget", "Perch"))
-  ? path.join(ROOT, "apps", "mac-widget")
-  : ROOT;
+// ⚠️ Since the 2026-08-31 split the working repo and the extracted package have the SAME
+// flat layout, so there is nothing to detect any more: the package root is the repo root in
+// both. PKG survives as a name because every guard reads paths through it — collapsing it
+// into ROOT everywhere would be a rename touching a hundred call sites for no gain.
+const PKG = ROOT;
+
+// Is this the working repo, or the extracted package? Since the split the two have the
+// same flat layout, so the old `PKG === ROOT` test no longer separates them. `docs/` does:
+// the exporter never copies it, and the manifest declares it excluded on purpose.
+// ⚠️ One owner. Two guards ask this question and they must not answer it differently.
+const WORKING = fs.existsSync(path.join(ROOT, "docs"));
 // Joins relative segments onto the detected package root and returns an absolute path.
 const pkgPath = (...p) => path.join(PKG, ...p);
 
@@ -93,7 +98,7 @@ const CARE_SESSION_CLOCK_SWIFT = islandPath("CareSessionClock.swift");
 const CARE_SESSION_RECORDER_SWIFT = islandPath("CareSessionRecorder.swift");
 
 module.exports = {
-  ISLAND_DIR, PKG, pkgPath, islandTree, islandPath,
+  ISLAND_DIR, PKG, WORKING, pkgPath, islandTree, islandPath,
   ISLAND_CARE_LEDGER_SWIFT, ISLAND_CATALOG, ISLAND_VIEW_FILES, islandViews, ISLAND_VIEW_SWIFT,
   viewModelFiles, viewModelSource, SOURCE_HEALTH_SWIFT, APP_GROUP_SWIFT,
   CARE_MOVE_POOL_SWIFT, CARE_SESSION_CLOCK_SWIFT, CARE_SESSION_RECORDER_SWIFT,

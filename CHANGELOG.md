@@ -6,6 +6,31 @@ Notable changes to Perch, newest first. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- A switch for the completion chime, in the bottom-right corner of the
+  unfolded card: press the speaker to mute the chime, press it again to
+  bring it back. The setting is remembered across launches. The beat that
+  paces a move is not affected — it is the move's clock, not a notification.
+- The history rebuild now notices when it has stopped seeing a provider. Its
+  counters could all read healthy while a reshaped log left most rows
+  unrecognised, because a row the scanner does not recognise is not counted
+  as dropped. The hooks are a second witness: each hook `complete` is now
+  matched against a native turn ending beside it, and a window where more
+  than a quarter of at least twenty completions have no such turn is reported
+  as a `reconstruction_gap` in `source-health.json`. Nothing about it is shown
+  on the island.
+
+### Changed
+
+- The bird on the closed island breathes by a Core Animation layer
+  animation instead of a SwiftUI one, avoiding SwiftUI updates on each
+  animation frame. The breathing motion and status colours are unchanged.
+- The comments beside the three flow thresholds no longer claim they are
+  re-derived from your corrections. They are hand-set provisional values; the
+  corrections are recorded so that they can be fitted one day, and nothing
+  reads them yet.
+
 ## [2.1] — 2026-08-25
 
 ### Fixed

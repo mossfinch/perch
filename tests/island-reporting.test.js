@@ -429,25 +429,17 @@ test("the day score came off the card, and its ledger did not move", () => {
   assert.equal(planted.length, 2,
     `control: the trace scanner cannot see a real mount — found ${planted.length}, wanted 2`);
 
-  // ②b Nothing floats in a bottom corner. Nothing at all.
-  //
-  //     ⚠️ This assertion has been written three ways and the history is the
-  //     point. First "nothing may float in a bottom corner"; then loosened to
-  //     "exactly ONE thing may hold that corner" when the week branch was given
-  //     it; now back to the first, strictest form.
-  //
-  //     ⚠️ The branch was never fighting the countdown bar — it was FLOATING.
-  //        An overlay in a corner belongs to no row and no column: it sits on
-  //        the frame strip's territory (the strip's frame ends 14pt from the
-  //        bottom, the branch sat at 16pt) and reads as pasted on. Three
-  //        instruments have been tried in that corner and all three read as
-  //        badges. The corner is closed: anything on this card needs a row.
-  const corners = view.match(/\.overlay\(alignment: \.bottom\w*\)/g) ?? [];
-  assert.deepEqual(corners, [],
-    `something floats in a bottom corner again — it needs a row, not a corner: ${corners}`);
+  // ②b The bottom corner holds only the completion-chime switch.
+  // Readings belong in the instrument rows: floating them over the figure
+  // strip makes them look like detached badges. The switch occupies the
+  // space beside the centred figures without adding a row or card height.
+  // Reject any other bottom-corner mount, including another instrument.
+  const corners = view.match(/\.overlay\(alignment: \.bottom\w*\)[^\n]*/g) ?? [];
+  assert.deepEqual(corners, [".overlay(alignment: .bottomTrailing) { chimeToggle }"],
+    `the bottom corner may hold the chime switch and nothing else: ${corners}`);
   // Control: the corner scanner can see a mount when one is really there.
-  const plantedCorner = ("        .overlay(alignment: .bottomTrailing) {\n            Thing()\n        }\n")
-    .match(/\.overlay\(alignment: \.bottom\w*\)/g) ?? [];
+  const plantedCorner = ("        .overlay(alignment: .bottomLeading) { Thing() }\n")
+    .match(/\.overlay\(alignment: \.bottom\w*\)[^\n]*/g) ?? [];
   assert.equal(plantedCorner.length, 1,
     `control: the corner scanner cannot see a real mount — found ${plantedCorner.length}, wanted 1`);
 

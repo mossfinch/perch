@@ -6,7 +6,7 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
-const { islandViews, CARE_MOVE_POOL_SWIFT } = require("./island-paths");
+const { islandViews, viewModelSource, CARE_MOVE_POOL_SWIFT } = require("./island-paths");
 
 test("opened panel stacks nothing above the care card", () => {
   const view = islandViews();
@@ -129,4 +129,43 @@ test("perch guided card stays responsive, data-driven, and state-consistent", ()
   assert.doesNotMatch(view, /NeckRollsGuidedCard|NeckRollsMovementStrip/);
   assert.doesNotMatch(view, /controlColumnWidth|controlAreaWidth/);
   assert.doesNotMatch(view, /\.lineLimit\(2\)/);
+});
+
+test("the completion chime has one switch, in the corner under the figures, and it is remembered", () => {
+  const vm = viewModelSource();
+  // Remembered across launches: a switch that springs back every morning
+  // reads as broken, not as remembered.
+  assert.match(vm, /@Published var chimeMuted: Bool = UserDefaults\.standard\.bool\(forKey: chimeMutedKey\)/);
+  assert.match(vm, /UserDefaults\.standard\.set\(chimeMuted, forKey: Self\.chimeMutedKey\)/);
+  assert.match(vm, /func toggleChime\(\) \{ chimeMuted\.toggle\(\) \}/);
+
+  // Muted means silent, and it reaches the CHIME only. The beat is the
+  // move's clock — the head is turned away during the side-neck and levator
+  // stretches, so only sound keeps up — and the switch must not touch it.
+  const chime = vm.match(/private func playChime\(\)[\s\S]*?\n    \}/)?.[0] ?? "";
+  assert.ok(chime, "playChime not found");
+  assert.match(chime, /guard !chimeMuted else \{ return \}/, "muted must mean silent");
+  const beat = vm.match(/private func playBeat\(\)[\s\S]*?\n    \}/)?.[0] ?? "";
+  assert.ok(beat, "playBeat not found");
+  assert.doesNotMatch(beat, /chimeMuted/, "the beat is the move's clock, not a notification");
+
+  // The switch lives in the corner under the figures — an overlay, in no row.
+  const view = islandViews();
+  const card = view.match(/struct GuidedCareCard: View[\s\S]*?\n\}/)?.[0] ?? "";
+  assert.ok(card, "GuidedCareCard not found");
+  assert.match(card, /\.overlay\(alignment: \.bottomTrailing\) \{ chimeToggle \}/,
+    "the switch is an overlay in the bottom-trailing corner: no height, nothing moved");
+  assert.match(card, /viewModel\.toggleChime\(\)/);
+  assert.match(card, /speaker\.slash\.fill/);
+  assert.match(card, /speaker\.wave/);
+  // A glyph of 12pt cannot be pressed; the button needs a real hit area.
+  assert.match(card, /\.frame\(width: 24, height: 24\)[\s\S]{0,80}\.contentShape\(Rectangle\(\)\)/);
+
+  // The three instrument rows carry readings, never a switch.
+  const band = card.match(/VStack\(spacing: GuidedCareLayout\.topRowSpacing\)[\s\S]*?\.padding\(\.top, GuidedCareLayout\.activityTopPadding\)/)?.[0] ?? "";
+  assert.ok(band, "the top band was not found");
+  assert.doesNotMatch(band, /chime/i, "the instrument rows must not carry the switch");
+  const controls = card.match(/private var topControls: some View[\s\S]*?\n    \}/)?.[0] ?? "";
+  assert.ok(controls, "topControls not found");
+  assert.doesNotMatch(controls, /chime/i, "the move's controls must not carry the switch");
 });

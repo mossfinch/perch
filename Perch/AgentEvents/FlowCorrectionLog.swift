@@ -2,9 +2,11 @@ import Foundation
 
 /// Corrections to the flow verdict.
 ///
-/// ⚠️ This file is what the three numbers in `FlowSense` get re-derived from,
-/// and from nothing else — which is why they may not be nudged by hand in the
-/// meantime.
+/// ⚠️ This file is the data the three numbers in `FlowSense` are meant to be
+/// fitted against one day. Nothing reads it yet: the only reference in the
+/// tree is the `append` in the view model, and the three numbers are hand-set
+/// provisional values. Not nudging them by hand in the meantime is a
+/// discipline the comments ask for, not a mechanism this file provides.
 ///
 /// ⚠️ A separate directory from the observations, and the separation is the
 /// point: the events stay exactly as recorded and a correction is an annotation

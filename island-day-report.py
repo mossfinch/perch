@@ -145,8 +145,8 @@ FLOW_BRIDGE = timedelta(minutes=5)
 # ⚠️ COPIED FROM `FlowSense.swift` — quickPickup / window / dropOut, in that
 # order — and compared against it by the island suite. They are one number
 # each living in two files; this side gets no opinion of its own. Like
-# FLOW_BRIDGE they are provisional, and get re-derived from recorded corrections, never
-# nudged by hand.
+# FLOW_BRIDGE they are provisional: hand-set, to be fitted against recorded
+# corrections one day — nothing reads those yet — and not nudged by hand until then.
 QUICK_PICKUP = timedelta(seconds=90)
 FLOW_WINDOW = 5
 DROP_OUT = timedelta(minutes=4.5)

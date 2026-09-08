@@ -16,20 +16,22 @@ test("the closed island shows a bird for the machine, and it stands on nothing",
 
   // The closed mark uses Perch's own perched-bird asset, not a generic symbol.
   const mark = view.match(/struct ClosedIslandMark[\s\S]*?\n\}/)?.[0] ?? "";
-  assert.match(mark, /Image\("PerchBird"\)/, "the closed mark is the app's own bird, the one on the icon");
+  assert.match(mark, /"PerchBird"/, "the closed mark is the app's own bird, the one on the icon");
   assert.doesNotMatch(mark, /"leaf\.fill"/, "the leaf belonged to the old name");
   // Not the system symbol: `bird.fill` is mid-flight with raised wings, a
   // different creature from the one perched on the icon.
   assert.doesNotMatch(mark, /systemName: "bird/, "the system bird is flying; ours is perched");
-  assert.match(mark, /renderingMode\(\.template\)/, "template, or the status colour stops applying");
+  // The asset is a MASK over a coloured layer: the shape comes from its
+  // alpha, the colour still means agent status.
+  assert.match(mark, /body\.mask = shape/, "the bird must be a mask over the status colour, or the colour stops applying");
 
   // The upright asset needs enough height to retain its silhouette inside the wing.
-  const height = Number(mark.match(/\.frame\(height: (\d+)\)/)?.[1] ?? 0);
+  const height = Number(mark.match(/height: (\d+)\)/)?.[1] ?? 0);
   assert.ok(height >= 20 && height <= 30,
     `perched bird needs ~20-30pt to read, got ${height}`);
 
   // The breathing scale stays close to 1 so the bird moves without inflating.
-  const swell = Math.max(...[...mark.matchAll(/scale = (1\.\d+)/g)].map((m) => Number(m[1])));
+  const swell = Math.max(...[...mark.matchAll(/toValue = (1\.\d+)/g)].map((m) => Number(m[1])));
   assert.ok(swell > 1 && swell <= 1.2, `a perched bird breathes, it does not grow (got ${swell})`);
 
   // The wing holds the bird directly. A wrapper or stacked marker changes the
@@ -151,8 +153,16 @@ test("island capsule has a distinct persistent done state + retained chime", () 
   assert.match(vm, /CompletionChime/);   // audio read from the app bundle (sandbox-safe)
   assert.match(vm, /func hoverEntered\(\)[\s\S]*?\.done/);
 
+  // The bird must keep breathing while an agent works or waits, using a
+  // layer animation rather than driving SwiftUI updates every frame.
+  // The dots inside the opened card are outside this guard's scope:
+  // their view leaves the tree when the island closes.
   const view = islandViews();
-  assert.match(view, /repeatForever/);   // continuous pulse animation while working
+  const mark = view.match(/struct ClosedIslandMark[\s\S]*?\n\}/)?.[0] ?? "";
+  assert.ok(mark, "ClosedIslandMark not found");
+  assert.match(mark, /repeatCount = \.infinity/, "the bird must keep breathing while an agent works");
+  assert.match(mark, /autoreverses = true/, "a breath goes out and comes back");
+  assert.doesNotMatch(mark, /repeatForever/, "a SwiftUI repeatForever re-runs the view graph every frame");
 });
 
 test("status dots split into rows by agent source, claude above codex", () => {

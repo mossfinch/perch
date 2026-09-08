@@ -31,6 +31,15 @@ from pathlib import Path
 SCHEMA_VERSION = 1
 SOURCES = ("codex", "claude")
 HOOK_TOLERANCE = timedelta(seconds=30)
+# Coverage asks whether hooks saw a native turn; this checks the reverse:
+# whether a hook completion has a native end in the same project within
+# HOOK_TOLERANCE. Unrecognised lifecycle rows need not count as parse errors,
+# so hook completions provide an independent witness to missing native ends.
+# More than 25% unmatched completions marks a reconstruction gap, but only
+# with at least 20 completions; a few unmatched events alone must not label
+# a quiet window as degraded.
+RECONSTRUCTION_GAP_LIMIT = 0.25
+RECONSTRUCTION_FLOOR = 20
 MAX_PUBLISH_BYTES = 4 * 1024 * 1024
 MAX_HOOK_SNAPSHOT_BYTES = 8 * 1024 * 1024
 # File mtime is an I/O filter, never historical authority.  A one-day margin
@@ -735,6 +744,29 @@ def _turn_is_covered(turn, hook_index):
     return left < right
 
 
+def _unreconstructed_completions(native, hooks):
+    """Hook ``complete`` events with no native turn of the same project ending
+    within ``HOOK_TOLERANCE`` of them, oldest first. Same project key and the
+    same tolerance as ``_turn_is_covered``: one rule read from both ends."""
+    ends = {}
+    for turn in native:
+        ended = _parse_timestamp(turn.get("ended_at"))
+        if ended is None:
+            continue
+        ends.setdefault(_normalise_project(turn["project"]), []).append(ended)
+    for values in ends.values():
+        values.sort()
+    completions = [event for event in hooks if event["event"] == "complete"]
+    missing = []
+    for event in completions:
+        candidates = ends.get(event["project"], ())
+        left = bisect.bisect_left(candidates, event["timestamp"] - HOOK_TOLERANCE)
+        right = bisect.bisect_right(candidates, event["timestamp"] + HOOK_TOLERANCE)
+        if left >= right:
+            missing.append(event["timestamp"])
+    return len(completions), sorted(missing)
+
+
 def build_source_health(turns, hook_events, diagnostics, generated_at):
     """Compare provider-native turns with Perch hooks to build per-source health.
 
@@ -745,9 +777,13 @@ def build_source_health(turns, hook_events, diagnostics, generated_at):
 
     Each source is classified as ``missing``, ``healthy``,
     ``recovered_with_gap``, or ``degraded``; any provider parse error forces a
-    degraded result. The snapshot also preserves coverage gaps, freshness,
-    incomplete tails, and replay counts. ``generated_at`` labels only when the
-    snapshot was produced.
+    degraded result, and so does a ``reconstruction_gap``: at least
+    ``RECONSTRUCTION_FLOOR`` hook completions in the window with more than
+    ``RECONSTRUCTION_GAP_LIMIT`` of them matched by no native turn ending
+    within tolerance — the signature of a scanner that has stopped seeing its
+    provider. The snapshot also preserves coverage gaps, freshness, incomplete
+    tails, and replay counts. ``generated_at`` labels only when the snapshot
+    was produced.
     """
     sources = {}
     alerts = []
@@ -787,6 +823,13 @@ def build_source_health(turns, hook_events, diagnostics, generated_at):
         parse_errors = source_diagnostics.get("parse_errors", 0)
         if parse_errors:
             status = "degraded"
+        hook_completions, unreconstructed = _unreconstructed_completions(native, hooks)
+        scanner_blind = (
+            hook_completions >= RECONSTRUCTION_FLOOR
+            and len(unreconstructed) / hook_completions > RECONSTRUCTION_GAP_LIMIT
+        )
+        if scanner_blind:
+            status = "degraded"
         if not native:
             freshness_status = "unknown"
             freshness_lag_seconds = None
@@ -808,6 +851,8 @@ def build_source_health(turns, hook_events, diagnostics, generated_at):
             "native_turns": len(native),
             "settled_turns": sum(1 for turn in native if turn["outcome"] != "open"),
             "uncovered_turns": len(uncovered),
+            "hook_completions": hook_completions,
+            "unreconstructed_completions": len(unreconstructed),
             "parse_errors": parse_errors,
             "partial_lines": source_diagnostics.get("partial_lines", 0),
             "replayed_turns_skipped": source_diagnostics.get("replayed_turns_skipped", 0),
@@ -835,6 +880,16 @@ def build_source_health(turns, hook_events, diagnostics, generated_at):
                     "count": parse_errors,
                     "first_at": None,
                     "last_at": None,
+                }
+            )
+        if scanner_blind:
+            alerts.append(
+                {
+                    "source": source,
+                    "kind": "reconstruction_gap",
+                    "count": len(unreconstructed),
+                    "first_at": _timestamp_text(unreconstructed[0]),
+                    "last_at": _timestamp_text(unreconstructed[-1]),
                 }
             )
         if uncovered:

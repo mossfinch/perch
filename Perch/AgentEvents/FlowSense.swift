@@ -3,9 +3,10 @@ import Foundation
 /// In flow, or not. Two answers and no third: the island judges in or out, and
 /// the levels in between are a crossing rather than a state (see `Transition`).
 ///
-/// The raw values are the WIRE FORMAT of the corrections file — the one thing
-/// the three provisional numbers will eventually be re-derived from — so they
-/// are a contract with a future reader, not an internal name.
+/// The raw values are the WIRE FORMAT of the corrections file — the data the
+/// three provisional numbers are meant to be fitted against one day, which
+/// nothing reads yet — so they are a contract with a future reader, not an
+/// internal name.
 enum FlowVerdict: String {
     case inFlow = "in_flow"
     case notInFlow = "not_in_flow"
@@ -23,8 +24,10 @@ enum FlowVerdict: String {
 /// front of the screen — a judgment that read looking something up as being
 /// absent would convict every minute of research.
 ///
-/// ⚠️ The three numbers below are provisional and are re-derived from
-/// recorded corrections, never nudged by hand.
+/// ⚠️ The three numbers below are provisional: hand-set, to be fitted against
+/// recorded corrections once there are enough of them. No fitting exists yet
+/// (`FlowCorrectionLog` is written and never read), so until then the rule is
+/// only that they are never nudged by hand.
 enum FlowSense {
     /// The median must come in under this for the verdict to be yes.
     static let quickPickup: TimeInterval = 90

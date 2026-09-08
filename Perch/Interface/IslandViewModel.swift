@@ -99,6 +99,20 @@ final class IslandViewModel: ObservableObject {
     private static let flowTickInterval: TimeInterval = 15
 
     @Published var projects: [ProjectStatus] = []                  // one status dot per project
+
+    /// The island's one setting: whether the completion chime plays. Kept in
+    /// UserDefaults so it survives a relaunch — a switch that springs back
+    /// every morning reads as broken, not as remembered.
+    ///
+    /// ⚠️ Reaches the CHIME only. The beat is the move's clock — side-neck and
+    /// levator stretches are done with the head turned away from the screen,
+    /// and only sound keeps up — so muting it would make the move undoable.
+    @Published var chimeMuted: Bool = UserDefaults.standard.bool(forKey: chimeMutedKey) {
+        didSet { UserDefaults.standard.set(chimeMuted, forKey: Self.chimeMutedKey) }
+    }
+    private static let chimeMutedKey = "chimeMuted"
+
+    func toggleChime() { chimeMuted.toggle() }
     @Published var display: IslandDisplayMetrics = .fallback
     @Published var sessionPhase: CareSessionPhase = .idle
     @Published var currentMove: CareMove = CareMovePool.all[0]
@@ -421,6 +435,7 @@ final class IslandViewModel: ObservableObject {
     }
 
     private func playChime() {
+        guard !chimeMuted else { return }   // muted means silent, not quieter
         completionSound?.stop()
         if completionSound?.play() != true {
             NSSound.beep()   // fallback: if the named sound fails, the system beep guarantees something is heard

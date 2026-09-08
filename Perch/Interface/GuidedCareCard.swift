@@ -75,6 +75,36 @@ struct GuidedCareCard: View {
                 .padding(.bottom, GuidedCareLayout.bottomInset)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .overlay(alignment: .bottomTrailing) { chimeToggle }
+    }
+
+    /// The island's one switch, in the one place that is empty in every state.
+    /// The three rows above are instruments and carry readings, never
+    /// controls; the figures sit centred, so the corner under them is never
+    /// used. An overlay, so it adds no height and moves nothing.
+    ///
+    /// Muted is drawn brighter than sounding: a switch you turned off has to
+    /// be more visible than one you never touched, or you forget it was you.
+    private var chimeToggle: some View {
+        Button { viewModel.toggleChime() } label: {
+            Image(systemName: viewModel.chimeMuted ? "speaker.slash.fill" : "speaker.wave.2.fill")
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(IslandPalette.paper.opacity(viewModel.chimeMuted ? 0.55 : 0.32))
+                .frame(width: 24, height: 24)   // the hit area; the glyph itself is too small to press
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        // ⚠️ The card is narrower than its frame: on a notched screen the
+        // shape flares out at the top to meet the bezel, so each side of the
+        // black card sits `topCornerRadius` inside the frame edge. Measured
+        // from the frame, 38pt is 16pt inside the visible edge — and at
+        // (16, 8) from the visible corner the whole 24pt hit area lies inside
+        // the 22pt corner arc, with the glyph's foot on the figures' 14pt
+        // bottom inset. On a plain screen the flare is 0 and it simply sits
+        // a little further in.
+        .padding(.trailing, IslandCardShape(topEdge: .notch).topCornerRadius + 16)
+        .padding(.bottom, 8)
+        .accessibilityLabel(viewModel.chimeMuted ? "Completion chime off" : "Completion chime on")
     }
 
     // Title row (title left, controls right) / the frame strip centered full-width, taking the whole bottom

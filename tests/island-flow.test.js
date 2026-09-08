@@ -198,8 +198,8 @@ precondition(plausible.count < turns.count,
 // it up". The daily report has recorded it for a long time; this is the first
 // time it reaches the screen.
 //
-// ⚠️ 90s / 5 / 4.5min are PROVISIONAL. They get re-derived from recorded
-// corrections, never nudged by hand.
+// ⚠️ 90s / 5 / 4.5min are PROVISIONAL: hand-set, to be fitted against recorded
+// corrections one day (nothing reads those yet), and not nudged by hand until then.
 //
 // `chain` lays out one line of turns: each turn works 10 seconds, the next
 // starts `gap` seconds after it finished. N gaps need N+1 turns — the last one
@@ -512,7 +512,7 @@ print("{\\"cases\\":[\\(rows.joined(separator: ","))],"
   // Comparing only the answers these cases happen to produce cannot catch 90s
   // being quietly read as 120s.
   assert.deepEqual(fromPython.constants, { quickPickup: 90, window: 5, dropOut: 270 },
-    "the three provisional numbers moved — they are re-derived from the corrections, never edited by hand");
+    "the three provisional numbers moved — they are not nudged by hand; a change must come with a fit against the corrections");
 
   // …and every boundary still answered the way the Swift side says.
   for (const [i, c] of FLOW_SENSE_CASES.entries()) {

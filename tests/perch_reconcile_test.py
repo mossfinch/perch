@@ -708,6 +708,138 @@ class PerchReconcileTest(unittest.TestCase):
         self.assertEqual(health["uncovered_turns"], 1)
         self.assertEqual(result["health"]["alerts"][0]["kind"], "coverage_gap_recovered")
 
+    def _hook_rows(self, source, project, completions, first_at="2026-08-12T12:00:00Z"):
+        """``completions`` hook complete rows a minute apart, each preceded by a
+        working row. Nothing native answers them unless the test writes it."""
+        from datetime import datetime, timedelta, timezone
+
+        base = datetime.strptime(first_at, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
+        rows = []
+        for index in range(completions):
+            started = base + timedelta(minutes=index)
+            ended = started + timedelta(seconds=30)
+            for event, when in (("working", started), ("complete", ended)):
+                rows.append({
+                    "t": when.strftime("%Y-%m-%dT%H:%M:%SZ"),
+                    "event": event,
+                    "project": project,
+                    "source": source,
+                })
+        return rows
+
+    def test_a_scanner_gone_blind_is_reported_against_the_hook_completions(self):
+        # The shape of a transcript whose settling row has drifted out of the
+        # scanner's reach: every turn still opens, but nothing ever ends. Every
+        # counter the scan keeps stays at zero, because in the scanner's eyes
+        # nothing was dropped. The hooks are the second witness: they saw each
+        # of these turns finish.
+        for index in range(20):
+            session = "s%02d" % index
+            write_jsonl(
+                self.claude / "project" / ("%s.jsonl" % session),
+                [claude_prompt(session, "p", "u", "2026-08-12T12:%02d:00Z" % index, "/work/a")],
+            )
+        write_jsonl(self.hooks, self._hook_rows("claude", "/work/a", 20))
+
+        result = self.run_reconcile()
+        health = result["health"]["sources"]["claude"]
+
+        self.assertEqual(health["native_turns"], 20)
+        self.assertEqual(health["settled_turns"], 0)
+        self.assertEqual(health["parse_errors"], 0)
+        self.assertEqual(health["hook_completions"], 20)
+        self.assertEqual(health["unreconstructed_completions"], 20)
+        self.assertEqual(health["status"], "degraded")
+        gaps = [alert for alert in result["health"]["alerts"] if alert["kind"] == "reconstruction_gap"]
+        self.assertEqual(len(gaps), 1)
+        self.assertEqual(gaps[0]["source"], "claude")
+        self.assertEqual(gaps[0]["count"], 20)
+        self.assertEqual(gaps[0]["first_at"], "2026-08-12T12:00:30.000Z")
+        self.assertEqual(gaps[0]["last_at"], "2026-08-12T12:19:30.000Z")
+
+    def test_a_scanner_that_still_sees_the_turns_end_raises_no_reconstruction_gap(self):
+        # Control: the same twenty completions, each answered by a native turn
+        # ending within tolerance. The guard must stay quiet here, or a green
+        # from the test above proves only that the guard always fires.
+        turns = [
+            ("t%02d" % index, "2026-08-12T12:%02d:00Z" % index, "2026-08-12T12:%02d:30Z" % index, "completed")
+            for index in range(20)
+        ]
+        write_jsonl(self.codex / "sessions" / "rollout-a.jsonl", codex_session("session-a", "/work/a", turns))
+        write_jsonl(self.hooks, self._hook_rows("codex", "/work/a", 20))
+
+        result = self.run_reconcile()
+        health = result["health"]["sources"]["codex"]
+
+        self.assertEqual(health["hook_completions"], 20)
+        self.assertEqual(health["unreconstructed_completions"], 0)
+        self.assertEqual(health["status"], "healthy")
+        self.assertNotIn("reconstruction_gap", {alert["kind"] for alert in result["health"]["alerts"]})
+
+    def test_reconstruction_gap_requires_more_than_a_quarter_unmatched(self):
+        # Synthetic completions straddle the boundary; exactly 25% stays quiet.
+        hooks = self._hook_rows("codex", "/work/a", 100)
+        for missing, expected_status in ((20, "healthy"), (25, "healthy"),
+                                         (26, "degraded"), (30, "degraded")):
+            with self.subTest(unmatched_percent=missing):
+                turns = [
+                    ("t%d" % index, hooks[2 * index]["t"],
+                     hooks[2 * index + 1]["t"], "completed")
+                    for index in range(100 - missing)
+                ]
+                write_jsonl(self.codex / "sessions" / "rollout-a.jsonl",
+                            codex_session("session-a", "/work/a", turns))
+                write_jsonl(self.hooks, hooks)
+
+                result = self.run_reconcile()
+                health = result["health"]["sources"]["codex"]
+                self.assertEqual(health["hook_completions"], 100)
+                self.assertEqual(health["unreconstructed_completions"], missing)
+                self.assertEqual(health["status"], expected_status)
+                gaps = [alert for alert in result["health"]["alerts"]
+                        if alert["kind"] == "reconstruction_gap"]
+                if expected_status == "degraded":
+                    self.assertEqual(len(gaps), 1)
+                    self.assertEqual(gaps[0]["source"], "codex")
+                    self.assertEqual(gaps[0]["count"], missing)
+                else:
+                    self.assertEqual(gaps, [])
+
+    def test_a_turn_ending_in_another_project_does_not_answer_for_this_one(self):
+        # Same source, same minute, different project: the match is by project,
+        # as coverage is. Matching on time alone would let one busy project
+        # vouch for a scanner that has gone blind on every other.
+        turns = [
+            ("t%02d" % index, "2026-08-12T12:%02d:00Z" % index, "2026-08-12T12:%02d:30Z" % index, "completed")
+            for index in range(20)
+        ]
+        write_jsonl(self.codex / "sessions" / "rollout-b.jsonl", codex_session("session-b", "/work/b", turns))
+        write_jsonl(self.hooks, self._hook_rows("codex", "/work/a", 20))
+
+        result = self.run_reconcile()
+        health = result["health"]["sources"]["codex"]
+
+        self.assertEqual(health["unreconstructed_completions"], 20)
+        self.assertIn("reconstruction_gap", {alert["kind"] for alert in result["health"]["alerts"]})
+
+    def test_a_quiet_day_is_below_the_floor_and_raises_no_reconstruction_gap(self):
+        # Three completions the scanner missed is 100% missed, and also three
+        # rows. Below the floor the ratio says nothing, so a slow day with one
+        # odd session must not be called a blind scanner.
+        write_jsonl(
+            self.codex / "sessions" / "rollout-a.jsonl",
+            codex_session("session-a", "/work/a",
+                          [("open", "2026-08-12T12:00:00Z", None, "open")]),
+        )
+        write_jsonl(self.hooks, self._hook_rows("codex", "/work/a", 3))
+
+        result = self.run_reconcile()
+        health = result["health"]["sources"]["codex"]
+
+        self.assertEqual(health["hook_completions"], 3)
+        self.assertEqual(health["unreconstructed_completions"], 3)
+        self.assertNotIn("reconstruction_gap", {alert["kind"] for alert in result["health"]["alerts"]})
+
     def test_window_filter_keeps_only_turns_that_start_inside_requested_interval(self):
         write_jsonl(
             self.codex / "sessions" / "rollout-a.jsonl",

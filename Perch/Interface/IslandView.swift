@@ -105,7 +105,8 @@ private struct ClosedIslandMark: View {
         }
     }
 
-    @State private var scale: CGFloat = 1.0
+    /// Breathes while an agent runs or waits; still when done or idle.
+    private var breathing: Bool { status == .working || status == .waiting }
 
     var body: some View {
         // The app's own bird, lifted from its icon. Not the `bird.fill`
@@ -115,28 +116,97 @@ private struct ClosedIslandMark: View {
         // ⚠️ 20pt is a floor, not a preference. The bird stands upright (3:4),
         // so below about 20pt tall it is under 15pt wide and collapses into a
         // sliver.
-        Image("PerchBird")
-            .renderingMode(.template)                          // shape comes from alpha; the colour below still means agent status
-            .resizable()
-            .aspectRatio(contentMode: .fit)
-            .frame(height: 20)
-            .foregroundStyle(color)                            // color purely status-driven, switches instantly (outside animation transactions)
-            .scaleEffect(scale)
-            .onChange(of: status, initial: true) { _, newStatus in
-                if newStatus == .working || newStatus == .waiting {
-                    scale = 1.0
-                    withAnimation(.easeInOut(duration: 0.55).repeatForever(autoreverses: true)) {
-                        // Gentle on purpose: at this size a swell of half
-                        // again looks like inflating, and it would overrun the
-                        // 38pt wing. A perched bird breathes, it does not grow.
-                        scale = 1.08                           // working/waiting: continuous breath
-                    }
+        //
+        // Core Animation runs the breath on a layer in the render server.
+        // This avoids driving SwiftUI view updates for every animation frame;
+        // the view still updates the bird's colour and breathing state.
+        Bird(color: NSColor(color), breathing: breathing)
+            .frame(width: 15, height: 20)
+            .accessibilityLabel("Perch island status")
+    }
+
+    private struct Bird: NSViewRepresentable {
+        let color: NSColor
+        let breathing: Bool
+
+        func makeNSView(context: Context) -> BirdView { BirdView() }
+
+        func updateNSView(_ view: BirdView, context: Context) {
+            view.color = color
+            view.breathing = breathing
+        }
+    }
+
+    /// One solid-colour layer wearing the bird's alpha as its mask: the shape
+    /// comes from the asset, the colour still means agent status.
+    private final class BirdView: NSView {
+        private let body = CALayer()
+        private let shape = CALayer()
+        private static let breath = "breath"
+
+        var color: NSColor = .white {
+            didSet {
+                // Instant, as `.foregroundStyle` was: a status change is a
+                // fact, not a fade, and layers fade property changes by default.
+                CATransaction.begin()
+                CATransaction.setDisableActions(true)
+                body.backgroundColor = color.cgColor
+                CATransaction.commit()
+            }
+        }
+
+        var breathing = false {
+            didSet {
+                guard breathing != oldValue else { return }
+                if breathing {
+                    let swell = CABasicAnimation(keyPath: "transform.scale")
+                    swell.fromValue = 1.0
+                    // Gentle on purpose: at this size a swell of half again
+                    // looks like inflating, and it would overrun the 38pt
+                    // wing. A perched bird breathes, it does not grow.
+                    swell.toValue = 1.08
+                    swell.duration = 0.55
+                    swell.autoreverses = true
+                    swell.repeatCount = .infinity
+                    swell.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+                    body.add(swell, forKey: Self.breath)
                 } else {
-                    withAnimation(.easeInOut(duration: 0.22)) {
-                        scale = 1.0                            // done/idle: settle clean and still (overrides the repeatForever above)
-                    }
+                    // Removing the animation settles the layer at its model
+                    // value, which never left 1.0: clean and still.
+                    body.removeAnimation(forKey: Self.breath)
                 }
             }
-            .accessibilityLabel("Perch island status")
+        }
+
+        override init(frame: NSRect) {
+            super.init(frame: frame)
+            wantsLayer = true
+            shape.contents = NSImage(named: "PerchBird")
+            shape.contentsGravity = .resizeAspect
+            body.mask = shape
+            layer?.addSublayer(body)
+        }
+
+        @available(*, unavailable)
+        required init?(coder: NSCoder) { nil }
+
+        override func layout() {
+            super.layout()
+            // Our own sublayer, so its anchor is the centre and the swell
+            // grows around it; a view's backing layer is anchored at a corner.
+            CATransaction.begin()
+            CATransaction.setDisableActions(true)
+            body.bounds = bounds
+            body.position = CGPoint(x: bounds.midX, y: bounds.midY)
+            shape.frame = body.bounds
+            CATransaction.commit()
+        }
+
+        override func viewDidChangeBackingProperties() {
+            super.viewDidChangeBackingProperties()
+            let scale = window?.backingScaleFactor ?? 2
+            body.contentsScale = scale
+            shape.contentsScale = scale
+        }
     }
 }

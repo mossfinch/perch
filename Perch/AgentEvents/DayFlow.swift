@@ -16,7 +16,7 @@ enum DayFlow {
     ///
     /// ⚠️ These four are a UNIT, not a fit: they move only if the working day
     /// they are anchored to does. The verdict's three numbers (`FlowSense`)
-    /// stay provisional and fitted; this ladder does not follow them.
+    /// stay provisional, to be fitted one day; this ladder does not follow them.
     static let levelStarts: [TimeInterval] = [60, 120, 240, 360].map { $0 * 60 }
 
     /// One day's reading.

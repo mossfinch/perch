@@ -2,35 +2,35 @@ import SwiftUI
 
 enum GuidedCareLayout {
     static let contentHorizontalInset: CGFloat = 40   // top rows keep extra distance from the side borders
-    // ⚠️ These two are traded against each other and their sum is fixed: extra
+    // These two are traded against each other and their sum is fixed: extra
     // height for row 2 comes out of the top padding, never out of the main area,
     // so the figure strip's height is untouched.
     static let activityTopPadding: CGFloat = 14        // wave's distance from the top border
     static let activityHeight: CGFloat = 26            // the wave plus the dot row beside it
     static let activityToMainSpacing: CGFloat = 12
-    /// ⚠️ Moving the figures down only helps if the room comes with them. Raise
-    /// this without also raising the card's height and the strip loses exactly
-    /// what the gap gained — the squeeze moves from above the figures to below.
+    /// Moving the figures down only helps if the room comes with them. Raising
+    /// this without raising the card's height takes from the strip exactly what
+    /// the gap gained: the squeeze moves from above the figures to below.
     static let titleToFramesSpacing: CGFloat = 14
     static let controlsSlotHeight: CGFloat = 36
     static let bottomInset: CGFloat = 14
 
     /// Row 1 of the top band: the bird standing on the week's branch.
     ///
-    /// ⚠️ Nothing may ever be placed above this row. The bird's clearance is the
-    /// notch reserve directly above — black all the way to the top of the screen,
-    /// and the only free open space on this card. Every other spot has to buy
-    /// its clearance by growing the card or shrinking the figures.
+    /// Nothing may be placed above this row. The bird's clearance is the notch
+    /// reserve directly above, black up to the top of the screen and the only
+    /// free space on this card. Anywhere else, clearance has to be bought by
+    /// growing the card or shrinking the figures.
     static let topRowHeight: CGFloat = 26
     static let topRowSpacing: CGFloat = 12
 
-    /// The top band's right-hand column, shared by BOTH rows.
+    /// The top band's right-hand column, shared by both rows.
     ///
-    /// ⚠️ These live on the band and not on either row: they are what makes the
-    /// two rows read as a grid rather than as two unrelated strips, and a row
-    /// reaching across to another row for them owns nothing.
+    /// These live on the band and not on either row: they make the two rows
+    /// read as a grid instead of two unrelated strips, and neither row owns
+    /// them.
     ///
-    /// ⚠️ Fixed, never self-sizing. A column that resized with its text would
+    /// Fixed, never self-sizing. A column that resized with its text would
     /// change the branch's width on every rotation, moving all seven day
     /// boundaries and the bird with them. Wide enough that a caption carrying
     /// both project and agent does not truncate.
@@ -52,7 +52,7 @@ struct GuidedCareCard: View {
 
             // The top band: two rows, two columns. Left holds the two things
             // that can stretch (the branch, the wave), right holds a short line
-            // for each. Every row is a complete sentence — an instrument on the
+            // for each. Every row is a complete sentence: an instrument on the
             // left, what it is saying on the right.
             VStack(spacing: GuidedCareLayout.topRowSpacing) {
                 TopWeekRow(viewModel: viewModel)
@@ -94,14 +94,13 @@ struct GuidedCareCard: View {
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        // ⚠️ The card is narrower than its frame: on a notched screen the
-        // shape flares out at the top to meet the bezel, so each side of the
-        // black card sits `topCornerRadius` inside the frame edge. Measured
-        // from the frame, 38pt is 16pt inside the visible edge — and at
-        // (16, 8) from the visible corner the whole 24pt hit area lies inside
-        // the 22pt corner arc, with the glyph's foot on the figures' 14pt
-        // bottom inset. On a plain screen the flare is 0 and it simply sits
-        // a little further in.
+        // The card is narrower than its frame: on a notched screen the shape
+        // flares out at the top to meet the bezel, so each side of the black
+        // card sits `topCornerRadius` inside the frame edge. Measured from the
+        // frame, 38pt is 16pt inside the visible edge, and at (16, 8) from the
+        // visible corner the whole 24pt hit area lies inside the 22pt corner
+        // arc, with the glyph's foot on the figures' 14pt bottom inset. On a
+        // plain screen the flare is 0 and it sits a little further in.
         .padding(.trailing, IslandCardShape(topEdge: .notch).topCornerRadius + 16)
         .padding(.bottom, 8)
         .accessibilityLabel(viewModel.chimeMuted ? "Completion chime off" : "Completion chime on")
@@ -156,7 +155,7 @@ struct GuidedCareCard: View {
         }
     }
 
-    // Session counter: which rep you are on (core of the active state — keep)
+    // Session counter: which rep you are on. The core of the active state.
     private var repCount: some View {
         Text("\(viewModel.completedReps)/\(move.reps)")
             .font(.system(size: 15, weight: .bold))
@@ -179,11 +178,12 @@ struct GuidedCareCard: View {
         }
     }
 
-    // The one CTA, solid — an outlined style would fight the coral-outlined
-    // category ring on the same row. Solid uses the DEEP coral accent, not the
-    // bright coral cue: white text on cue is 1.9:1, mush; on accent it is
-    // 4.6:1. The two corals split duties: cue does hints and outlines (spark,
-    // category ring, fade bar), accent does this one solid CTA and nothing else.
+    // The one call to action, solid: an outlined style would fight the
+    // coral-outlined category ring on the same row. Solid uses the deep coral
+    // accent, not the bright coral cue: white text on cue is 1.9:1, mush; on
+    // accent it is 4.6:1. The two corals split duties: cue does hints and
+    // outlines (spark, category ring, fade bar), accent does this one solid
+    // button and nothing else.
     private var recommendationControls: some View {
         Button { viewModel.startSession() } label: {
             HStack(spacing: 6) {
@@ -266,7 +266,7 @@ private struct CareFrameView: View {
 
     /// Progress through this beat (0→1). The bar under the current frame
     /// fades along it: solid at the start of a beat, gone exactly when it
-    /// ends — and the frame changes at that instant. A static highlight can
+    /// ends, the instant the frame changes. A static highlight can
     /// only say "this one is current", never "how long until the next" (which
     /// you need in order to anticipate). Move the bar, not the figure.
     @State private var breath: CGFloat = 0
@@ -287,8 +287,8 @@ private struct CareFrameView: View {
 
     var body: some View {
         // Image smaller than its slot → whitespace on all sides, images stay
-        // apart, the card can breathe. Why 0.9: the 4-frame move (eyes) has
-        // the narrowest slots and anything smaller becomes illegible;
+        // apart, the card can breathe. Why 0.9: a four-frame move has the
+        // narrowest slots, and anything smaller becomes illegible;
         // 2–3-frame moves sit at the 108 cap, unaffected; anything larger
         // pushes into the neighbors' whitespace and crowds the row.
         let imageSide = min(108, slotWidth * 0.9)
@@ -311,7 +311,8 @@ private struct CareFrameView: View {
             // Coral underline for the current frame during a session; other
             // frames keep an equal-height placeholder so baselines match and
             // switching doesn't jump. The bar fades linearly with the beat:
-            // the fainter the bar, the sooner the change — gone exactly at the switch.
+            // the fainter the bar, the sooner the change, and it is gone exactly
+            // at the switch.
             Rectangle()
                 .fill(IslandPalette.cue)
                 .frame(width: imageSide * 0.46, height: 2)
@@ -338,13 +339,13 @@ private struct CareFrameView: View {
 }
 
 /// The category dock. The selected circle wears a ring that says "this area
-/// holds several moves and you are on this one" — without the ring, "tap the
-/// selected category = flip to the next move" leaves no visual trace and
-/// nobody discovers the paging.
+/// holds several moves and you are on this one"; without it, "tap the selected
+/// category to flip to the next move" leaves no visual trace and nobody
+/// discovers the paging.
 ///
-/// The ring is deliberately a CONTINUOUS base ring plus one bright arc, not a
-/// circle cut into N segments: segments look broken, and "how many" is fully
-/// carried by the arc's LENGTH (a quarter circle = four moves) — no counting gaps.
+/// The ring is a continuous base ring plus one bright arc, not a circle cut
+/// into N segments: segments look broken, and the arc's length says how many
+/// (a quarter circle is four moves), with no gaps to count.
 private struct CategoryDock: View {
     let selected: CareCategory
     let moveIndex: Int          // position of the current move in its category
@@ -352,7 +353,7 @@ private struct CategoryDock: View {
     let onSelect: (CareCategory) -> Void
 
     /// A monotonically increasing step count. Deriving the angle from
-    /// moveIndex directly would sweep the arc BACKWARD most of a full turn
+    /// moveIndex directly would sweep the arc backward most of a full turn
     /// when flipping from the last move to the first; accumulating a monotonic
     /// value keeps the animation "one step forward" forever, matching what the
     /// tap means.

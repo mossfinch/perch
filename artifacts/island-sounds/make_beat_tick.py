@@ -7,7 +7,7 @@ random seed is fixed, so the PCM is reproducible under the same NumPy and afconv
 
 Usage: python3 make_beat_tick.py --output <target directory>. The script needs NumPy and
 macOS afconvert; it creates the target directory, writes a 44.1 kHz mono 16-bit AIFF, and
-deletes the temporary WAV once the conversion succeeds. It only produces the audio — adding
+deletes the temporary WAV once the conversion succeeds. It only produces the audio; adding
 the file to the Xcode project or the app's resources is not its job.
 """
 import argparse

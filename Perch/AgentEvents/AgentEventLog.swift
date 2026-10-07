@@ -1,15 +1,13 @@
 import Foundation
 
-/// Keeps the working, waiting and complete events the island receives, for
+/// The working, waiting and complete events the island receives, kept for
 /// restart recovery and for the week's readings.
-/// Each event is one line of JSON — original project path, source, status and
-/// time — in a file named for the local date.
-/// It records events and never judges flow: it can watch agent interaction, it
-/// cannot prove the human was focused or even present.
-/// One file per day keeps reading and cleanup inside a single day, and stops
-/// one log from growing without bound.
+/// Each event is one JSON line (project path, source, status, time) in a file
+/// named for the local date. One file per day keeps reads and cleanup within a
+/// day and stops a single log from growing without bound.
+/// It records events and never judges flow: agent traffic cannot prove that a
+/// person was focused, or even present.
 enum AgentEventLog {
-    /// The event log and the socket share the same App Group container.
     private static var directory: URL {
         AppGroup.containerURL.appendingPathComponent("agent-events")
     }
@@ -18,13 +16,9 @@ enum AgentEventLog {
     /// the main thread and no two writes interleave into half a line.
     private static let queue = DispatchQueue(label: "io.github.mossfinch.perch.event-log")
 
-    // `stamp` and `day` are shared instances; production code must reach them
-    // through `queue`.
-    // `write` stays a synchronous entry point for the real round-trip test;
-    // every other production caller goes through `append`.
-    // `ISO8601DateFormatter` is not Sendable while `DateFormatter` is, so only
-    // `stamp` needs `nonisolated(unsafe)`; for both, production concurrency
-    // safety comes from the queue.
+    // Production code reaches `stamp` and `day` only through `queue`.
+    // `ISO8601DateFormatter` is not Sendable and `DateFormatter` is, so only
+    // `stamp` needs `nonisolated(unsafe)`; the queue is what makes both safe.
     nonisolated(unsafe) private static let stamp: ISO8601DateFormatter = {
         let f = ISO8601DateFormatter()
         f.formatOptions = [.withInternetDateTime]
@@ -41,18 +35,16 @@ enum AgentEventLog {
         return f
     }()
 
-    /// Queues one event for the disk. A failure to record never interrupts what
-    /// the island is actually for.
+    /// A failed write is ignored on purpose: recording must never get in the
+    /// way of what the island is for.
     static func append(project: String, source: String, event: String, at date: Date = Date()) {
         queue.async { _ = write(project: project, source: source, event: event, at: date, into: directory) }
     }
 
-    /// Writes one event synchronously into the named directory; true on
-    /// success.
-    /// It stays a separate entry point so the round-trip test executes the real
-    /// writing path instead of building sample lines of its own.
-    /// Production code must call through `append`, which is what keeps the
-    /// shared formatters behind `queue`.
+    /// Synchronous, and separate from `append`, so the round-trip test runs the
+    /// real writing path instead of building sample lines of its own.
+    /// Production code calls `append`, which keeps the shared formatters behind
+    /// `queue`.
     @discardableResult
     static func write(project: String, source: String, event: String,
                       at date: Date, into directory: URL) -> Bool {
@@ -81,14 +73,12 @@ enum AgentEventLog {
         }
     }
 
-    /// Reads the valid events inside the closed window `since...now`, oldest
-    /// first.
-    /// A new process uses it to recover recent events from disk instead of
-    /// waiting all over again for enough samples in memory.
-    /// A file that is missing, unreadable or carrying bad lines is skipped;
-    /// what a gap means is the caller's decision.
-    /// `override` lets a test point at a temporary directory without touching
-    /// the real App Group.
+    /// The valid events in the closed window `since...now`, oldest first.
+    /// A new process reads them to recover recent events instead of waiting for
+    /// enough samples in memory all over again.
+    /// Missing or unreadable files and bad lines are skipped; what a gap means
+    /// is for the caller to decide.
+    /// `override` points a test at a temporary directory.
     static func recent(since: Date,
                        now: Date = Date(),
                        from override: URL? = nil) -> [FlowMath.Event] {

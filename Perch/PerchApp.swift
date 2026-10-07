@@ -14,12 +14,11 @@ final class PerchAppDelegate: NSObject, NSApplicationDelegate {
     private var islandWindowController: IslandWindowController?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        // Single instance: there is only one notch, so two panels would stack
-        // exactly on top of each other, indistinguishable by eye — and agent
-        // events reach only whichever instance grabbed the socket; the other
-        // is a zombie pulsing in place, receiving nothing. The newcomer exits.
-        // Must run before IslandWindowController, or the newcomer would first
-        // steal the socket from the earlier instance.
+        // One instance only. Two panels would sit exactly on top of each other
+        // at the one notch, and only the instance holding the socket gets agent
+        // events, so the other would keep drawing while receiving nothing.
+        // The newcomer exits. This runs before IslandWindowController is made,
+        // or the newcomer would take the socket from the running instance first.
         guard !Self.anotherInstanceIsRunning else {
             NSApp.terminate(nil)
             return

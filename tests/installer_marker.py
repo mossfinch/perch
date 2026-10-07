@@ -1,17 +1,17 @@
 """Extract the ownership-marker pieces from the hook installers' source, so
-tests can run the REAL matcher functions.
+tests can run the real matcher functions.
 
 Why not just import the installer: at module level it reads the installed
-app's Info.plist and SystemExits when the island is not installed. Tests must
-not depend on "whether this machine has it installed".
+app's Info.plist and raises SystemExit when the island is not installed. Tests
+must not depend on whether this machine has it installed.
 
-Why a separate file: both `install-island-hooks.py` and
-`install-codex-island-hooks.py` tests need it; two copies would drift. And
-embedding this in a JS template string means nested escaping too brittle to
-trust — JS eats one layer of backslashes in `"\\n".join(...)` and silently
-turns it into a syntax error.
+Why a separate file: the tests of both `install-island-hooks.py` and
+`install-codex-island-hooks.py` need it, and two copies would drift. Embedding
+this in a JS template string means nested escaping too brittle to trust: JS
+eats one layer of backslashes in `"\\n".join(...)` and silently turns it into
+a syntax error.
 
-Cut by LINE, not by regex: the marker's pattern strings contain `)`, and a
+Cut by line, not by regex: the marker's pattern strings contain `)`, and a
 non-greedy regex truncates there.
 """
 import os
@@ -20,7 +20,7 @@ import re
 
 
 def _block(lines, start):
-    """From line `start`, take until the next flush-left (unindented) line —
+    """From line `start`, take until the next flush-left (unindented) line:
     one whole function body."""
     out = [lines[start]]
     for line in lines[start + 1:]:
@@ -51,17 +51,17 @@ def load_marker(rel_path):
     """Return a namespace holding the installer's real ownership matcher and
     upsert.
 
-    ⚠️ Every function `upsert` calls has to be listed here too — an extracted
+    Every function `upsert` calls has to be listed here too: an extracted
     function only sees this namespace, so a missing helper surfaces as a
     NameError when the test runs it.
     """
     lines = pathlib.Path(rel_path).read_text().split("\n")
     ns = {"re": re, "os": os}
 
-    # ⚠️ The slice must reach the LAST constant the matcher reads, not the
-    # last one that existed when this was written. `is_perch_command` also
-    # consults LAUNCHER_PATTERN now; stopping at WIRE_PATTERN left it
-    # undefined and every test running the real matcher died with a NameError.
+    # The slice must reach the last constant the matcher reads.
+    # `is_perch_command` also consults LAUNCHER_PATTERN; stopping at
+    # WIRE_PATTERN would leave it undefined, and every test running the real
+    # matcher would die with a NameError.
     a = next(i for i, l in enumerate(lines) if l.startswith("OWN_ARTIFACTS = "))
     b = next(i for i, l in enumerate(lines[a:], a) if l.startswith("LAUNCHER_PATTERN = "))
     exec("\n".join(lines[a:b + 1]), ns)

@@ -1,7 +1,7 @@
 // The closed island and the strip along it: the bird, the wave, the status dots, the tally,
 // and the caption that rotates when several projects run.
 // One of the island suite's files; `tests/island-roster.js` is what knows they all
-// exist. Run them together — a single file run is a partial answer.
+// exist. Run them together; a single file run is a partial answer.
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
@@ -21,7 +21,7 @@ test("the closed island shows a bird for the machine, and it stands on nothing",
   // Not the system symbol: `bird.fill` is mid-flight with raised wings, a
   // different creature from the one perched on the icon.
   assert.doesNotMatch(mark, /systemName: "bird/, "the system bird is flying; ours is perched");
-  // The asset is a MASK over a coloured layer: the shape comes from its
+  // The asset is a mask over a coloured layer: the shape comes from its
   // alpha, the colour still means agent status.
   assert.match(mark, /body\.mask = shape/, "the bird must be a mask over the status colour, or the colour stops applying");
 
@@ -43,7 +43,7 @@ test("the closed island shows a bird for the machine, and it stands on nothing",
   assert.doesNotMatch(capsule, /VStack/,
     "nothing may be stacked under the bird — it floats, by its owner's own answer");
 
-  // ③ Left wing — the right one holds the counts, up to three digits inside a
+  // ③ Left wing: the right one holds the counts, up to three digits inside a
   //    fixed 44pt. And the closed capsule passes no tap handler: that panel
   //    ignores the mouse so clicks reach the menu bar behind it.
   assert.ok(capsule.indexOf("ClosedIslandMark") < capsule.indexOf("statusCounts"),
@@ -74,18 +74,18 @@ test("one black for both states, and the wave's dim end is derived from it", () 
   assert.deepEqual(capsuleColor, [0, 0, 0],
     `the island's ground drifted off the notch's black (got ${capsuleColor})`);
 
-  // ② Control: the same probe must still read a colour that is NOT black, or
+  // ② Control: the same probe must still read a colour that is not black, or
   //    ① passes on a regex that stopped matching rather than on a real value.
   const paper = rgb("paper");
   assert.ok(paper, "control: the probe cannot read IslandPalette.paper at all");
   assert.ok(paper.some((c) => c > 0.9), `control: paper should be near-white, got ${paper}`);
 
-  // ②b ONE ground, both states. Giving the open card its own lifted grey to
-  //     rescue the wave was rejected outright: both states owe the same depth,
-  //     so the wave was brightened instead.
+  // ②b One ground for both states. The open card gets no lifted grey of its
+  //     own to rescue the wave: both states owe the same depth, so the wave is
+  //     brightened instead.
   assert.ok(!/static let card\b/.test(view),
     "IslandPalette.card is back — its owner asked for one depth, not two");
-  // The two GROUND call sites only — IslandPalette.accent / .cue also back
+  // The two ground call sites only: IslandPalette.accent and .cue also back
   // pills inside the card, and sweeping those in would make this pass for the
   // wrong reason.
   const closedGround = view.match(/\.background\(IslandPalette\.(\w+), in: IslandCapsuleShape/)?.[1];
@@ -96,7 +96,7 @@ test("one black for both states, and the wave's dim end is derived from it", () 
     `the closed island and the open card draw different grounds again: ${closedGround} vs ${openGround}`);
   assert.equal(closedGround, "capsule", "the grounds moved off IslandPalette.capsule");
 
-  // ②c ⚠️ The ground and the wave's dim alpha are ONE decision, and getting it
+  // ②c The ground and the wave's dim alpha are one decision, and getting it
   //     wrong is easy: a black ground plus an alpha tuned against a lifted grey
   //     is an invisible wave. Pinned together, so moving either alone goes red.
   const sense = fs.readFileSync(islandPath("FlowSense.swift"), "utf8");
@@ -111,9 +111,8 @@ test("one black for both states, and the wave's dim end is derived from it", () 
   assert.ok(dim < full / 3,
     `the dim end crept up on full flow (${dim} vs ${full}) — the gap IS the reading`);
 
-  // ③ The number must carry its reason. The capsule was the ONE value in the
-  //    palette with no comment above it, which is exactly how it drifted in
-  //    unnoticed — every other colour here explains itself.
+  // ③ The number must carry its reason: a value with no comment above it is
+  //    how a colour drifts unnoticed. Every other colour here explains itself.
   assert.match(view, /\/\/\/[^\n]*\n(?:\s*\/\/\/[^\n]*\n)*\s*static let capsule = Color\(/,
     "IslandPalette.capsule is a bare number — the last time that happened nobody could say why it was warm");
   assert.match(sense, /\/\/\/[^\n]*\n(?:\s*\/\/\/[^\n]*\n)*\s*static let dimAlpha = /,
@@ -167,38 +166,38 @@ test("island capsule has a distinct persistent done state + retained chime", () 
 
 test("status dots split into rows by agent source, claude above codex", () => {
   const monitor = fs.readFileSync(islandPath("AgentEventMonitor.swift"), "utf8");
-  // Source is the later-added 4th field; older hooks push three fields, and a
-  // three-field message must count as claude — or sessions still running with
-  // an old hook (hooks are read once at session start) lose their row on upgrade.
+  // Older hooks push three fields, and a three-field message must count as
+  // claude, or sessions still running an old hook (hooks are read once at
+  // session start) are misfiled on upgrade.
   assert.match(monitor, /let rawSource = field\(3\)/);
   assert.match(monitor, /rawSource\.isEmpty \? "claude" : rawSource/);
 
   const vm = viewModelSource();
   assert.match(vm, /let source: String/);
   // The unique key must include the source: the same directory open in two
-  // agents is two lines of work — keyed by directory alone they fight over
+  // agents is two lines of work, and keyed by directory alone they fight over
   // one dot and overwrite each other.
   assert.match(vm, /static func key\(source: String, dir: String\)[\s\S]{0,80}\\\(source\)/);
   assert.match(vm, /ProjectStatus\.key\(source: source, dir: dir\)/);
 
   const view = islandViews();
   assert.match(view, /enum AgentRows/);
-  assert.match(view, /static let order = \["claude", "codex"\]/);   // Claude on top
+  assert.match(view, /static let order = \["claude", "codex"\]/);   // Claude first
   // Unknown sources (a future agent) must not silently vanish
   assert.match(view, /for p in projects where !sources\.contains\(p\.source\)/);
-  // Rows by source belong to the OPENED card only. The closed capsule reports
-  // counts instead: 44pt of wing fits about five dots, and rows there only
-  // ever distinguished the sources while both agents happened to be running.
+  // Dots grouped by source belong to the opened card only. The closed capsule
+  // reports counts instead: 44pt of wing fits about five dots, and grouping
+  // there only told the sources apart while both agents happened to be running.
   const card = view.match(/private struct AgentStatusDots[\s\S]*?\n\}/)?.[0] ?? "";
   const capsule = view.match(/private func statusCounts[\s\S]*?\n    \}/)?.[0] ?? "";
   assert.ok(capsule.length > 0, "statusCounts not found");
   assert.match(card, /AgentRows\.rows/);
   assert.doesNotMatch(capsule, /AgentRows\.rows/, "the closed capsule must not lay out per-source rows any more");
-  // No text labels on the card's rows: 8pt row captions are the weakest, most
-  // fragmented thing on it. The persistent caption right of the wave tells.
+  // No text labels on the card's dots: 8pt captions are the weakest, most
+  // fragmented thing on it. The persistent caption right of the wave names them.
   assert.doesNotMatch(view, /AgentRows\.label/);
   // No tooltips on the dots: the island is a non-activating panel where
-  // system tooltips never appear. Strip comments before checking — a comment
+  // system tooltips never appear. Strip comments before checking: a comment
   // legitimately says "don't add .help()" and must stay, so nobody adds it back.
   const code = (s) => s.replace(/\/\/.*$/gm, "");
   assert.doesNotMatch(code(card), /\.help\(/);
@@ -211,10 +210,8 @@ test("status dots split into rows by agent source, claude above codex", () => {
   assert.equal(top + height, 40, "the top row must keep 40pt total, or it steals the figure strip's height");
 
   // Wire format: <event>\\t<dir>\\t<nonce>\\t<source>, source appended last (older hooks without it still work)
-  // ⚠️ Old expectation: each installer's source text contained the wire
-  // format `%s-$$\\t<source>`. The push itself now lives in one launcher
-  // script — a hook command whose text never changes cannot cost the owner
-  // the owner another Trust click), so the format is asserted where it is,
+  // The push lives in one launcher script (a hook command whose text never
+  // changes never needs trusting again), so the wire format is asserted there,
   // and each installer is checked for the only thing it still decides: which
   // source token it hands the launcher.
   const launcher = fs.readFileSync(pkgPath("perch-hook.sh"), "utf8");
@@ -241,7 +238,7 @@ test("the closed capsule tallies states, and the tally can never overflow the wi
   fs.writeFileSync(main, `
 import Foundation
 
-// Nothing to report — the view draws its idle placeholder instead
+// Nothing to report: the view draws its idle placeholder instead
 precondition(StatusTally.counts([]).isEmpty)
 precondition(StatusTally.counts([.idle, .idle]).isEmpty, "idle is the absence of news, never a group")
 
@@ -260,15 +257,15 @@ precondition(StatusTally.counts([.done, .done]) == [StatusCount(status: .done, c
 let lopsided: [IslandAgentStatus] = [.done, .done, .done, .done, .working]
 precondition(StatusTally.counts(lopsided).map(\\.status) == [.working, .done])
 
-// THE WHOLE POINT: however many projects run, the capsule shows at most
-// three things — so the wing can never overflow again, and nothing is lost.
+// The point of the tally: however many projects run, the capsule shows at
+// most three things, so the wing can never overflow, and nothing is lost.
 let flood = [IslandAgentStatus](repeating: .done, count: 200)
           + [IslandAgentStatus](repeating: .working, count: 50)
 precondition(StatusTally.counts(flood).count <= 3)
 precondition(StatusTally.counts(flood).map(\\.count).reduce(0, +) == 250, "every project must still be counted")
 `);
 
-  // Feed ONLY AgentStatus.swift: it has to stay pure Foundation, or this test
+  // Feed only AgentStatus.swift: it has to stay pure Foundation, or this test
   // cannot compile it and the display logic goes back to being checked by grep.
   execFileSync("swiftc", [islandPath("AgentStatus.swift"), main, "-o", binary], { stdio: "pipe" });
   execFileSync(binary, { stdio: "pipe" });
@@ -296,8 +293,8 @@ let factors = levels.map { FlowSense.tempoMultiplier(for: $0) }
 
 let t0 = Date(timeIntervalSince1970: 1_700_000_000)
 let rising = FlowSense.Transition(from: 0, to: 1, since: t0, clockAtSince: 0)
-// One second at the island's own 30fps: half of it is the crossing, half of it
-// is after — so both the ramp and the settled rate get sampled.
+// One second at the island's own 30fps: half of it is the crossing and half of
+// it is after, so both the ramp and the settled rate get sampled.
 let frames = (0...30).map { t0.addingTimeInterval(Double($0) / 30.0) }
 let ramp = frames.map { rising.level(at: $0) }
 let clock = frames.map { rising.waveClock(at: $0) }
@@ -306,7 +303,7 @@ let clock = frames.map { rising.waveClock(at: $0) }
 let naive = frames.map { $0.timeIntervalSinceReferenceDate * FlowSense.tempoMultiplier(for: rising.level(at: $0)) }
 
 // A verdict that flips back mid-crossing must pick up from where the crossing
-// had got to — in the look AND in the phase. Restarting either is the jump
+// had got to, in the look and in the phase. Restarting either is the jump
 // this whole arrangement exists to avoid.
 let mid = t0.addingTimeInterval(0.25)
 let falling = rising.retarget(to: 0, at: mid)
@@ -330,17 +327,17 @@ print("{\\"alphas\\":\\(row(alphas)),\\"clock\\":\\(row(clock)),\\"factors\\":\\
   const at = (level) => r.levels.findIndex((l) => Math.abs(l - level) < 1e-9);
   const near = (a, b, why) => assert.ok(Math.abs(a - b) < 1e-9, `${why}: ${a} vs ${b}`);
 
-  // ① The two ends. Out of flow the wave FADES rather than shrinking: short
+  // ① The two ends. Out of flow the wave fades instead of shrinking: short
   //    bars read as broken.
   //
-  //    ⚠️ The dim end is ground-dependent. On pure black, 0.23 preserves a
+  //    The dim end depends on the ground. On pure black, 0.23 preserves a
   //    visible mid-height bar; this value and IslandPalette's ground are one
   //    decision, so the palette test pins them together.
   near(r.alphas[at(0)], 0.23, "out of flow the wave must sit at 0.23");
   near(r.alphas[at(1)], 1.0, "in flow the wave must be at full strength");
   near(r.factors[at(0)], 0.3, "out of flow the wave must run at 0.3");
   near(r.factors[at(1)], 1.6, "in flow the wave must run at 1.6");
-  // ⚠️ An island that stops moving looks like it crashed. The slow end is slow,
+  // An island that stops moving looks like it crashed. The slow end is slow,
   //    never still.
   assert.ok(r.factors[at(0)] > 0, "the wave must keep moving even out of flow");
   // ② Monotone, and clamped outside 0…1 rather than extrapolated.
@@ -365,11 +362,11 @@ print("{\\"alphas\\":\\(row(alphas)),\\"clock\\":\\(row(clock)),\\"factors\\":\\
   }
 
   // ④ The phase must never jump. The bar heights are sin(time × frequency),
-  //    and one frame of a scaled WALL clock moves that by ~10⁸ radians when the
-  //    factor shifts — the row stops reading as bars and starts reading as
+  //    and one frame of a scaled wall clock moves that by ~10⁸ radians when the
+  //    factor shifts, and the row stops reading as bars and starts reading as
   //    static. The wave clock integrates the factor instead, so the rate
   //    changes while the phase stays put.
-  //    ⚠️ The tolerance is 1e-5, not 1e-9: a Date around 2026 holds only about
+  //    The tolerance is 1e-5, not 1e-9: a Date around 2026 holds only about
   //    1e-7 of a second of resolution, so the frame spacing itself wobbles at
   //    that scale before any of this arithmetic runs. Still ten orders of
   //    magnitude tighter than the leap it is here to catch.
@@ -386,7 +383,7 @@ print("{\\"alphas\\":\\(row(alphas)),\\"clock\\":\\(row(clock)),\\"factors\\":\\
     "control: scaling the wall clock is supposed to leap — if it does not, this assertion proves nothing");
 });
 
-// This test COMPILES AND RUNS CarouselClock, which imports no SwiftUI.
+// This test compiles and runs CarouselClock, which imports no SwiftUI.
 // A text pin cannot prove a formula executes, so entry, boundaries, wrapping
 // and a clock behind the origin all go through behaviour.
 test("the carousel clock really turns: entry, boundaries, wrap, and a clock behind the origin", () => {
@@ -425,7 +422,7 @@ print("ok")
   execFileSync("swiftc", [islandPath("CarouselClock.swift"), main, "-o", binary], { stdio: "pipe" });
   assert.equal(execFileSync(binary, { encoding: "utf8" }).trim(), "ok");
 
-  // Both rotations — resting and hover — must ride this tested clock, never an
+  // Both rotations, resting and hover, must ride this tested clock, never an
   // inlined formula of their own.
   const cellSrc = fs.readFileSync(islandPath("TopWeekRow.swift"), "utf8");
   assert.match(cellSrc, /CarouselClock\.slot\(now: now, origin: carouselOrigin/,
@@ -443,38 +440,25 @@ print("ok")
     "CarouselClock.swift is not compiled into the island");
 });
 
-// The week is recomputed from the log, so it must be refreshed when the panel
-// is opened, and again when a panel left open crosses into a new day.
-// Read only in `init`, a long-running app keeps showing yesterday.
-
-// The week is recomputed from the log, so it must be refreshed when the panel
-// is opened, and again when a panel left open crosses into a new day.
-// Read only in `init`, a long-running app keeps showing yesterday.
-
 test("persistent 'project · source' caption right of the wave, rotating when several run", () => {
   const view = islandViews();
   const label = view.match(/private struct ActiveProjectLabel[\s\S]*?\n\}/)?.[0] ?? "";
   assert.ok(label.length > 0, "ActiveProjectLabel not found");
 
-  // ⚠️ Four of this test's assertions were rewritten, not relaxed. What each
-  //    old expectation assumed, and why it stopped being true:
+  // What this test expects, and why:
   //
-  //    · "rotate working AND waiting together" — this was the bug, not the
-  //      rule. Cycling both meant a project stuck waiting scrolled past every
-  //      three seconds like any other, and yellow is the only one of the four
-  //      states that needs someone to act. Now yellow takes the label and pins
-  //      it.
-  //    · "the caller pre-filters, the label renders what it is handed" — the
-  //      picking moved INTO the label, so "yellow wins" is written in exactly
-  //      one place. `activeProjects` had no other caller and was deleted
-  //      rather than left sitting there.
-  //    · "the label owns a fixed width of its own" — it still must not
-  //      self-size (the reason below is unchanged), but the width now comes
-  //      from the shared right column so the two top rows line up as a grid.
-  //      Same constraint, one owner instead of two.
-  //    · "hide the label when nothing is running" — the cell is now dots AND
-  //      name together; the dots stay whatever happens, so there is no width
-  //      to give back.
+  //    - Yellow takes the label and pins it. Cycling working and waiting
+  //      together would scroll a project stuck waiting past every three
+  //      seconds like any other, and yellow is the only one of the four
+  //      states that needs someone to act.
+  //    - The label picks its own subject, so "yellow wins" is written in
+  //      exactly one place; a caller that pre-filtered would be a second one.
+  //    - The label must not size itself (the reason is below), and its width
+  //      comes from the shared right column, so the two top rows line up as a
+  //      grid with one owner of that width.
+  //    - Nothing is hidden when nothing is running: the cell is dots and name
+  //      together, and the dots stay whatever happens, so there is no width to
+  //      give back.
   const strip = view.match(/struct AgentActivityStrip[\s\S]*?\n\}/)?.[0] ?? "";
   assert.doesNotMatch(strip, /activeProjects/,
     "the pre-filtered list came back — 'yellow wins' must live in one place only");
@@ -491,7 +475,7 @@ test("persistent 'project · source' caption right of the wave, rotating when se
   assert.match(strip, /\.frame\(width: GuidedCareLayout\.rightColumnWidth/);
   assert.doesNotMatch(label, /private static let width: CGFloat/,
     "the label grew a second, private copy of the column width");
-  // Out-of-range normalizes via modulo — projects leave at any time; slot can't be assumed valid
+  // Out-of-range normalizes via modulo: projects leave at any time, so a slot can't be assumed valid
   assert.match(label, /shown\[slot % shown\.count\]/);
   // Don't blink when only one is showing, and don't rotate at all while pinned
   assert.match(label, /guard waiting\.isEmpty, shown\.count > 1 else \{ return \}/);

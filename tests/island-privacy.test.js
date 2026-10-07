@@ -1,7 +1,7 @@
 // Nothing that ships may point at the person who wrote it: no Team ID, no builder path,
 // no agent note left standing, no internal work order, and no accidental push.
 // One of the island suite's files; `tests/island-roster.js` is what knows they all
-// exist. Run them together — a single file run is a partial answer.
+// exist. Run them together; a single file run is a partial answer.
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
@@ -21,8 +21,8 @@ test("the island neither says where you are nor speaks Chinese", () => {
   const view = islandViews();
   const vm = viewModelSource();
 
-  // ① Neither retired view survives — declaration or call site.
-  //    ⚠️ Control group first, and it is a standing rule here: a scan that
+  // ① Neither retired view survives, as a declaration or a call site.
+  //    Control group first, and it is a standing rule here: a scan that
   //    finds nothing proves nothing until it has been shown to find something.
   //    Every "suspiciously clean" result in this repo so far turned out to be a
   //    collapsed scan surface rather than a clean file.
@@ -69,15 +69,15 @@ test("the island neither says where you are nor speaks Chinese", () => {
   assert.equal(literals("// 只有注释\nlet x = 1\n").length, 0,
     "control: the scanner reads the comments it is supposed to skip");
   const shown = literals(view);
-  // The floor only has to catch a COLLAPSED scan (zero or one hit), never to
-  // pin the file's size — IslandView legitimately shrinks every time an
+  // The floor only has to catch a collapsed scan (zero or one hit), never to
+  // pin the file's size: IslandView legitimately shrinks every time an
   // instrument comes off it. Raising this as the file grows would pin the wrong
   // thing; it exists so `for (const s of shown)` can never pass vacuously.
   assert.ok(shown.length >= 12,
     `only ${shown.length} literals found in IslandView — the scan surface collapsed`);
   for (const s of shown) assert.ok(!CJK.test(s), `the island shows Chinese: ${s}`);
 
-  // ③ Mutation, with the ammunition counted BEFORE firing: a replacement string
+  // ③ Mutation, with the ammunition counted before firing: a replacement string
   //    that matches nothing mutates nothing, the guard stays quiet, and the
   //    green means only that the shot was blank.
   const load = (src, anchor, wanted = 1) => {
@@ -86,20 +86,19 @@ test("the island neither says where you are nor speaks Chinese", () => {
     return (replacement) => src.split(anchor).join(replacement);
   };
 
-  // m1 — put the readout back into the card: ① must fire, exactly once.
-  //      ⚠️ This anchor has moved once already, when the view it hung off was
-  //      removed. The ammunition count caught it rather than firing a blank,
-  //      which is the entire reason the count is there.
+  // m1: put the readout back into the card; ① must fire, exactly once.
+  //     If the anchor moves, the ammunition count catches it instead of firing
+  //     a blank; that is why the count is there.
   const m1 = load(view, "            mainContent")(
     "            PresenceReadout()\n            mainContent");
   assert.equal(drawnNames(m1).length, 1, "mutation: the readout came back and the name scan stayed quiet");
 
-  // m2 — put the Chinese label back: ② must fire, exactly once.
+  // m2: put the Chinese label back; ② must fire, exactly once.
   const m2 = load(view, 'Text("Start")')('Text("在岗")');
   assert.equal(literals(m2).filter((s) => CJK.test(s)).length, 1,
     "mutation: Chinese went back onto the island and the probe stayed quiet");
 
-  // m3 — a plinth under the bird: ①b must fire.
+  // m3: a plinth under the bird; ①b must fire.
   const m3 = load(view, "ClosedIslandMark(status: viewModel.agentStatus)")(
     "VStack(spacing: 2) { ClosedIslandMark(status: viewModel.agentStatus)\n" +
     "                Capsule().fill(IslandPalette.paper.opacity(0.55)).frame(width: 20, height: 2) }");
@@ -107,9 +106,9 @@ test("the island neither says where you are nor speaks Chinese", () => {
 });
 
 test("the installer refuses to ship a bundle carrying the builder's own paths", () => {
-  // ⚠️ The gap this closes: every other guard here scans the REPOSITORY — the
-  // manifest picks which files ship, the privacy test scans those. **The
-  // compiled bundle is in none of it**, and the bundle is what a stranger
+  // The gap this closes: every other guard here scans the repository (the
+  // manifest picks which files ship, the privacy test scans those). The
+  // compiled bundle is in none of it, and the bundle is what a stranger
   // downloads. A Release build keeps its debug symbols unless something strips
   // them, and a DWARF file table is a list of the builder's absolute paths.
   // The fixture paths are assembled at runtime: written literally, this file
@@ -143,7 +142,7 @@ test("the installer refuses to ship a bundle carrying the builder's own paths", 
     // ② same bundle once stripped -> must pass, or the gate is unpassable
     "exe.write_bytes(b'\\x00\\x01ordinary bytes\\x00tail')",
     "verify(root)",
-    // ③ the needle is the SHAPE, not one username, and not one file: a
+    // ③ the needle is the shape, not one username, and not one file: a
     //    contributor's own path in any resource counts just the same
     "(root / 'Contents' / 'Resources').mkdir()",
     "(root / 'Contents' / 'Resources' / 'x.bin').write_bytes(b'pad' + TWO.encode())",
@@ -161,7 +160,7 @@ test("no Team ID anywhere in the island's files — it links to the registrant's
   // signature, so no shipped file may carry it as a literal.
   const TEAM = /\b[0-9A-Z]{10}\.group\./;   // an Apple Team ID is 10 uppercase alphanumerics
   // Must recurse into subdirectories: with sources grouped by duty, most
-  // files are not at the top level — reading one level quietly guts the guard.
+  // files are not at the top level, and reading one level quietly guts the guard.
   const islandFiles = islandTree()
     .filter((f) => /\.(swift|entitlements|plist)$/.test(f))
     .map((f) => pkgPath("Perch", f));
@@ -173,9 +172,9 @@ test("no Team ID anywhere in the island's files — it links to the registrant's
     assert.doesNotMatch(s, TEAM, `hard-coded Team ID in ${path.relative(PKG, abs)}`);
   }
 
-  // The island needs NO per-machine configuration (the group name has no Team
+  // The island needs no per-machine configuration (the group name has no Team
   // prefix, identical for everyone, and Xcode doesn't sign). So the public
-  // package must contain no .xcconfig at all — that layer belongs to the
+  // package must contain no .xcconfig at all: that layer belongs to the
   // mother repo's signing side.
   const xcc = fs.readdirSync(PKG).filter((f) => f.endsWith(".xcconfig"));
   if (!WORKING) {
@@ -188,7 +187,7 @@ test("no Team ID anywhere in the island's files — it links to the registrant's
   }
 
   // Info.plist and the entitlements are two declarations of one fact and must
-  // name the same group — diverge and the island can't reach its container
+  // name the same group: diverge and the island can't reach its container
   // while the UI looks perfectly fine
   const ent = fs.readFileSync(islandPath("Perch.entitlements"), "utf8");
   const plist = fs.readFileSync(islandPath("Info.plist"), "utf8");
@@ -196,17 +195,17 @@ test("no Team ID anywhere in the island's files — it links to the registrant's
   assert.ok(group && group.startsWith("group."), `Info.plist's AppGroupID should look like group.xxx, got ${group}`);
   assert.ok(ent.includes(`<string>${group}</string>`), "entitlements and Info.plist disagree on the App Group");
 
-  // Swift reads Info.plist and crashes on misconfiguration — an island
-  // without its App Group is a silent husk: no socket, no events, UI looking
-  // fine. Better to crash than to pretend.
+  // Swift reads Info.plist and crashes on misconfiguration: an island
+  // without its App Group is a silent husk, with no socket, no events, and a UI
+  // looking fine. Better to crash than to pretend.
   const mon = fs.readFileSync(islandPath("AppGroup.swift"), "utf8");
   assert.match(mon, /Bundle\.main\.object\(forInfoDictionaryKey: "AppGroupID"\)/);
   assert.match(mon, /fatalError/);
 
   // The installer must check before installing; an app without the
   // entitlement must never be installed with a success report. What gets
-  // checked is WHAT THE SIGNATURE CARRIES — "the container path resolves"
-  // proves nothing, that API returns a path even for made-up ids.
+  // checked is what the signature carries: "the container path resolves"
+  // proves nothing, because that API returns a path even for made-up ids.
   const inst = fs.readFileSync(pkgPath("install-island-app.py"), "utf8");
   assert.match(inst, /codesign", "-d", "--entitlements"/, "must check the signed entitlements before install");
   assert.match(inst, /com\.apple\.security\.application-groups" not in out/);
@@ -219,14 +218,14 @@ test("no Team ID anywhere in the island's files — it links to the registrant's
   }
 
   // Group validation comes in two families: at build time only `group.x` is
-  // accepted, at run time both `group.x` and `TEAMID.group.x` are.
-  // A faceless widget on macOS 15 needs the signing Team prefix to reach the
-  // protected container.
+  // accepted, at run time both `group.x` and `<TeamID>.group.x` are.
+  // A Team-signed build's container carries the signing Team prefix, so the
+  // run-time readers must accept that shape.
   // The Team prefix is only ever read at run time, from the installed plist or
   // Config.xcconfig, and may never be written into source.
-  // install-island-app.py reads the built product BEFORE the prefix is
+  // install-island-app.py reads the built product before the prefix is
   // injected, so it must use the strict rule.
-  // The hook installers and the day report read the INSTALLED app, so they
+  // The hook installers and the day report read the installed app, so they
   // must use the rule that tolerates both shapes.
   {
     const s = fs.readFileSync(pkgPath("install-island-app.py"), "utf8");
@@ -253,22 +252,19 @@ test("no Team ID anywhere in the island's files — it links to the registrant's
     assert.doesNotMatch(s, /\b[0-9A-Z]{10}\.group\./,
       `${f}: a Team ID leaked into the group validator`);
   }
-  // Same check on the Swift side, now the two-shape guard. ⚠️ The old
-  // expectation pinned a single prefix-free shape (a comma-separated guard,
-  // `value.hasPrefix("group."), value.count > "group.".count`). That assumed
-  // the prefix-free container is reachable on macOS — it is not: a faceless
-  // widget is denied a TCC-protected container whose id lacks the signing Team
-  // ID, so AppGroup.swift must ALSO accept the locally-injected
-  // <TeamID>.group.xxx. The plain shape is still validated the same way; a
-  // second clause validates the Team-prefixed shape's core. Neither writes a
-  // Team ID literal — the guard names only the two SHAPES.
+  // Same check on the Swift side, which accepts two shapes. The prefix-free
+  // container is not always reachable on macOS (TCC protects group containers;
+  // see AppGroup.swift), so AppGroup.swift also accepts the locally injected
+  // <TeamID>.group.xxx. The plain shape is still validated, and a second clause
+  // validates the Team-prefixed shape's core. Neither writes a Team ID literal;
+  // the guard names only the two shapes.
   assert.match(mon, /value\.hasPrefix\("group\."\) && value\.count > "group\."\.count/,
     "the plain group.xxx shape must still be validated");
   assert.match(mon, /rest\.hasPrefix\("group\."\) && rest\.count > "group\."\.count/,
     "the Team-prefixed <TeamID>.group.xxx shape must be accepted, its core validated");
   assert.match(mon, /guard isPlain \|\| isTeamPrefixed else/,
     "exactly those two shapes pass the guard, nothing else");
-  // The Team prefix must not come back INTO THE REPO: committed Info.plist and
+  // The Team prefix must not come back into the repo: committed Info.plist and
   // entitlements stay prefix-free ($(DEVELOPMENT_TEAM) would stamp it into the
   // shipped binary and name a folder after it on every user's machine). The
   // prefix is injected into the built product at install time, never here.
@@ -279,21 +275,21 @@ test("no Team ID anywhere in the island's files — it links to the registrant's
 test("nothing in the public package may locate the author — the scan surface comes from the single manifest", () => {
   // The release scan takes its only boundary from perch-package.json, expanded
   // recursively from the manifest's roots.
-  // A hand-written file list drifts with the directory — missing the guard
-  // itself, the docs, the dot-directories — and then stays reliably green.
+  // A hand-written file list drifts with the directory (missing the guard
+  // itself, the docs, the dot-directories) and then stays reliably green.
   const manifest = JSON.parse(
     fs.readFileSync(pkgPath("perch-package.json"), "utf8"));
 
-  // ⚠️ Must be a SINGLE-PASS replace. Four chained replaces go wrong: after
+  // Must be a single-pass replace. Four chained replaces go wrong: after
   // step three turns `**` into `.*`, step four's `*` -> `[^/]*` rewrites that
-  // freshly made `.*`, and `**/.omc/**` matches only one path level — deep
+  // freshly made `.*`, and `**/.omc/**` matches only one path level, so deep
   // files inside .omc slip through.
   const globToRe = (g) => new RegExp("^" + g.replace(
     /\*\*\/|\*\*|\*|[.+^${}()|[\]\\]/g,
     (m) => ({ "**/": "(?:.*/)?", "**": ".*", "*": "[^/]*" }[m] ?? "\\" + m)) + "$");
   const neverCopy = Object.keys(manifest.neverCopy).map(globToRe);
 
-  // The walk skips NOTHING that starts with a dot — dot-directories are
+  // The walk skips nothing that starts with a dot: dot-directories are
   // exactly where machine paths hide
   const walk = (abs, rel, out) => {
     for (const e of fs.readdirSync(abs, { withFileTypes: true })) {
@@ -319,29 +315,29 @@ test("nothing in the public package may locate the author — the scan surface c
   const skipped = all.filter((f) => neverCopy.some((re) => re.test(f)));
   const scanned = all.filter((f) => !neverCopy.some((re) => re.test(f)));
 
-  // ⚠️ In the extracted package the check must run BOTH ways. Manifest → disk
-  // alone cannot see a file that appeared AFTER the copy: a .pyc dropped by a
+  // In the extracted package the check must run both ways. Manifest to disk
+  // alone cannot see a file that appeared after the copy: a .pyc dropped by a
   // test run, an editor's scratch file, a downloaded asset. Those never sit
-  // under a manifest root, so the walk above never reaches them — and they are
+  // under a manifest root, so the walk above never reaches them, and they are
   // exactly the files that carry an absolute home path.
   //
-  // Whatever is present in the extracted package IS what ships, so:
-  //   · a neverCopy match EXISTING here is itself the alarm — the export never
+  // Whatever is present in the extracted package is what ships, so:
+  //   - a neverCopy match existing here is itself the alarm: the export never
   //     copies those, so anything matching was written afterwards, and a
   //     manual copy or a zip would carry it off even though git ignores it;
-  //   · anything the manifest does not account for must not be here at all.
-  // Only meaningful in the package layout: the mother repo is full of files
-  // that are legitimately none of this package's business.
-  if (true) {   // 两种布局都查；分支在 covered() 里
+  //   - anything the manifest does not account for must not be here at all.
+  // The working repo holds files that are legitimately none of this package's
+  // business, so the rule there is different (see below).
+  if (true) {   // both layouts are checked; the branch is in covered()
     const onDisk = walk(ROOT, "", []).filter((f) => !f.startsWith(".git/"));
-    // ⚠️ Two shapes, one rule each. Since the split this working repo has the same
-    // flat layout as the package, so `PKG === ROOT` no longer tells them apart —
-    // `docs/` does: the exporter never copies it.
+    // Two shapes, one rule each. The working repo has the same flat layout as the
+    // package, so `PKG === ROOT` cannot tell them apart; `docs/` does, because the
+    // exporter never copies it.
     //
-    // In the WORKING repo the manifest's `excludedOnPurpose` entries are SUPPOSED to be
-    // on disk; that field exists to say so, and this guard never read it before. In the
-    // PACKAGE they must be absent, because the export left them behind — so there the
-    // same list is an alarm rather than a pass.
+    // In the working repo the manifest's `excludedOnPurpose` entries are supposed to
+    // be on disk; that field exists to say so. In the package they must be absent,
+    // because the export left them behind, so there the same list is an alarm
+    // instead of a pass.
     const working = WORKING;
     const excluded = Object.keys(manifest.excludedOnPurpose || {}).map((k) => k.replace(/\/\*\*$/, ""));
     const inList = (list) => (rel) => list.some((r) => rel === r || rel.startsWith(r + "/"));
@@ -365,7 +361,7 @@ test("nothing in the public package may locate the author — the scan surface c
   // Control group: the scan surface must not collapse. The most dangerous
   // failure is "scanned nothing, then all green".
   assert.ok(scanned.length >= 40, `only ${scanned.length} files in the scan surface; the manifest is probably broken`);
-  // ⚠️ The guard must scan the suite it lives in. Asking after ALL of the island test
+  // The guard must scan the suite it lives in. Asking after all of the island test
   // files, not just this one, is what makes a seventh file added without a manifest
   // entry go red here instead of shipping unscanned.
   for (const f of islandTestFiles()) {
@@ -375,7 +371,7 @@ test("nothing in the public package may locate the author — the scan surface c
 
   // git assertions run only inside a git repo: the extracted package is not a
   // repo before `git init`, and "human eyeballs before init" is the designed
-  // process — not a defect.
+  // process, not a defect.
   let inGit = true;
   try { execFileSync("git", ["rev-parse", "--is-inside-work-tree"], { cwd: ROOT, stdio: "pipe" }); }
   catch { inGit = false; }
@@ -393,8 +389,8 @@ test("nothing in the public package may locate the author — the scan surface c
 
   // Banned terms: whatever the machine can derive, derive; historical values
   // it can't derive live in tests/.private-terms, which never enters the repo.
-  // The username derives on ANY machine, so the guard really scans on
-  // contributor/CI machines too — it never idles.
+  // The username derives on any machine, so the guard really scans on
+  // contributor and CI machines too: it never idles.
   // The floor must not be hard-coded at 2: on machines without local private
   // material that forces people to edit this test, and editing a guard's test
   // is the easiest way to edit the guard away.
@@ -406,7 +402,7 @@ test("nothing in the public package may locate the author — the scan surface c
   }
   // Two kinds of line live in that file. Plain lines are identity terms,
   // matched literally, everywhere. `history:` lines are upstream working
-  // vocabulary and are read as PATTERNS, not literals — one of them has to
+  // vocabulary and are read as patterns, not literals: one of them has to
   // say "this prefix followed by a digit", and a literal there fires on
   // ordinary identifiers that merely start the same way. They also get the
   // manifest exemption below, because the upstream manifest legitimately
@@ -421,18 +417,18 @@ test("nothing in the public package may locate the author — the scan surface c
       else terms.push([t, "a historical private term (see tests/.private-terms)"]);
     }
   }
-  // On machines where the private files exist (= the author's), a term list
-  // collapsed to just the username means loading broke — that must ring
+  // On machines where the private files exist (the author's), a term list
+  // collapsed to just the username means loading broke, and that must ring
   if (fs.existsSync(cfg) || fs.existsSync(priv)) {
     assert.ok(terms.length >= 2, "private files exist but no terms loaded — check Config.xcconfig and tests/.private-terms");
   }
   assert.ok(terms.length >= 1, "the banned-term list is empty");
 
-  // The history vocabulary is deliberately NOT listed in this file. A
+  // The history vocabulary is deliberately not listed in this file. A
   // hard-coded list of the words that must not leak is itself a description of
-  // the repo they come from — and this file ships. It lives in
-  // tests/.private-terms instead, so the author's machine scans exactly as
-  // before while the public copy carries no such list. A contributor machine
+  // the repo they come from, and this file ships. It lives in
+  // tests/.private-terms instead, so the author's machine still scans for them
+  // while the public copy carries no such list. A contributor machine
   // ends up with an empty list, which is correct: it cannot produce upstream
   // vocabulary in the first place.
   // Setting up only half of it must ring, or the guard quietly loses teeth.
@@ -440,10 +436,10 @@ test("nothing in the public package may locate the author — the scan surface c
     assert.ok(historyNeedles.length >= 1,
       "tests/.private-terms exists but defines no history: lines — the development-history scan is off");
   }
-  // ⚠️ Known interaction, left deliberately unpatched: Apple's asset-scale
-  // suffix makes a filename match the email pattern — the name becomes the
-  // local part, the scale suffix becomes the domain, and the file extension
-  // becomes the tld. Asset-catalog filenames are arbitrary (Contents.json is
+  // Known interaction, left unpatched on purpose: Apple's asset-scale suffix
+  // makes a filename match the email pattern (the name becomes the local part,
+  // the scale suffix the domain, and the file extension the tld).
+  // Asset-catalog filenames are arbitrary (Contents.json is
   // what declares the scale), so those files are spelled with a hyphen here.
   // Loosening the pattern to admit that shape would also admit a real address
   // at a short numeric-looking domain, and this guard is worth more at full
@@ -467,7 +463,7 @@ test("nothing in the public package may locate the author — the scan surface c
     // gets scanned is the text that will actually land.
     // In the package layout nothing is stripped, so a surviving note must ring
     // like anything else.
-    // Both layouts scan the RAW bytes for identity terms, addresses and local
+    // Both layouts scan the raw bytes for identity terms, addresses and local
     // paths.
     // The tag is assembled in pieces in this test, so this file is not itself
     // a residue sample.
@@ -483,7 +479,7 @@ test("nothing in the public package may locate the author — the scan surface c
   }
   assert.ok(sawKnownContent, "control group failed: even a guaranteed string was not seen — nothing was actually read");
 
-  // The term list itself must never enter the repo — it holds exactly what must not leak
+  // The term list itself must never enter the repo: it holds exactly what must not leak
   if (inGit) {
     assert.equal(execFileSync("git", ["ls-files", "tests/.private-terms"], { cwd: ROOT, encoding: "utf8" }).trim(),
       "", "tests/.private-terms is in version control");
@@ -516,10 +512,10 @@ test("the working repo cannot be pushed by accident", () => {
 });
 
 // Which lines in a Swift file are agent notes that detach the doc block above
-// them. One function, used both on the real sources and on the fixtures below —
+// them. One function, used both on the real sources and on the fixtures below:
 // a control that calls something else proves nothing about what runs.
 //
-// ⚠️ Case-insensitive and whole-line, exactly as export-perch.py's NOTE_LINE is:
+// Case-insensitive and whole-line, exactly as export-perch.py's NOTE_LINE is:
 // the publishing step strips a lower-case note too, so one of those detaches
 // the docs in this tree and then vanishes from the package. A guard that only
 // saw upper case would never hear about it.
@@ -528,16 +524,17 @@ function notesDetachingDocs(lines) {
   const out = [];
   lines.forEach((line, i) => {
     if (line.trim().startsWith("///") || !note.test(line)) return;
-    // ⚠️ What FOLLOWS is irrelevant. Once a note sits directly after a `///`
-    // line the block above is already detached — whether what comes next is
-    // more doc, the declaration itself, or an attribute in front of one.
+    // What follows is irrelevant. Once a note sits directly after a `///` line
+    // the block above is already detached, whether what comes next is more doc,
+    // the declaration itself, or an attribute in front of one.
     // Walk back past blank lines and attributes. A note is inside the doc block
     // whether it sits directly under the `///` or behind an attribute that
-    // itself follows one — Swift attaches a doc comment to the whole
+    // itself follows one: Swift attaches a doc comment to the whole
     // declaration, attributes included, so anything wedged in detaches it.
-    // ⚠️ An attribute can span lines (`@available(\n macOS 15,\n *)`). Skipping
-    // only lines that START with `@` stopped the walk at the `*)` and let that
-    // shape through; parens are counted so the whole attribute is stepped over.
+    // An attribute can span lines (`@available(\n macOS 15,\n *)`). Skipping
+    // only lines that start with `@` would stop the walk at the `*)` and let
+    // that shape through, so parens are counted to step over the whole
+    // attribute.
     let j = i - 1;
     let depth = 0;
     while (j >= 0) {
@@ -555,8 +552,8 @@ function notesDetachingDocs(lines) {
 }
 
 test("no agent note is left standing inside a doc comment", () => {
-  // ⚠️ A `//` line ENDS a Swift doc comment. Drop a note into the middle of one
-  // and everything above it stops documenting the declaration below — the file's
+  // A `//` line ends a Swift doc comment. Drop a note into the middle of one
+  // and everything above it stops documenting the declaration below: the file's
   // purpose, its contracts, its warnings, all detached, in the tree people
   // actually read.
   // The publishing step cannot catch this: it strips the notes, so the halves
@@ -570,10 +567,10 @@ test("no agent note is left standing inside a doc comment", () => {
   assert.deepEqual(offenders, [],
     `agent notes sit inside a doc comment and detach everything above them: ${offenders.join(", ")}`);
 
-  // Controls, through the SAME function the sweep just used. Every shape that
+  // Controls, through the same function the sweep just used. Every shape that
   // detaches a doc block must register; nothing else may.
   const tag = "AIDEV" + "-NOTE";
-  // ⚠️ Split like everything else that names the marker: the publishing step
+  // Split like everything else that names the marker: the publishing step
   // refuses a file containing it whole, and it matches case-insensitively.
   const noteHere = new RegExp("aidev" + "-", "i");
   const mustFlag = {
@@ -606,10 +603,6 @@ test("no agent note is left standing inside a doc comment", () => {
 // Comment lines of one shipping file, python docstrings included. Sticky notes
 // are excluded: they are exactly the channel where process history belongs, and
 // the publishing step removes them.
-
-// Comment lines of one shipping file, python docstrings included. Sticky notes
-// are excluded: they are exactly the channel where process history belongs, and
-// the publishing step removes them.
 function publicCommentLines(text, kind) {
   const note = new RegExp("^\\s*(//|#)\\s*" + "AIDEV" + "-(NOTE|TODO|QUESTION)\\b", "i");
   const out = [];
@@ -624,9 +617,9 @@ function publicCommentLines(text, kind) {
       const quotes = (t.match(/"{3}/g) || []).length + (t.match(/'{3}/g) || []).length;
       const wasDoc = inDoc;
       if (quotes % 2 === 1) inDoc = !inDoc;
-      // ⚠️ An even count is not "no docstring": `"""one line."""` opens and
-      // closes on the same line and left the toggle untouched, so a whole class
-      // of docstring walked past this sweep.
+      // An even count is not "no docstring": `"""one line."""` opens and
+      // closes on the same line and leaves the toggle untouched, so parity
+      // alone would let a whole class of docstring walk past this sweep.
       isProse = wasDoc || inDoc || quotes > 0 || t.startsWith("#");
     } else if (kind === "shell") {
       isProse = t.startsWith("#");
@@ -648,17 +641,13 @@ function commentKindFor(rel) {
   return null;   // binaries, images, plists: nothing to read
 }
 
-// A three-digit number used as a REFERENCE — the shape a work-order id takes in
+// A three-digit number used as a reference, the shape a work-order id takes in
 // prose. Not any three-digit number: an angle or a loop bound handed to a call
 // is not a reference, and a guard that flagged those would be switched off
 // within a week.
-// A three-digit number used as a REFERENCE — the shape a work-order id takes in
-// prose. Not any three-digit number: an angle or a loop bound handed to a call
-// is not a reference, and a guard that flagged those would be switched off
-// within a week.
-// ⚠️ Built from halves, and named without the word: a sibling guard forbids that
+// Built from halves, and named without the word: a sibling guard forbids that
 // upstream vocabulary anywhere in a shipping file, and it caught both this
-// constant's NAME and the literal inside it.
+// constant's name and the literal inside it.
 const WORK_ORDER_REFERENCE = new RegExp(
   "\\b" + "PROCESS" + "_\\d+" +
   "|(?:\\b(?:in|since|until|by|after|before|from)\\s+\\d{3}\\b)" +
@@ -667,7 +656,7 @@ const WORK_ORDER_REFERENCE = new RegExp(
 
 test("nothing that ships names an internal work order", () => {
   // A stranger has no way to look up "096", and it narrates how the code got
-  // here rather than what it does — which the sticky-note channel exists for.
+  // here rather than what it does, which is what the sticky-note channel is for.
   // This guard covers mechanical work-order references only. Semantic provenance,
   // including whether a number came from private observations, still requires
   // human comment review.
@@ -709,7 +698,7 @@ test("nothing that ships names an internal work order", () => {
     `shipping comments name internal work orders: ${offenders.join(" · ")}`);
 
   // Controls, through the same two pieces the sweep just used.
-  // ⚠️ The upstream tag is spelled in halves here too: a sibling guard forbids
+  // The upstream tag is spelled in halves here too: a sibling guard forbids
   // that vocabulary anywhere in a shipping file, and it caught this line once.
   const upstream = "PROCESS" + "_124";
   for (const line of ["// gone (096)", "# it changed in 097", `// see ${upstream}`, "/// 090's features"]) {
@@ -718,8 +707,8 @@ test("nothing that ships names an internal work order", () => {
   for (const line of ["// the 108 cap", "// Seconds from 09:00.", "// half an hour, 30 minutes"]) {
     assert.doesNotMatch(line, WORK_ORDER_REFERENCE, `control: "${line}" is being called a work-order reference`);
   }
-  // A parenthesised number in CODE is not a comment, and it is the picker —
-  // not the pattern — that keeps such a call out of this. Prove the picker
+  // A parenthesised number in code is not a comment, and it is the picker,
+  // not the pattern, that keeps such a call out of this. Prove the picker
   // does that job, or the pattern above looks stricter than the sweep is.
   assert.deepEqual(
     publicCommentLines([".degrees(180),", "for _ in range(180):", "// the 108 cap"].join("\n"), "slashes")

@@ -4,8 +4,8 @@ import Foundation
 /// Which index a looping carousel should show at a given moment.
 /// Perch's resting readings and its hover pages share this one rule, each
 /// keeping its own origin.
-/// This type stays clear of SwiftUI so the suite can EXECUTE the real formula;
-/// put back inside a view, it could only ever be text-matched.
+/// This type stays clear of SwiftUI so the suite can execute the real formula;
+/// inside a view, it could only be text-matched.
 enum CarouselClock {
     /// Starts on slot zero at `origin`, advances one slot every `seconds`, and
     /// wraps within `count`.

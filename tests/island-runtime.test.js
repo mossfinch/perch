@@ -1,7 +1,7 @@
-// What the island DOES while it runs: source health, the care ledger and session clock,
+// What the island does while it runs: source health, the care ledger and session clock,
 // the socket it listens on, the status it keeps, and the sweeps that age it.
 // One of the island suite's files; `tests/island-roster.js` is what knows they all
-// exist. Run them together — a single file run is a partial answer.
+// exist. Run them together; a single file run is a partial answer.
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
@@ -70,35 +70,19 @@ test("health stays out of the visual layer while background publication remains 
   assert.match(health, /SourceHealthSnapshot\.decode\(health\)/, "published health must still be schema-validated");
 });
 
-// The island's (Perch's) own tests. The island must be liftable as a whole,
-// so the tests travel with it.
+// The island's own tests travel with it, so the island can be lifted out whole.
 //
-// ⚠️ Two tests deliberately stay behind upstream: they assert that code
-// outside this package keeps its hands off the island — moved into Perch they
-// would be meaningless (what they guard against does not exist here), and
-// only upstream do they work as the reverse guard.
+// Two tests stay behind upstream on purpose: they assert that code outside this
+// package keeps its hands off the island, so moved into Perch they would be
+// meaningless (what they guard against does not exist here); only upstream do
+// they work as the reverse guard.
 //
-// ⚠️ Every python subprocess below runs with `-B`, and that flag is load
-// bearing: without it the interpreter drops `__pycache__/*.pyc` next to the
-// scripts, and a .pyc embeds the absolute path of its source. Running the
-// tests would then plant a home-directory path inside the very package these
-// tests exist to keep clean — and the privacy guard would not see it, because
-// those files are born after the scan.
-
-// The island's (Perch's) own tests. The island must be liftable as a whole,
-// so the tests travel with it.
-//
-// ⚠️ Two tests deliberately stay behind upstream: they assert that code
-// outside this package keeps its hands off the island — moved into Perch they
-// would be meaningless (what they guard against does not exist here), and
-// only upstream do they work as the reverse guard.
-//
-// ⚠️ Every python subprocess below runs with `-B`, and that flag is load
-// bearing: without it the interpreter drops `__pycache__/*.pyc` next to the
-// scripts, and a .pyc embeds the absolute path of its source. Running the
-// tests would then plant a home-directory path inside the very package these
-// tests exist to keep clean — and the privacy guard would not see it, because
-// those files are born after the scan.
+// Every python subprocess below runs with `-B`, and that flag carries weight:
+// without it the interpreter drops `__pycache__/*.pyc` next to the scripts, and
+// a .pyc embeds the absolute path of its source. Running the tests would then
+// plant a home-directory path inside the very package these tests exist to keep
+// clean, and the privacy guard would not see it, because those files are born
+// after the scan.
 
 test("care ledger model round-trips records and locks the wire format", () => {
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "perch-care-ledger-"));
@@ -152,7 +136,7 @@ test("a restarted island reads its own log back instead of starting blind", () =
   const logs = path.join(tmp, "logs");
   fs.mkdirSync(logs);
   // Fixtures use the local-offset shape `append` writes, with the offset read
-  // from THIS machine.
+  // from this machine.
   // `recent` names its day files in local time; a hardcoded offset lands the
   // stamps on a different day than their filenames.
   const at = (local) => {
@@ -164,14 +148,14 @@ test("a restarted island reads its own log back instead of starting blind", () =
     JSON.stringify({ event, project: "/work/a", source: "claude", t });
   // A local 22:30→00:30 window straddles midnight and two day files.
   fs.writeFileSync(path.join(logs, "2026-08-15.jsonl"), [
-    row(at("2026-08-15T20:00:00"), "working"),   // BEFORE the window
+    row(at("2026-08-15T20:00:00"), "working"),   // before the window
     row(at("2026-08-15T23:00:00"), "working"),   // in
     row(at("2026-08-15T23:10:00"), "complete"),  // in
     "{ this line is not json",                     // a half-written tail must not be fatal
   ].join("\n") + "\n");
   fs.writeFileSync(path.join(logs, "2026-08-16.jsonl"), [
-    row(at("2026-08-16T00:05:00"), "working"),   // in — the far side of midnight
-    row(at("2026-08-16T02:00:00"), "working"),   // AFTER `now`
+    row(at("2026-08-16T00:05:00"), "working"),   // in: the far side of midnight
+    row(at("2026-08-16T02:00:00"), "working"),   // after `now`
   ].join("\n") + "\n");
 
   fs.writeFileSync(main, `
@@ -200,7 +184,7 @@ let empty = AgentEventLog.recent(since: since, now: now,
                                  from: URL(fileURLWithPath: "${logs}/nope"))
 precondition(empty.isEmpty, "a missing log should read as no events")
 
-// A wider window must read MORE events, proving the three above came from
+// A wider window must read more events, proving the three above came from
 // filtering and not from a broken reader.
 let wide = AgentEventLog.recent(since: f.date(from: "${at("2026-08-15T00:00:00")}")!,
                                 now: f.date(from: "${at("2026-08-17T00:00:00")}")!,
@@ -212,8 +196,8 @@ precondition(wide.count == 5, "control: a wide window should see all 5 good rows
                           APP_GROUP_SWIFT, main, "-o", binary], { stdio: "pipe" });
   execFileSync(binary, { stdio: "pipe" });
 
-  // ⚠️ Order is correctness: seeding must happen BEFORE the monitor opens, or
-  //    an event can land in memory and be read back out of the log at once, and
+  // The order matters: seeding must happen before the monitor opens, or an
+  //    event can land in memory and be read back out of the log at once, and
   //    one turn gets counted twice.
   const vm = viewModelSource();
   const seed = vm.indexOf("seedFlowFromLog()");
@@ -363,7 +347,7 @@ let eyes = CareMovePool.first(in: .eyes)
 check(clock.position(for: eyes, at: 112), elapsed: 12, frame: 1, reps: 2, complete: false)
 check(clock.position(for: eyes, at: 120), elapsed: 20, frame: 0, reps: 4, complete: false)
 
-// Path: swing out and back — the middle frame is visited again on the return leg
+// Path: swing out and back; the middle frame is visited again on the return leg
 precondition(CareMovePool.all.first { $0.id == "levator-stretch" }!.playbackSequence == [0, 1, 2, 1])
 precondition(CareMovePool.all.first { $0.id == "trap-massage" }!.playbackSequence == [0, 1])   // a massage has no center station
 precondition(CareMovePool.all.first { $0.id == "neck-side-stretch" }!.playbackSequence == [0, 1, 2, 1])
@@ -377,7 +361,7 @@ precondition(abs(lev.frameDuration(at: 0) - (40.0 / 2.0 - 2.0) / 2.0) < 0.000_00
 precondition(lev.frameDuration(at: 1) < lev.frameDuration(at: 0) / 3)
 
 // The real point: change reps/total duration and the through-center time must
-// not move an inch — only hold frames follow. (A beat-proportional model
+// not move an inch; only hold frames follow. (A beat-proportional model
 // would drift the through-center time with cycle length.)
 let levVariant = CareMove(id: "lev-variant", category: .neck, name: "variant",
                           reps: 4, seconds: 60, frames: lev.frames, playback: .pingPong)
@@ -421,17 +405,17 @@ test("island care session uses monotonic state and agent completion does not int
   const vm = viewModelSource();
   assert.match(vm, /NSSound/);
   // Frame changes must be audible: side-neck/levator are done with the head
-  // turned away, eyes off the screen — visual cues like the fade bar are useless there
+  // turned away, eyes off the screen, where visual cues like the fade bar are useless
   assert.match(vm, /beatSound/);
   assert.match(vm, /position\.currentFrameIndex != currentFrameIndex/);
   // Pass-through frames don't tick: they are the interval between sides, not
   // a new move; ticking on every frame change turns one rep into four scattered ticks
   assert.match(vm, /!currentMove\.frames\[position\.currentFrameIndex\]\.isPassThrough/);
-  // Scope to applyProjectEvent FIRST, then find the .done branch. Anchoring on
+  // Scope to applyProjectEvent first, then find the .done branch. Anchoring on
   // "the file's first case .done:" breaks as soon as anyone adds a switch-bearing
-  // method to IslandAgentStatus — the capture then stretches into
+  // method to IslandAgentStatus: the capture then stretches into
   // applyProjectEvent and swallows the endSession machinery into a false failure.
-  // ⚠️ Invariant: agent completion only chimes; it must never interrupt a running session.
+  // Invariant: agent completion only chimes; it must never interrupt a running session.
   const applyBlock = vm.match(/private func applyProjectEvent\([\s\S]*?\n    \}/)?.[0] ?? "";
   assert.ok(applyBlock.length > 0, "applyProjectEvent not found");
   const doneBlock = applyBlock.match(/case \.done:([\s\S]*?)case \.waiting/)?.[1] ?? "";
@@ -495,7 +479,7 @@ test("island gains a 4th waiting state (PermissionRequest→yellow) + auto-peek 
                /enum IslandAgentStatus[\s\S]*?case waiting/);   // four states
   assert.match(vm, /onWaiting/);
   assert.match(vm, /return \.waiting/);   // waiting is reachable (via aggregateStatus())
-  assert.match(vm, /isHovering/);                                   // expanded = OR of three
+  assert.match(vm, /isHovering/);                                   // expanded = any of three
   assert.match(vm, /peekActive/);                                   // auto-peek choreography
   assert.match(vm, /sessionPhase == \.active/);                     // stays open during a session
   assert.match(vm, /caredThisRound/);                               // done auto-peeks only if you cared this round
@@ -550,18 +534,18 @@ test("the socket bridge accepts bounded reconciliation payloads for App Group pu
 });
 
 test("yellow must be able to turn back to blue: PostToolUse pushes working", () => {
-  // Yellow would otherwise never exit: approving emits NO event, and
-  // UserPromptSubmit only fires when the human types — so "asked once" would
+  // Yellow would otherwise never end: approving emits no event, and
+  // UserPromptSubmit only fires when a person types, so "asked once" would
   // mean "yellow until the turn ends": you approve, the agent works another
-  // 20 minutes, the dot stays yellow.
-  // PostToolUse is the only signal that DISPROVES "something is stuck": a
-  // tool finished, therefore nothing waits on a human.
+  // 20 minutes, and the dot stays yellow.
+  // PostToolUse is the only signal that proves nothing is stuck: a tool
+  // finished, so nothing waits on a person.
   for (const f of ["install-island-hooks.py", "install-codex-island-hooks.py"]) {
     const s = fs.readFileSync(pkgPath(f), "utf8");
     const events = s.match(/EVENTS = \{[\s\S]*?\n\}/)?.[0] ?? "";
     assert.ok(events.length > 0, `${f}: EVENTS not found`);
     assert.match(events, /"PostToolUse":\s*"working"/, `${f}: PostToolUse must push working`);
-    // Yellow itself must not get lost — it is the only "really waiting on your approval" signal
+    // Yellow itself must not get lost: it is the only "really waiting on your approval" signal
     assert.match(events, /"PermissionRequest":\s*"waiting"/, `${f}: yellow is gone`);
     assert.match(events, /"Stop":\s*"complete"/, `${f}: green is gone`);
   }
@@ -580,7 +564,7 @@ test("yellow must be able to turn back to blue: PostToolUse pushes working", () 
 import importlib.util, json, sys
 spec = importlib.util.spec_from_file_location("cx", ${JSON.stringify(pkgPath("install-codex-island-hooks.py"))})
 cx = importlib.util.module_from_spec(spec); spec.loader.exec_module(cx)
-# Importing must not require an installed island — and neither may anything
+# Importing must not require an installed island, and neither may anything
 # these tests drive. Make the reader explode to prove it: a fresh clone and CI
 # have no /Applications/Perch.app, and a test that only passes on the author's
 # machine is not a test.
@@ -591,10 +575,9 @@ foreign = {"hooks": [{"command": "someone-elses-hook", "type": "command"}]}
 root = {"hooks": {"PostToolUse": [dict(foreign)]}}
 # Explicit launcher path: the command must be buildable without Perch
 # installed, or this test only passes on a machine that already has it.
-# ⚠️ Old expectation: an explicit socket AND lastrun, because the command
-# carried both inline. It no longer carries either — that is the whole point
-# of this change (a command whose text never changes cannot cost the owner
-# another Trust click). What marks a command as ours is now the launcher path.
+# The command carries neither the socket nor the lastrun path (a command whose
+# text never changes needs no new trust); the launcher path is what marks it
+# as ours.
 cmd = cx.hook_command("working", "/x/.perch/bin/perch-hook")
 assert cx.is_perch_command(cmd), "the built command is not recognized as ours; this test proves nothing"
 _, first = cx.upsert(root, "PostToolUse", cmd)          # new
@@ -618,11 +601,11 @@ test("yellow survives the 15-min sweep, no silent container fallback, screen cha
   const code = (s) => s.replace(/\/\/.*$/gm, "");
   const read = (name) => code(fs.readFileSync(islandPath(name), "utf8"));
 
-  // ② Yellow's expiry policy has its OWN real-behavior test (see "stale
+  // ② Yellow's expiry policy has its own real-behavior test (see "stale
   //    policy runs real behavior" below). Here only the call site: pruneStale
   //    must go through StalePolicy, and the ViewModel keeps no duration constants.
   // the extensions count: a constant hidden there is still in the view model.
-  // ⚠️ Comments stripped — the `\d+ \* 60` rule below would otherwise fire on a
+  // Comments stripped: the `\d+ \* 60` rule below would otherwise fire on a
   // comment that merely mentions a duration.
   const vm = viewModelSource().replace(/\/\/.*$/gm, "");
   const prune = vm.match(/func pruneStale\(\)[\s\S]*?\n    \}/)?.[0] ?? "";
@@ -632,7 +615,7 @@ test("yellow survives the 15-min sweep, no silent container fallback, screen cha
   assert.doesNotMatch(prune, /removeAll \{ \$0\.updatedAt < cutoff \}/, "the old blanket sweep must not remain");
 
   // ③ Failing to get the App Group container must crash loudly. A sandboxed
-  //    app's homeDirectoryForCurrentUser is the home INSIDE the container;
+  //    app's homeDirectoryForCurrentUser is the home inside the container;
   //    falling back there writes everything into a shadow directory nothing
   //    outside can read, without a sound.
   const group = read("AppGroup.swift");
@@ -640,14 +623,14 @@ test("yellow survives the 15-min sweep, no silent container fallback, screen cha
   const container = group.match(/static let containerURL[\s\S]*?\n    \}\(\)/)?.[0] ?? "";
   assert.match(container, /fatalError/, "an unavailable container must crash on the spot with a clear reason");
 
-  // ④ Panel coordinates are computed against THE screen of that moment; without
+  // ④ Panel coordinates are computed against the screen of that moment; without
   //    recomputing after a screen change the island draws on a screen that no
   //    longer exists (looks exactly like a crash)
   const wc = read("IslandWindowController.swift");
   assert.match(wc, /didChangeScreenParametersNotification[\s\S]{0,240}activate\(\)/,
     "the screen-change notification must rerun activate() to reposition");
 
-  // ⑤ Closing must UNMOUNT the whole card: it holds a 30fps TimelineView, and opacity 0 doesn't stop it
+  // ⑤ Closing must unmount the whole card: it holds a 30fps TimelineView, and opacity 0 doesn't stop it
   const view = read("IslandView.swift");
   const stack = view.match(/ZStack\(alignment: \.top\)[\s\S]*?\n        \}/)?.[0] ?? "";
   assert.match(stack, /if phase == \.opened \{[\s\S]*?openedPlaceholder/, "the card mounts only when opened");
@@ -656,12 +639,12 @@ test("yellow survives the 15-min sweep, no silent container fallback, screen cha
 });
 
 test("stale policy runs real behavior: yellow survives a meal, blue/green go at 15 minutes", () => {
-  // ⚠️ Regex-matching the ternary inside `pruneStale` is a fake gate: keep
+  // Regex-matching the ternary inside `pruneStale` is a fake gate: keep
   // the literal, swap the real comparison back to 15 minutes, and behavior
   // regresses to the original bug (yellow swept) while the test stays green.
   //
   // So the policy must be extracted into pure-Foundation StalePolicy to be
-  // testable at all — buried in IslandViewModel, that class drags in AppKit
+  // testable at all: buried in IslandViewModel, that class drags in AppKit
   // and the socket listener and cannot be constructed in a test (touching
   // AppGroup.id hits fatalError), leaving only literal-matching.
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "perch-stale-"));
@@ -677,7 +660,7 @@ precondition(!StalePolicy.isStale(isWaiting: false, age: 14 * min), "removed at 
 precondition(!StalePolicy.isStale(isWaiting: false, age: 15 * min), "exactly 15 minutes should not remove")
 precondition( StalePolicy.isStale(isWaiting: false, age: 16 * min), "16 minutes should remove")
 
-// Yellow (isWaiting=true): IT MUST STILL BE THERE AFTER A MEAL — the whole point of the rule
+// Yellow (isWaiting=true): it must still be there after a meal; that is the point of the rule
 precondition(!StalePolicy.isStale(isWaiting: true, age: 16 * min), "yellow swept at 16 minutes")
 precondition(!StalePolicy.isStale(isWaiting: true, age: 90 * min), "back from lunch and yellow is gone")
 precondition(!StalePolicy.isStale(isWaiting: true, age: 8 * hour), "exactly 8 hours should not remove")
@@ -688,7 +671,7 @@ precondition( StalePolicy.isStale(isWaiting: true, age: 8 * hour + 1), "a never-
 precondition(StalePolicy.waiting > StalePolicy.busy, "yellow's line is not longer than blue/green's — no distinction at all")
 `);
 
-  // Feed ONLY StalePolicy.swift: it must be pure Foundation — dragging in AppKit makes it untestable again
+  // Feed only StalePolicy.swift: it must be pure Foundation, and dragging in AppKit makes it untestable again
   execFileSync("swiftc", [islandPath("StalePolicy.swift"), main, "-o", binary], { stdio: "pipe" });
   execFileSync(binary, { stdio: "pipe" });
 
@@ -724,7 +707,7 @@ test("perch care-move assets match exactly what the move pool references", () =>
     assert.match(metadata, /hasAlpha: yes/, `${assetName} should have alpha`);
   }
 
-  // ⚠️ The artwork-slicing pipeline is checked upstream, not here: it does not
+  // The artwork-slicing pipeline is checked upstream, not here: it does not
   // ship, and referencing it from the island's tests would make the island
   // unliftable.
 });

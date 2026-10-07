@@ -1,46 +1,36 @@
 import CoreGraphics
 
-/// A geometry snapshot of the island window and its visible contents on one target screen.
-///
-/// `IslandWindowController` derives these values from the current screen, and window
-/// placement, SwiftUI layout, and the hover zones all read them. Every dimension is in
-/// macOS logical points. This type only carries the numbers; it does not read the screen or
-/// validate the relationships between its fields.
+/// The island window's geometry on one screen, in macOS logical points.
+/// `IslandWindowController` derives it; window placement, SwiftUI layout and the hover zones
+/// read it.
 public struct IslandDisplayMetrics: Equatable, Sendable {
-    /// Whether the target screen is laid out around a physical notch.
     public let isNotched: Bool
-    /// Full width of the NSPanel, including the transparent margins for the shadow.
+    /// Includes the transparent shadow margins.
     public let windowWidth: CGFloat
-    /// Full height of the NSPanel, including the bottom margin for the shadow.
+    /// Includes the bottom shadow margin.
     public let windowHeight: CGFloat
-    /// Visible width of the closed capsule.
     public let closedWidth: CGFloat
-    /// Visible height of the closed capsule, which is also the safe-area height at the top
-    /// of the opened card.
+    /// Also the safe-area height at the top of the opened card.
     public let closedHeight: CGFloat
-    /// On notched screens, the transparent gap at the center of the closed capsule that
-    /// lines up with the physical notch; 0 on ordinary screens.
+    /// The transparent gap in the closed capsule's centre that lines up with the physical
+    /// notch; 0 without one.
     public let notchGapWidth: CGFloat
-    /// The width the opened content would like; the controller takes the larger of this and
-    /// `closedWidth` to produce `layoutWidth`.
+    /// What the opened content asks for; `layoutWidth` is the larger of this and
+    /// `closedWidth`.
     public let resultWidth: CGFloat
-    /// Content height of the opened card below the top safe area.
+    /// Below the top safe area.
     public let resultHeight: CGFloat
-    /// Actual card width before the shadow margins, which must fit both the closed capsule
-    /// and the opened content.
+    /// The card itself, without shadow margins; it fits both the capsule and the opened
+    /// content.
     public let layoutWidth: CGFloat
-    /// Actual card height before the shadow margins, i.e. `closedHeight + resultHeight`.
+    /// `closedHeight + resultHeight`, without shadow margins.
     public let layoutHeight: CGFloat
-    /// Transparent width reserved for the shadow on each side of the card; the window's
-    /// total width includes two of them.
+    /// On each side; the window width includes two.
     public let openedShadowHorizontalInset: CGFloat
-    /// Transparent height reserved for the shadow below the card.
     public let openedShadowBottomInset: CGFloat
 
-    /// Creates a complete geometry snapshot.
-    ///
-    /// The initializer neither clamps nor derives values. Callers should supply
-    /// non-negative dimensions and maintain these relationships:
+    /// Nothing is clamped or derived. Callers supply non-negative dimensions that keep these
+    /// relationships:
     /// `layoutWidth >= closedWidth` and `layoutWidth >= resultWidth`,
     /// `layoutHeight = closedHeight + resultHeight`,
     /// `windowWidth = layoutWidth + 2 × openedShadowHorizontalInset`,
@@ -73,11 +63,8 @@ public struct IslandDisplayMetrics: Equatable, Sendable {
         self.openedShadowBottomInset = openedShadowBottomInset
     }
 
-    /// Notch-free startup values used before the target screen's geometry is available.
-    /// They create the initial window and populate the initial view model; once the
-    /// controller has picked a screen, measured results replace them. These numbers only
-    /// need to form a self-consistent, displayable startup layout — they do not stand for
-    /// any real screen's dimensions.
+    /// Startup values, used until the controller picks a screen and measures it. They only
+    /// need to be self-consistent and displayable; they describe no real screen.
     public static let fallback = IslandDisplayMetrics(
         isNotched: false,
         windowWidth: 556,

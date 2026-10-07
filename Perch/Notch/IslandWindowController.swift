@@ -11,11 +11,10 @@ final class IslandWindowController: NSWindowController {
         static let externalClosedHeight: CGFloat = 38
         static let externalOpenedWidth: CGFloat = 520
         static let notchedOpenedWidth: CGFloat = 540
-        // ⚠️ The card grows rather than the figure strip shrinking. The top
-        // band's two rows take most of the strip's slack, and the figures are
-        // what a person is actually looking at while they move — so every time
-        // something is added above, the room comes with it or the squeeze has
-        // only been moved somewhere else.
+        // When something is added above the figure strip, the card grows and the
+        // strip keeps its size. The top band's two rows already take most of the
+        // strip's slack, and the figures are what a person looks at while moving;
+        // shrinking them only moves the squeeze somewhere else.
         static let openedResultHeight: CGFloat = 298
         static let openedShadowHorizontalInset: CGFloat = 18
         static let openedShadowBottomInset: CGFloat = 22
@@ -54,6 +53,7 @@ final class IslandWindowController: NSWindowController {
         installContentView()
         configureHoverMonitor()
         observePresentationPhase()
+        observeStretchTab()
         observeScreenChanges()
     }
 
@@ -62,8 +62,8 @@ final class IslandWindowController: NSWindowController {
         nil
     }
 
-    /// Position the panel and bring it up. **Idempotent, safe to rerun any
-    /// time** — screen changes are handled precisely by rerunning it.
+    /// Positions the panel and brings it up. Safe to rerun at any time; screen
+    /// changes are handled by rerunning it.
     func activate() {
         guard let window, let screen = targetScreen() else { return }
         let display = displayMetrics(for: screen)
@@ -72,7 +72,7 @@ final class IslandWindowController: NSWindowController {
             window.setFrame(windowFrame, display: true)
         }
         viewModel.display = display
-        updateHoverZones(for: display, on: screen)
+        updateHoverZones(for: display, on: screen, nudging: viewModel.stretchNudge)
         hoverMonitor.start()
         window.orderFrontRegardless()
     }
@@ -88,6 +88,18 @@ final class IslandWindowController: NSWindowController {
         window.contentView = hostingView
     }
 
+    /// The tab under the closed capsule changes the closed hover zone. `@Published` emits
+    /// before the property changes, so the zone is built from the value handed over here.
+    private func observeStretchTab() {
+        viewModel.$stretchNudge
+            .removeDuplicates()
+            .sink { [weak self] nudging in
+                guard let self, let screen = self.targetScreen() else { return }
+                self.updateHoverZones(for: self.viewModel.display, on: screen, nudging: nudging)
+            }
+            .store(in: &cancellables)
+    }
+
     private func observePresentationPhase() {
         viewModel.$presentationPhase
             .sink { [weak self] phase in
@@ -96,14 +108,14 @@ final class IslandWindowController: NSWindowController {
             .store(in: &cancellables)
     }
 
-    /// Display plugged / unplugged / lid closed / resolution changed — all of
-    /// them require recomputing coordinates.
+    /// A display plugged in or out, the lid closed, a resolution change: each
+    /// needs the coordinates recomputed.
     ///
-    /// The panel's position, size, and hover zones are all computed in
-    /// `activate()` against THE screen of that moment. After a screen change
-    /// those coordinates point at a screen that no longer exists and the
-    /// island vanishes — the process stays alive, events keep arriving, it
-    /// just draws where nobody can see. Looks exactly like a crash.
+    /// `activate()` computes the panel's position, size and hover zones against
+    /// the screen of that moment. After a screen change they point at a screen
+    /// that no longer exists, and the island vanishes: the process stays alive
+    /// and events keep arriving, but it draws where nobody can see. That looks
+    /// exactly like a crash.
     private func observeScreenChanges() {
         screenObserver = NotificationCenter.default.addObserver(
             forName: NSApplication.didChangeScreenParametersNotification,
@@ -151,19 +163,22 @@ final class IslandWindowController: NSWindowController {
         }
     }
 
-    private func updateHoverZones(for display: IslandDisplayMetrics, on screen: NSScreen) {
+    private func updateHoverZones(for display: IslandDisplayMetrics, on screen: NSScreen,
+                                  nudging: Bool) {
         hoverMonitor.updateZones(
-            closed: closedSurfaceRect(for: display, on: screen),
+            closed: closedSurfaceRect(for: display, on: screen, nudging: nudging),
             expanded: expandedSurfaceRect(for: display, on: screen)
         )
     }
 
-    private func closedSurfaceRect(for display: IslandDisplayMetrics, on screen: NSScreen) -> NSRect {
+    private func closedSurfaceRect(for display: IslandDisplayMetrics, on screen: NSScreen,
+                                   nudging: Bool) -> NSRect {
+        let height = display.closedHeight + (nudging ? IslandView.stretchTabHeight : 0)
         let visualRect = NSRect(
             x: screen.frame.midX - display.closedWidth / 2,
-            y: screen.frame.maxY - display.closedHeight,
+            y: screen.frame.maxY - height,
             width: display.closedWidth,
-            height: display.closedHeight
+            height: height
         )
         return visualRect.insetBy(dx: -80, dy: -6)
     }

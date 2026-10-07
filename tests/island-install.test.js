@@ -1,7 +1,7 @@
 // Getting onto the machine and staying recognised: the app target, the installers, the
 // hooks, the launchd job, and the container the ledger lives in.
 // One of the island suite's files; `tests/island-roster.js` is what knows they all
-// exist. Run them together — a single file run is a partial answer.
+// exist. Run them together; a single file run is a partial answer.
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
@@ -16,18 +16,18 @@ test("perch target is wired as an LSUIElement notch app", () => {
   // No project.yml (XcodeGen recipe) here: a generator recipe never tracks
   // the pbxproj, and one run of xcodegen would rebuild the project from the
   // stale recipe, wiping weeks of changes.
-  // ⚠️ The invariant: the island must be a standalone target with its own
+  // The invariant: the island must be a standalone target with its own
   // bundle id, and the project file itself is the single source of truth.
   const pbx = fs.readFileSync(pkgPath("Perch.xcodeproj", "project.pbxproj"), "utf8");
   assert.match(pbx, /\/\* Perch \*\/ = \{\s*isa = PBXNativeTarget;/);
 
-  // ⚠️ No literal bundle id pinned here — that would be over-specification.
+  // No literal bundle id is pinned here; that would be over-specification.
   // The invariant is "the island has its own bundle id, identical in Debug
   // and Release", never "it must be called some particular name"; a pinned
   // literal turns every rename into "edit the tests".
-  // (The "must not collide with anything else on the same machine"
-  // counterpart lives upstream — it has to name what it checks against, and
-  // that name doesn't ship.)
+  // (The counterpart, "must not collide with anything else on the same
+  // machine", lives outside this package: it has to name what it checks
+  // against, and that name doesn't ship.)
   //
   // The island's build-settings blocks = the ones whose INFOPLIST_FILE points
   // into Perch/ (one for Debug, one for Release)
@@ -44,7 +44,7 @@ test("perch target is wired as an LSUIElement notch app", () => {
 
   const ent = fs.readFileSync(islandPath("Perch.entitlements"), "utf8");
   // No literal id asserted: a Team ID links to a developer account's real
-  // name. The invariant stands — the entitlements must declare an App Group.
+  // name. The invariant stands: the entitlements must declare an App Group.
   assert.match(ent, /<key>com\.apple\.security\.application-groups<\/key>/);
   assert.match(ent, /<string>group\.[^<]+<\/string>/);
 
@@ -64,8 +64,8 @@ test("island is single-instance and installable as a real app", () => {
   assert.match(app, /bundleIdentifier == bundleID && \$0\.processIdentifier != me\.processIdentifier/);
   assert.match(app, /NSApp\.terminate/);
   // The real invariant: the yield check must precede window creation. One
-  // step later and the newcomer steals the socket from the incumbent first —
-  // "two panels stacked, events delivered to the one that just started".
+  // step later and the newcomer steals the socket from the incumbent first:
+  // two panels stacked, with events delivered to the one that just started.
   const guardAt = app.search(/anotherInstanceIsRunning/);
   const windowAt = app.search(/IslandWindowController\(\)/);
   assert.ok(guardAt >= 0 && windowAt >= 0 && guardAt < windowAt,
@@ -78,8 +78,8 @@ test("island is single-instance and installable as a real app", () => {
   // KeepAlive must be false: stacked on the single-instance guard it becomes a start→suicide→restart flap
   assert.match(installer, /"KeepAlive": False/);
   // Entitlement missing = sandbox denies the container = every hook event lost; must be caught at install.
-  // What gets checked is that the SIGNATURE really carries the app-group
-  // entitlement — with no Team prefix in the group name, "TeamIdentifier ==
+  // What gets checked is that the signature really carries the app-group
+  // entitlement: with no Team prefix in the group name, "TeamIdentifier ==
   // group prefix" checks are meaningless and miss the real failure anyway.
   assert.match(installer, /def check_entitlement/);
   assert.match(installer, /def app_group_of/);
@@ -118,7 +118,7 @@ test("the app installer keeps the scanner outside the sandbox and publishes thro
 test("the island's own launchd job has somewhere to put what it says", () => {
   // Without these the island's stderr goes nowhere: a crash, a refused write or
   // a failed precondition leaves no trace anyone can read afterwards. The
-  // reconciler beside it has had both since day one.
+  // reconciler beside it has both.
   const py = [
     "import pathlib, sys",
     "sys.path.insert(0, 'tests')",
@@ -139,7 +139,7 @@ test("the island's own launchd job has somewhere to put what it says", () => {
   const out = execFileSync("python3", ["-B", "-c", py], { encoding: "utf8", cwd: ROOT }).trim();
   assert.equal(out, "ok");
 
-  // ⚠️ The spec spells the label and the executable out so it can be lifted out
+  // The spec spells the label and the executable out so it can be lifted out
   // and inspected alone; the install path around it still reaches for the
   // module constants when it unloads the old job. Two spellings of one fact:
   // let them drift and the plist names one job while `launchctl bootout` names
@@ -155,9 +155,9 @@ test("the island's own launchd job has somewhere to put what it says", () => {
 });
 
 test("the installer's socket check waits for a real connection, never for the file", () => {
-  // ⚠️ The bug this guards against: a socket FILE may be the leftover of the
-  // instance the installer just killed — pkill gives it no chance to unlink
-  // its own — so "the file is there" says nothing about anyone listening.
+  // What this guards against: a socket file may be the leftover of the
+  // instance the installer just killed (pkill gives it no chance to unlink
+  // its own), so "the file is there" says nothing about anyone listening.
   // Gating on the file and connecting once fails on the single most common
   // path there is: every reinstall, where the fresh island unlinks that
   // leftover and rebinds a moment later.
@@ -180,7 +180,7 @@ test("the installer's socket check waits for a real connection, never for the fi
     "        raise AssertionError('did not fail: ' + why)",
     "    except SystemExit as e:",
     "        return str(e)",
-    // ② Never accepts AND no socket file -> the island never bound
+    // ② Never accepts and no socket file -> the island never bound
     "msg = refuses(pathlib.Path('/nonexistent/bridge.sock'), 'nothing bound at all')",
     "assert 'never bound' in msg, 'wrong diagnosis: ' + msg",
     // ③ A real socket file nobody accepts on -> a different diagnosis, because
@@ -205,23 +205,22 @@ test("codex island hooks install additively, never reordering foreign hooks", ()
   assert.match(s, /"Stop": "complete"/);
   assert.match(s, /perch-backup/);                          // backup before writing
   assert.match(s, /trusted_hash/);             // the reason lives in the code, not in word of mouth
-  // Replacement must happen at the HOOK level. Assigning a whole group is the
+  // Replacement must happen at the hook level. Assigning a whole group is the
   // bug the A4 case below exists for: it takes somebody else's hooks down
   // together with ours, and a group-level self-check cannot see the damage.
   // Behavior is proven below; this bans the shape, which behavior cannot.
   assert.doesNotMatch(s, /^\s*groups\[[^\]]*\] = /m,
     "a whole-group assignment deletes any foreign hook sharing that group");
 
-  // ⚠️ Two assertions were deliberately NOT written the obvious way:
+  // Two assertions are deliberately not written the obvious way:
   //
-  // ① `assert.match(s, /PERCH_MARK = APP_GROUP/)` — that pattern is itself a
+  // ① `assert.match(s, /PERCH_MARK = APP_GROUP/)`: that pattern is itself a
   //    bug (a changeable value as identity: change the App Group and old
   //    entries stop being recognized); recognition is by shape instead. And
-  //    literal-matching assertions collide with comments — matching the
-  //    comment that explains them still turns green. So the literal is
-  //    BANNED instead.
+  //    literal-matching assertions collide with comments: matching the comment
+  //    that explains them still turns green. So the literal is banned instead.
   //
-  // ② `assert.doesNotMatch(s, /groups\.pop\(/)` — that bans a WORD, while the
+  // ② `assert.doesNotMatch(s, /groups\.pop\(/)`: that bans a word, while the
   //    real invariant is "other entries' indices must not move" (codex keys
   //    trusted_hash by `<file>:<event>:<group idx>:<hook idx>`; one shift and
   //    someone else's hook loses trust and silently stops). Banning the word
@@ -236,7 +235,7 @@ test("codex island hooks install additively, never reordering foreign hooks", ()
     "from installer_marker import load_marker",
     `ns = load_marker(${JSON.stringify(pkgPath("install-codex-island-hooks.py"))})`,
     "upsert = ns['upsert']",
-    // A command must carry BOTH an own-artifact path inside the container and
+    // A command must carry both an own-artifact path inside the container and
     // the wire-protocol signature (path alone would misfire on other apps)
     "SOCK = '$HOME/Library/Group Containers/TTTTTTTTTT.group.x/bridge.sock'",
     "CMD = 'printf \"working' + chr(92) + 't%s' + chr(92) + 't%s-$$' + chr(92) + 'tcodex\" | nc -U \"' + SOCK + '\"'",
@@ -262,7 +261,7 @@ test("codex island hooks install additively, never reordering foreign hooks", ()
     "upsert(root, 'Stop', CMD)",
     "g = root['hooks']['Stop']",
     "assert len(g) == 2 and 'some-tool' in g[0]['hooks'][0]['command'], 'new entries must append at the end'",
-    // A4 — a MIXED group: our hook sitting in the same group as someone
+    // A4: a mixed group, our hook sitting in the same group as someone
     // else's. Replacing the group as a whole (the obvious implementation)
     // silently deletes their hook, and a group-level self-check cannot see it,
     // because a group holding one of ours is excluded from the comparison.
@@ -279,7 +278,7 @@ test("codex island hooks install additively, never reordering foreign hooks", ()
     "assert g[0]['hooks'][0]['command'] == FOREIGN, \"someone else's hook was deleted or moved\"",
     "assert g[0]['hooks'][1]['command'] == CMD, 'our hook was not updated in place'",
     "assert g[0].get('matcher') == '*', 'the group lost its other keys'",
-    // A5 — and the pre-write self-check must SEE that foreign hook. Keyed by
+    // A5: and the pre-write self-check must see that foreign hook. Keyed by
     // group, a mixed group drops out of the comparison altogether, so losing
     // their hook inside one would read as perfectly clean. Keyed by address,
     // it is visible.
@@ -290,7 +289,7 @@ test("codex island hooks install additively, never reordering foreign hooks", ()
   ].join("\n");
   assert.equal(execFileSync("python3", ["-B", "-c", py], { encoding: "utf8", cwd: ROOT }).trim(), "ok");
 
-  // A failed self-check must abort BEFORE the write, not report afterwards
+  // A failed self-check must abort before the write, not report afterwards
   const check = s.match(/# Self-check before writing[\s\S]*?write_atomic\(HOOKS/)?.[0] ?? "";
   assert.ok(check.length > 0, "the self-check no longer sits between the edits and the write");
   assert.match(check, /raise SystemExit/);
@@ -300,32 +299,33 @@ test("codex island hooks install additively, never reordering foreign hooks", ()
 });
 
 test("hook installers recognize their own entries: no amnesia on container change, no friendly fire", () => {
-  // This test watches BOTH failure directions:
-  //   Too narrow — the current App Group as identity: after a container
-  //                change the old entries go unrecognized, old and new
-  //                coexist, every hook runs twice.
-  //   Too wide  — path-only bridge.sock matching: **another app using the
-  //                same file name in ITS OWN App Group gets recognized as
-  //                ours**, and reinstalling deletes their hook.
-  // Both "path" and "wire-protocol signature" must hold. No grepping — the
-  // real matcher function runs.
+  // This test watches both failure directions:
+  //   Too narrow: the current App Group as identity. After a container change
+  //               the old entries go unrecognized, old and new coexist, and
+  //               every hook runs twice.
+  //   Too wide:   path-only bridge.sock matching. Another app using the same
+  //               file name in its own App Group is recognized as ours, and
+  //               reinstalling deletes their hook.
+  // Both "path" and "wire-protocol signature" must hold. No grepping: the real
+  // matcher function runs.
   for (const script of ["install-island-hooks.py", "install-codex-island-hooks.py"]) {
     const py = [
       "import json, pathlib, sys",
       "sys.path.insert(0, 'tests')",
       "from installer_marker import load_marker",
       `ok = load_marker(${JSON.stringify(pkgPath(script))})['is_perch_command']`,
-      // Take our real command from the local config, never assemble one — an
+      // Take our real command from the local config, never assemble one: an
       // assembled command may differ from what is actually installed.
-      // Machines without the hooks installed (contributors/CI, where a blind
-      // read would FileNotFoundError) skip the two positive assertions; the
-      // negative ones still run — "no friendly fire" is verifiable anywhere.
-      // Both shapes, always asserted — these do not depend on this machine.
-      // ⚠️ The legacy one is not history: commands written before the
-      // launcher are still sitting in people's configs, and a reinstall that
-      // stopped recognizing them would append the new hooks beside the old
-      // ones instead of replacing them. Every event would then fire twice,
-      // one of the two pushing at a socket nobody listens on.
+      // Machines without the hooks installed (contributors or CI, where a blind
+      // read would raise FileNotFoundError) skip the two positive assertions;
+      // the negative ones still run, since "no friendly fire" is verifiable
+      // anywhere.
+      // Both shapes, always asserted: these do not depend on this machine.
+      // The legacy one is not history: commands written before the launcher
+      // are still sitting in people's configs, and a reinstall that stopped
+      // recognizing them would append the new hooks beside the old ones instead
+      // of replacing them. Every event would then fire twice, one of the two
+      // pushing at a socket nobody listens on.
       "LEGACY = ('/bin/sh -c \\'printf \"working\\\\t%s\\\\t%s-$$\\\\tclaude\" \"$d\" \"$(date +%s)\" | '",
       "          'nc -U -w 1 \"$HOME/Library/Group Containers/group.io.github.mossfinch.perch/bridge.sock\"\\'')",
       "assert ok(LEGACY), 'a pre-launcher command is no longer recognized — reinstalling would duplicate it, not replace it'",
@@ -333,10 +333,9 @@ test("hook installers recognize their own entries: no amnesia on container chang
       "    'a changed App Group is no longer recognized as ours — the amnesia this guards against'",
       "assert ok(\"'/somewhere/.perch/bin/perch-hook' working claude\"), 'the launcher command is not recognized as ours'",
       // And the real installed command, whichever shape this machine has.
-      // ⚠️ It is found by "is it ours" rather than by a substring: matching on
-      // 'bridge.sock' silently stopped finding anything the moment the
-      // launcher landed, and a skipped assertion looks exactly like a passing
-      // one.
+      // It is found by "is it ours" rather than by a substring: matching on
+      // 'bridge.sock' finds nothing once the launcher is installed, and a
+      // skipped assertion looks exactly like a passing one.
       "cfg = pathlib.Path.home() / '.claude/settings.json'",
       "verdict = 'ok'",
       "if cfg.exists():",
@@ -365,15 +364,15 @@ test("hook installers recognize their own entries: no amnesia on container chang
 });
 
 test("ledger migration after a container change: source named by a human, four dangers all refused", () => {
-  // Changing the App Group = changing the folder. Without the move the island
+  // Changing the App Group changes the folder. Without the move the island
   // starts from an empty ledger, and the first session writes a new one with
-  // ONE record — looking like dozens of history entries vanished. So
+  // one record, which looks like dozens of history entries vanishing. So
   // migration must be a procedure, not a one-off manual copy.
   //
-  // The source must be named by a human (--migrate-from), never scanned for:
+  // The source must be named by a person (--migrate-from), never scanned for:
   // with no Team prefix (a Team ID is real-name information; this package
   // carries none), a prefix scan matches every app's shared container on the
-  // machine. Everything below runs the REAL migration function, no grepping.
+  // machine. Everything below runs the real migration function, no grepping.
   const py = [
     "import sys, tempfile, pathlib, json, shutil, os, inspect",
     "sys.path.insert(0, 'tests')",
@@ -425,11 +424,11 @@ test("ledger migration after a container change: source named by a human, four d
     "r = setup({OLD: 39}); (r/'group.link').mkdir()",
     "(r/'group.link'/'care-ledger.json').symlink_to(r/OLD/'care-ledger.json')",
     "refuses(lambda: mig('group.link', NEW, r), 'source is a symlink')",
-    // ⑤ Source does not parse -> refuse (moved over, the island could not read it — the reader side's standing invariant)
+    // ⑤ Source does not parse -> refuse (moved over, the island could not read it either: the reader side's standing invariant)
     "r = setup({OLD: 39}); (r/OLD/'care-ledger.json').write_text('{broken')",
     "refuses(lambda: mig(OLD, NEW, r), 'source is broken JSON')",
     "assert count(r, NEW) is None, 'a broken ledger was moved over'",
-    // ⑤b JSON-legal but the WRONG SHAPE -> refuse. A count-only check waves
+    // ⑤b JSON-legal but the wrong shape -> refuse. A count-only check waves
     //     this through, and then the island throws on its next launch: the
     //     failure would have been relocated, not avoided.
     "r = setup({OLD: 39})",
@@ -445,7 +444,7 @@ test("ledger migration after a container change: source named by a human, four d
     "r = setup({})",
     "refuses(lambda: mig(OLD, NEW, r), 'source does not exist at all')",
     "refuses(lambda: mig(NEW, NEW, r), 'source and target are the same')",
-    // ⑦ Atomicity: dying halfway must leave the target NONEXISTENT — a half-file would block every retry forever
+    // ⑦ Atomicity: dying halfway must leave no target at all; a half-file would block every retry forever
     "class HalfWay:",
     "    def __init__(self):",
     "        self.dst = None",
@@ -461,7 +460,7 @@ test("ledger migration after a container change: source named by a human, four d
     "assert impl.dst and impl.dst.endswith('.migrating'), 'the copy went straight at the real ledger path'",
     "assert count(r, NEW) is None, 'a truncated care-ledger.json was left at the target; once it exists the move can never run again'",
     "assert not list((r/NEW).glob('*.migrating')), 'the failed staging file was left behind — it would block every retry'",
-    // ⑧ The source must have NO default: the machine never guesses, only the caller names it
+    // ⑧ The source must have no default: the machine never guesses, only the caller names it
     "p = inspect.signature(mig).parameters",
     "assert list(p)[:2] == ['source_group','target_group'], 'the first two parameters should be source and target'",
     "assert p['source_group'].default is inspect.Parameter.empty, 'the source must have no default; the machine must not guess'",
@@ -470,10 +469,10 @@ test("ledger migration after a container change: source named by a human, four d
   assert.equal(execFileSync("python3", ["-B", "-c", py], { encoding: "utf8", cwd: ROOT }).trim(), "ok");
 
   const inst = fs.readFileSync(pkgPath("install-island-app.py"), "utf8");
-  // Migration must run BEFORE the island starts: a running island may record
+  // Migration must run before the island starts: a running island may record
   // at any moment, and once the target file exists the move can never run again.
   // Capture to the trailing `if __name__`, never treat a blank line as the
-  // function's end — blank lines inside main would make this falsely red
+  // function's end: blank lines inside main would make this falsely red
   const main = inst.match(/def main\(\)[\s\S]*?\nif __name__/)?.[0] ?? "";
   assert.ok(main.indexOf("migrate_ledger(") > 0 &&
             main.indexOf("migrate_ledger(") < main.indexOf("install_launch_agent()"),
@@ -483,9 +482,9 @@ test("ledger migration after a container change: source named by a human, four d
     "no guessing which ledger is old by scanning containers");
 });
 
-test("after a rename, the completion bell installed under the OLD name must still be recognized, or every turn pushes twice", () => {
+test("after a rename, the completion bell installed under the old name must still be recognized, or every turn pushes twice", () => {
   // The bell block locates itself, and its comment title carries the product
-  // name — names change. Find by name and the block already installed on the
+  // name, and names change. Find by name and the block already installed on the
   // machine can't be found after a rename: old and new coexist, codex pushes
   // twice per finished turn. Same trap as "App Group as identity".
   // This runs the real our_tail_span, no grepping.
@@ -504,10 +503,10 @@ test("after a rename, the completion bell installed under the OLD name must stil
     "OTHER = '# --- somebody else\\'s block ---\\necho hi\\n'",
     "def ours(title):",
     "    return '# --- ' + title + ' ---\\nsock=\"$HOME/Library/' + SOCK + '\"\\n' + SIG + '\\n'",
-    // ① A title written under an OLD name must still be recognized — the rename gate.
-    // The title is deliberately a name totally unlike the current NOTIFY_MARK —
-    // what's verified is "independent of the title", not one particular
-    // historical name (that would cover one rename and need patching for the next)
+      // ① A title written under an old name must still be recognized: the rename gate.
+      // The title is deliberately a name totally unlike the current NOTIFY_MARK:
+      // what's verified is "independent of the title", not one particular
+      // historical name (that would cover one rename and need patching for the next)
     "old = OTHER + ours('any old name whatsoever (bell)')",
     "span = find(old)",
     "assert span is not None, 'the block installed under an old name went unrecognized — a rename would make every turn push twice'",
@@ -524,9 +523,9 @@ test("after a rename, the completion bell installed under the OLD name must stil
     "assert find(OTHER + '# --- signature only ---\\n' + SIG + '\\n') is None",
     // ⑤ A clean file -> never installed
     "assert find('# --- someone else ---\\necho hi\\n') is None",
-    // ⑥ Somebody appended their own block AFTER ours. The span must stop at
-    //    their header — reinstalling replaces our lines and leaves theirs
-    //    alone. "From our start to the end of the file" would delete them.
+      // ⑥ Somebody appended their own block after ours. The span must stop at
+      //    their header: reinstalling replaces our lines and leaves theirs
+      //    alone. "From our start to the end of the file" would delete them.
     "AFTER = '# --- another tool, added later ---\\necho later\\n'",
     "sandwich = OTHER + ours('Perch (bell)') + AFTER",
     "start, end = find(sandwich)",
@@ -564,9 +563,6 @@ const RETIRED_CONTAINER_ENTRIES = {
   "presence": "presence collection was retired",
   "presence-corrections": "presence collection was retired",
 };
-
-// Why an entry does not belong, or null when it does. Split out from the sweep
-// so its three answers stay provable on a machine that has no container at all.
 
 // Why an entry does not belong, or null when it does. Split out from the sweep
 // so its three answers stay provable on a machine that has no container at all.

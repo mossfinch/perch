@@ -1,19 +1,16 @@
 import Foundation
 
-// This file defines the catalog of guided moves and turns each move's total duration into a
-// playback path of pose frames plus how long each one is held. The interface shows moves in
-// catalog order and CareSessionClock advances progress along the path defined here; this
-// file keeps no time, writes no care ledger, and draws no images.
+// The catalog of guided moves, and how each move's total duration becomes a playback path
+// of pose frames with a hold time for each. The interface shows moves in catalog order, and
+// CareSessionClock advances along the path defined here.
 
-/// One pose frame within a move's playback.
 struct CareFrame: Equatable, Identifiable {
     let assetName: String
     let label: String
-    /// Whether this is a transition between two held poses.
-    /// Pass-through frames always take the short beat, and hold frames split what is left
-    /// of the cycle — so passing through the neutral pose does not eat as much time as an
-    /// actual stretch. The beat sound marks arriving at a held pose, not passing through a
-    /// transition.
+    /// A transition between two held poses. Pass-through frames always take the short beat
+    /// and hold frames split what is left of the cycle, so passing through the neutral pose
+    /// does not take as long as an actual stretch. The beat sound marks arriving at a held
+    /// pose, not passing through a transition.
     let isPassThrough: Bool
 
     init(assetName: String, label: String, isPassThrough: Bool = false) {
@@ -25,9 +22,8 @@ struct CareFrame: Equatable, Identifiable {
     var id: String { assetName }
 }
 
-/// Each visit to a pass-through frame takes a fixed 1 second.
-/// A pass-through only expresses the short beat it takes to switch sides; it does not scale
-/// with the move's total duration or rep count. The remaining time goes to hold frames.
+/// A pass-through is the short beat it takes to switch sides, so it does not scale with the
+/// move's duration or rep count. Hold frames get the rest.
 private let passThroughSeconds: TimeInterval = 1.0
 
 /// How frames are walked within one cycle of a move.
@@ -40,10 +36,9 @@ enum CarePlayback: Equatable {
     case pingPong
 }
 
-/// One playable guided move and the tempo that defines it.
-/// `seconds` is the total time to complete `reps` cycles. The catalog guarantees positive
-/// reps and duration, a non-empty frame list, and at least one hold frame; anyone
-/// constructing a move outside the catalog must satisfy the same preconditions.
+/// `seconds` is the total time for `reps` cycles. The catalog guarantees positive reps and
+/// duration, a non-empty frame list, and at least one hold frame; a move built outside the
+/// catalog must meet the same preconditions.
 struct CareMove: Equatable, Identifiable {
     let id: String
     let category: CareCategory
@@ -67,12 +62,10 @@ struct CareMove: Equatable, Identifiable {
         }
     }
 
-    /// Seconds to complete one playback cycle.
     var cycleDuration: TimeInterval { Double(seconds) / Double(reps) }
-    /// Seconds spent on this visit to frame `index`; `index` must be a valid frame index.
-    /// Pass-through frames are fixed at 1 second, and hold frames split the remaining time
-    /// according to how many times `playbackSequence` actually visits them — so a middle
-    /// frame revisited on a `pingPong` return leg takes its own share of time.
+    /// Seconds for one visit to frame `index`. Hold frames split the time left after the
+    /// pass-throughs by how often `playbackSequence` visits them, so a middle frame revisited
+    /// on a `pingPong` return leg takes its own share.
     func frameDuration(at index: Int) -> TimeInterval {
         if frames[index].isPassThrough { return passThroughSeconds }
         let sequence = playbackSequence
@@ -83,16 +76,16 @@ struct CareMove: Equatable, Identifiable {
     var symbolName: String { CareMovePool.symbol(for: category) }
 }
 
-/// The catalog of moves the island can run; array order is also the paging order.
+/// The moves the island can run. Array order is the paging order and the order the card
+/// offers them in.
 enum CareMovePool {
     /// The categories the interface currently offers. Only neck and eyes have catalog
     /// moves; until shoulders or face gain moves, do not pass them to `first` or `next`,
     /// which require a non-empty category.
     static let selectableCategories: [CareCategory] = [.neck, .eyes]
 
-    /// The full move catalog. Moves, frames, and the computed hold durations are validated
-    /// at initialization; anything that breaks the contract trips a precondition
-    /// immediately rather than handing an invalid tempo to the interface or the clock.
+    /// Validated when first built: anything that breaks the contract trips a precondition at
+    /// once instead of handing an invalid tempo to the interface or the clock.
     static let all: [CareMove] = {
         let moves = [
             CareMove(
@@ -170,8 +163,7 @@ enum CareMovePool {
         return moves
     }()
 
-    /// Returns the first move in a category; trips preconditionFailure if the category has
-    /// no moves.
+    /// Traps when the category has no moves.
     static func first(in category: CareCategory) -> CareMove {
         guard let move = all.first(where: { $0.category == category }) else {
             preconditionFailure("No care move for category \(category.rawValue)")
@@ -179,22 +171,18 @@ enum CareMovePool {
         return move
     }
 
-    /// Returns every move in a category; the result order is the interface's paging order.
-    /// Returns an empty array when the category has no moves.
     static func moves(in category: CareCategory) -> [CareMove] {
         all.filter { $0.category == category }
     }
 
-    /// Returns a move's zero-based position within its category, or 0 when not found.
-    /// That fallback is only good for sending the interface back to the first page; it
-    /// cannot be used to decide whether a move exists.
+    /// 0 when not found. That fallback only sends the interface back to the first page; it
+    /// cannot tell whether a move exists.
     static func index(of moveID: String, in category: CareCategory) -> Int {
         moves(in: category).firstIndex { $0.id == moveID } ?? 0
     }
 
-    /// Returns the move after the current one in a category, wrapping to the first at the
-    /// end. Trips a precondition on an empty category; returns the category's first move
-    /// when `moveID` is not found.
+    /// Wraps to the first move at the end, and starts there when `moveID` is not found.
+    /// Traps on an empty category.
     static func next(in category: CareCategory, after moveID: String) -> CareMove {
         let moves = all.filter { $0.category == category }
         precondition(!moves.isEmpty, "No care move for category \(category.rawValue)")
@@ -204,8 +192,16 @@ enum CareMovePool {
         return moves[(index + 1) % moves.count]
     }
 
-    /// Returns the SF Symbol name the interface uses for a category, including categories
-    /// that are not yet selectable.
+    /// The move after `moveID` in catalog order across every category, wrapping at the end.
+    /// Nil, or an id the catalog no longer carries, starts at the top. The card offers this
+    /// one next: the move after the last one done.
+    static func next(after moveID: String?) -> CareMove {
+        guard let moveID, let index = all.firstIndex(where: { $0.id == moveID }) else {
+            return all[0]
+        }
+        return all[(index + 1) % all.count]
+    }
+
     static func symbol(for category: CareCategory) -> String {
         switch category {
         case .neck:

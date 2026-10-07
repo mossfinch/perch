@@ -1,15 +1,15 @@
 import SwiftUI
 
 enum IslandPalette {
-    /// The island's ground, closed and open alike — ONE constant, so both
-    /// states sit at the same depth. Pure black because the closed island sits
-    /// against the notch all day and anything lighter reads as a warm grey
-    /// patch beside the bezel.
+    /// The island's ground, closed and open alike, so both states sit at the
+    /// same depth. Pure black because the closed island sits against the notch
+    /// all day, and anything lighter reads as a warm grey patch beside the
+    /// bezel.
     ///
-    /// ⚠️ Nothing dim may be drawn here at an alpha tuned against a lighter
-    /// ground. sRGB is non-linear, so the same alpha emits far less light down
-    /// here — dim bars lost 2.4× of their contrast when this went black, and
-    /// `FlowSense.dimAlpha` had to be re-derived for it.
+    /// Nothing dim may be drawn here at an alpha tuned against a lighter
+    /// ground. sRGB is not linear, so the same alpha emits far less light on
+    /// black: dim bars lost 2.4× of their contrast when this went black, and
+    /// `FlowSense.dimAlpha` was derived again for it.
     static let capsule = Color(red: 0, green: 0, blue: 0)
     static let paper = Color(red: 0.998, green: 0.996, blue: 0.991)
     static let accent = Color(red: 0.620, green: 0.372, blue: 0.322)

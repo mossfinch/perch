@@ -1,26 +1,24 @@
 import Foundation
 import Darwin
 
-/// Listens for agent lifecycle events over a Unix domain socket in the App Group
-/// container, pushing them to the island the instant a hook connects.
+/// Receives agent lifecycle events on a Unix domain socket in the App Group
+/// container and hands them to the island as soon as a hook connects.
 ///
-/// Why a socket instead of polling a file: each hook fires one tiny message per
-/// event; a stream socket delivers it immediately, with no timer wakeups and no
-/// file re-arm races. The socket lives inside the App Group container so the
-/// sandboxed island may bind it — AF_UNIX access is mediated by file-system
-/// permission on the socket path, not by the network entitlements — while the
-/// unsandboxed shell hook connects to that same absolute path via `nc -U`.
+/// A socket rather than a polled file: each hook sends one small message per
+/// event, and a stream socket delivers it at once, with no timer wakeups and no
+/// file re-arm races. The socket sits in the App Group container so the
+/// sandboxed island may bind it (AF_UNIX access follows the file permissions on
+/// the socket path, not the network entitlements), and the unsandboxed shell
+/// hook connects to the same absolute path with `nc -U`.
 ///
-/// Fail-open: if the island is not running nothing binds the socket, the hook's
-/// `nc -U` simply fails to connect, and Claude Code proceeds unaffected.
+/// Fail-open: when the island is not running nothing binds the socket, the
+/// hook's `nc -U` fails to connect, and the agent carries on unaffected.
 ///
-/// `@unchecked Sendable`: the mutable state (`listenFD` / `acceptSource`) is
-/// touched only on the serial `queue` below, and the three callbacks are set
-/// once before `start()` and read-only afterwards. Safety rests on those two
-/// conventions, not on the type system — the same kind of honest declaration
-/// as the `nonisolated(unsafe)` in `AgentEventLog`.
+/// `@unchecked Sendable`: the mutable state (`listenFD`, `acceptSource`) is
+/// touched only on the serial `queue`, and the callbacks are set once before
+/// `start()` and only read afterwards. Safety rests on those two conventions,
+/// not on the type system, like the `nonisolated(unsafe)` in `AgentEventLog`.
 final class AgentEventMonitor: @unchecked Sendable {
-    /// App Group: see `AppGroup.swift` (read from Info.plist; no Team ID in source).
     static var appGroupID: String { AppGroup.id }
 
     static let socketFileName = "bridge.sock"
@@ -29,10 +27,10 @@ final class AgentEventMonitor: @unchecked Sendable {
         AppGroup.containerURL.appendingPathComponent(socketFileName)
     }
 
-    // Callback parameters = (project directory cwd, source agent).
-    // Source is the 4th field, added later: older hooks push three fields, and
-    // three-field messages count as claude — so sessions still running with an
-    // old hook (hooks are read once at session start) survive an upgrade intact.
+    // Callback parameters: (project directory, source agent).
+    // A message with only three fields counts as claude. Hooks are read once
+    // when a session starts, so a session still running an older hook that
+    // sends three fields keeps working across an upgrade.
     var onWorking: (@MainActor (String, String) -> Void)?
     var onWaiting: (@MainActor (String, String) -> Void)?
     var onComplete: (@MainActor (String, String) -> Void)?
@@ -100,15 +98,15 @@ final class AgentEventMonitor: @unchecked Sendable {
         var tv = timeval(tv_sec: 1, tv_usec: 0)   // 1s receive timeout so a mute connection can't stall the accept loop
         setsockopt(client, SOL_SOCKET, SO_RCVTIMEO, &tv, socklen_t(MemoryLayout<timeval>.size))
 
-        // Read in a loop rather than once: a single read can come back with
-        // only part of the line, and a truncated line loses its trailing
-        // field — the event would be filed under a garbage source.
+        // Read in a loop: one read can return part of the line, and a
+        // truncated line loses its last field, filing the event under a
+        // garbage source.
         //
-        // The line carries four tab-separated fields and no terminator, so
-        // "four fields in hand and nothing more waiting" is as complete as it
-        // gets; waiting for the peer to close would idle a whole receive
-        // timeout on every event. The byte cap keeps a wedged peer from
-        // growing this without bound.
+        // The line has four tab-separated fields and no terminator, so four
+        // fields in hand with nothing more waiting is as complete as it gets.
+        // Waiting for the peer to close would idle a whole receive timeout on
+        // every event. The byte cap stops a wedged peer from growing this
+        // without bound.
         var message = [UInt8]()
         var chunk = [UInt8](repeating: 0, count: 65536)
         while message.count < Self.maxReconciliationBytes {
@@ -184,8 +182,7 @@ final class AgentEventMonitor: @unchecked Sendable {
 
     private func deliver(_ text: String) {
         // Format: <event>\t<projectDir>\t<nonce>\t<source>
-        // source is the later-added 4th field; when absent it counts as claude
-        // (see the callback comment above).
+        // A missing source counts as claude (see the callbacks above).
         let parts = text.split(separator: "\t", omittingEmptySubsequences: false).map(String.init)
         func field(_ i: Int) -> String {
             parts.count > i ? parts[i].trimmingCharacters(in: .whitespacesAndNewlines) : ""

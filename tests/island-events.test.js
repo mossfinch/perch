@@ -1,7 +1,7 @@
 // The raw material: what the agents did, written down without judgement, and the settle
 // layer that turns a stream of events back into turns.
 // One of the island suite's files; `tests/island-roster.js` is what knows they all
-// exist. Run them together — a single file run is a partial answer.
+// exist. Run them together; a single file run is a partial answer.
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
@@ -14,7 +14,7 @@ const { viewModelSource, APP_GROUP_SWIFT, islandPath, pkgPath } = require("./isl
 test("event log: record without judging, and time must match the human's clock", () => {
   const log = fs.readFileSync(islandPath("AgentEventLog.swift"), "utf8");
 
-  // ⚠️ ISO8601DateFormatter defaults to UTC (trailing Z) while day-splitting
+  // ISO8601DateFormatter defaults to UTC (trailing Z) while day-splitting
   // uses the local zone. Diverge and the report is off by a whole timezone.
   assert.match(log, /f\.timeZone = TimeZone\.current/, "the timestamp must set the local zone explicitly, or the report is a timezone off");
 
@@ -29,7 +29,7 @@ test("event log: record without judging, and time must match the human's clock",
   // the serial queue, and no try! / crashes
   assert.match(log, /queue\.async/);
   assert.doesNotMatch(log, /try!/);
-  // Log the full path, not the display name — future grouping by directory depends on it
+  // Log the full path, not the display name: future grouping by directory depends on it
   const vm = viewModelSource();
   assert.match(vm, /AgentEventLog\.append\(project: dir, source: source, event: status\.logName\)/);
   assert.doesNotMatch(vm, /AgentEventLog\.append\([^)]*displayName/);
@@ -37,7 +37,7 @@ test("event log: record without judging, and time must match the human's clock",
   const rep = fs.readFileSync(pkgPath("island-day-report.py"), "utf8");
   // The report may only claim what it knows: "how long you and the agents
   // worked together", never how focused you were. Check only lines that
-  // actually print — the docstring legitimately explains "never claims to
+  // actually print: the docstring legitimately explains "never claims to
   // know how focused", and that explanation must stay.
   const printed = rep.split("\n").filter((l) => l.includes("print(")).join("\n");
   assert.doesNotMatch(printed, /focus/i, "the report must not claim to know your focus — the island cannot see the human");
@@ -77,65 +77,19 @@ print(json.dumps({"turns": len(ts), "closed": sorted(closed),
 });
 
 
-// ⚠️ The REAL writer against the REAL reader, and it is the only test that runs
-// `AgentEventLog`'s write path at all. Until it existed the round-trip fixtures
-// were written from JavaScript, so the writer was executed by nothing — and the
-// three things below are load-bearing for the whole flow reading:
+// The real writer against the real reader; the only test that runs
+// `AgentEventLog`'s write path at all. Three things below are load-bearing for
+// the whole flow reading:
 //
-//   · the timestamp the writer emits must be one the reader can parse. Give the
-//     writer fractional seconds and `recent` returns NOTHING from that moment
+//   - the timestamp the writer emits must be one the reader can parse. Give the
+//     writer fractional seconds and `recent` returns nothing from that moment
 //     on: the verdict and the week go permanently to zero while the daily report
-//     (python parses either shape) keeps working, so the two languages split
+//     (Python parses either shape) keeps working, so the two languages split
 //     with no error anywhere.
-//   · the window's upper bound is CLOSED. `DayFlow.week` asks for the day minus
-//     one second precisely because of that; make it half-open and every event
-//     stamped 23:59:59 falls into no day at all.
-//   · the file a line lands in is named for the LOCAL day of its own timestamp.
-
-// ⚠️ The REAL writer against the REAL reader, and it is the only test that runs
-// `AgentEventLog`'s write path at all. Until it existed the round-trip fixtures
-// were written from JavaScript, so the writer was executed by nothing — and the
-// three things below are load-bearing for the whole flow reading:
-//
-//   · the timestamp the writer emits must be one the reader can parse. Give the
-//     writer fractional seconds and `recent` returns NOTHING from that moment
-//     on: the verdict and the week go permanently to zero while the daily report
-//     (python parses either shape) keeps working, so the two languages split
-//     with no error anywhere.
-//   · the window's upper bound is CLOSED. `DayFlow.week` asks for the day minus
-//     one second precisely because of that; make it half-open and every event
-//     stamped 23:59:59 falls into no day at all.
-//   · the file a line lands in is named for the LOCAL day of its own timestamp.
-
-// ⚠️ The REAL writer against the REAL reader, and it is the only test that runs
-// `AgentEventLog`'s write path at all. Until it existed the round-trip fixtures
-// were written from JavaScript, so the writer was executed by nothing — and the
-// three things below are load-bearing for the whole flow reading:
-//
-//   · the timestamp the writer emits must be one the reader can parse. Give the
-//     writer fractional seconds and `recent` returns NOTHING from that moment
-//     on: the verdict and the week go permanently to zero while the daily report
-//     (python parses either shape) keeps working, so the two languages split
-//     with no error anywhere.
-//   · the window's upper bound is CLOSED. `DayFlow.week` asks for the day minus
-//     one second precisely because of that; make it half-open and every event
-//     stamped 23:59:59 falls into no day at all.
-//   · the file a line lands in is named for the LOCAL day of its own timestamp.
-
-// ⚠️ The REAL writer against the REAL reader, and it is the only test that runs
-// `AgentEventLog`'s write path at all. Until it existed the round-trip fixtures
-// were written from JavaScript, so the writer was executed by nothing — and the
-// three things below are load-bearing for the whole flow reading:
-//
-//   · the timestamp the writer emits must be one the reader can parse. Give the
-//     writer fractional seconds and `recent` returns NOTHING from that moment
-//     on: the verdict and the week go permanently to zero while the daily report
-//     (python parses either shape) keeps working, so the two languages split
-//     with no error anywhere.
-//   · the window's upper bound is CLOSED. `DayFlow.week` asks for the day minus
-//     one second precisely because of that; make it half-open and every event
-//     stamped 23:59:59 falls into no day at all.
-//   · the file a line lands in is named for the LOCAL day of its own timestamp.
+//   - the window's upper bound is closed. `DayFlow.week` asks for the day minus
+//     one second because of that; make it half-open and every event stamped
+//     23:59:59 falls into no day at all.
+//   - the file a line lands in is named for the local day of its own timestamp.
 test("what the event log writes is what the event log reads back", () => {
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "perch-log-roundtrip-"));
   const main = path.join(tmp, "main.swift");
@@ -143,7 +97,7 @@ test("what the event log writes is what the event log reads back", () => {
   fs.writeFileSync(main, `
 import Foundation
 let dir = URL(fileURLWithPath: CommandLine.arguments[1])
-// A fixed local day, and the last second of it — the boundary the day window
+// A fixed local day, and the last second of it: the boundary the day window
 // depends on. Built from components so the machine's own zone is what is tested.
 var c = DateComponents()
 c.year = 2026; c.month = 8; c.day = 12
@@ -180,19 +134,19 @@ print(String(data: try! JSONSerialization.data(withJSONObject: ["rows": rows, "f
     { event: "working", project: "/p/one", source: "claude", offset: 12 * 3600 },
     { event: "complete", project: "/p/two", source: "codex", offset: 24 * 3600 - 1 },
   ], "the writer and the reader disagree about what was written");
-  // ② …and the one at 23:59:59 is IN it. That is the whole reason the day window
+  // ② …and the one at 23:59:59 is in it. That is why the day window
   //    may stop one second short of midnight instead of dropping data.
   assert.ok(got.rows.some((r) => r.offset === 24 * 3600 - 1),
     "the last second of the day was dropped — the window's upper bound went half-open");
-  // ③ …and the event a second later is NOT, because it belongs to the next day.
+  // ③ …and the event a second later is not, because it belongs to the next day.
   assert.ok(!got.rows.some((r) => r.project === "/p/three"),
     "an event from the next day leaked into this one");
 });
 
 test("the settle layer cuts orphan welds, trusts completes, and flow bridges parallel work", () => {
-  // An interrupted turn (no complete) welded to the NEXT session by pure
+  // An interrupted turn (no complete) welded to the next session by pure
   // pairing turns a stretch of seconds into hours. The settle layer exists to
-  // cut exactly that weld — while still trusting a complete across mid-turn
+  // cut exactly that weld, while still trusting a complete across mid-turn
   // silence, because a tool can run for many quiet minutes and truncating it
   // would halve a genuine turn.
   const out = execFileSync("python3", ["-B", "-c", `
@@ -206,10 +160,10 @@ rep._app_group = no_app
 t0 = datetime(2026,7,28,9,0,0)
 def e(sec, ev, proj, src): return {"dt": t0+timedelta(seconds=sec), "event": ev, "project": proj, "source": src}
 evs = [
-  # line A: interrupted at 30s, silent ~4h, new session, complete — the weld case
+  # line A: interrupted at 30s, silent ~4h, new session, complete: the weld case
   e(0,"working","/x/a","claude"), e(30,"working","/x/a","claude"),
   e(14000,"working","/x/a","claude"), e(14100,"complete","/x/a","claude"),
-  # line B: 600s turn with a long quiet middle — the complete must be trusted
+  # line B: 600s turn with a long quiet middle; the complete must be trusted
   e(0,"working","/x/b","codex"), e(600,"complete","/x/b","codex"),
 ]
 st = rep.settled(evs)
@@ -227,43 +181,7 @@ print(json.dumps({
   assert.deepEqual(s.closed, [100, 600],
     "the new session closes at its own complete (100s), and the quiet-middle turn keeps its full 600s — completes are trusted");
   // Flow: line B's 600s turn covers line A's fragment (parallel work bridges),
-  // then a 4-hour break, then the second session — two stretches, 700s total.
+  // then a 4-hour break, then the second session: two stretches, 700s total.
   assert.equal(s.stretches, 2, "parallel lines merge into one stretch; a 4-hour silence breaks it");
   assert.equal(s.flow, 700, "stretch length is wall-clock first-start to last-end, summed");
 });
-
-// ⚠️ The whole point of the split: the island (Swift) computes the desktop
-// widget's numbers, the daily report (python) computes the terminal's. One
-// algorithm, two implementations, and nothing but this test standing between
-// them and a slow drift nobody notices — the two are never read side by side.
-//
-// The cases below are not decoration. Each one is a boundary where a
-// plausible-looking reimplementation goes wrong:
-//   · the 4-hour weld (the bug the settle layer exists for)
-//   · a complete after a long quiet middle (must be trusted anyway)
-//   · a gap of EXACTLY the cutoff (must not cut — the rule is "longer than")
-//   · a gap one second past it (must cut)
-//   · a single event that never completes (a turn of zero length, not nothing)
-//   · stretches bridging at exactly the bridge, and breaking one second past
-//   · a complete arriving long after a WAITING event (the empty chair — the
-//     silence is a human who walked off, and must not be backfilled as work)
-//   · a completed turn past the plausible ceiling (dropped from flow, kept as
-//     a settled turn)
-
-// ⚠️ The whole point of the split: the island (Swift) computes the desktop
-// widget's numbers, the daily report (python) computes the terminal's. One
-// algorithm, two implementations, and nothing but this test standing between
-// them and a slow drift nobody notices — the two are never read side by side.
-//
-// The cases below are not decoration. Each one is a boundary where a
-// plausible-looking reimplementation goes wrong:
-//   · the 4-hour weld (the bug the settle layer exists for)
-//   · a complete after a long quiet middle (must be trusted anyway)
-//   · a gap of EXACTLY the cutoff (must not cut — the rule is "longer than")
-//   · a gap one second past it (must cut)
-//   · a single event that never completes (a turn of zero length, not nothing)
-//   · stretches bridging at exactly the bridge, and breaking one second past
-//   · a complete arriving long after a WAITING event (the empty chair — the
-//     silence is a human who walked off, and must not be backfilled as work)
-//   · a completed turn past the plausible ceiling (dropped from flow, kept as
-//     a settled turn)

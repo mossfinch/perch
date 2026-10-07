@@ -1,34 +1,32 @@
 import Foundation
 
-/// A person's own reading of the day — the labels no sensor can produce, asked
-/// on the island rather than in a terminal.
+/// A person's own reading of the day: the labels no sensor can produce, asked
+/// on the island instead of in a terminal.
 ///
-/// ⚠️ TWO questions, not one. A single score quietly answers both "did the day
-/// hold together" (`rhythm`) and "did anything move" (`progress`), and mixed
-/// together no number of days will ever calibrate anything. They stay apart on
-/// disk as well as on screen.
+/// It asks two questions. A single score would quietly answer both "did the
+/// day hold together" (`rhythm`) and "did anything move" (`progress`), and
+/// mixed together no number of days could ever calibrate anything. They stay
+/// apart on disk as well as on screen.
 ///
-/// One JSON object per line, re-answering appends, broken lines skipped.
-/// ⚠️ The last line per FIELD wins, not the last line per date: a line updates
-/// exactly the keys it carries, which is what lets three kinds of line share one
+/// One JSON object per line; re-answering appends; broken lines are skipped.
+/// The last line per field wins, not the last line per date: a line updates
+/// exactly the keys it carries, which lets three kinds of line share one
 /// append-only file without standing on each other.
 ///
-/// ⚠️ `island-day-report.py`'s `day_scores()` reads the same file by the same
-/// rule. Two readers, one file, and only the island suite holds the ends
-/// together.
+/// `island-day-report.py`'s `day_scores()` reads the same file by the same
+/// rule. Only the island suite holds the two readers together.
 enum DayScore {
-    /// ⚠️ The raw value is the LEDGER KEY and is permanent. The words shown on
-    /// the island live in the view, so wording can change without orphaning a
-    /// single line already on disk.
+    /// The raw value is the ledger key and is permanent. The words shown on the
+    /// island live in the view, so wording can change without orphaning a line
+    /// already on disk.
     enum Field: String, CaseIterable {
         case rhythm
         case progress
-        /// What the day's FLOW really was, 1…5, when the week perch got it
-        /// wrong. Unlike the two above this is not a question the island asks —
-        /// it is an argument with an answer already given, so it is only ever
-        /// written where it disagrees.
+        /// What the day's flow really was, 1…5, when the week perch got it
+        /// wrong. The island never asks this one; it argues with an answer
+        /// already given, so it is only written where it disagrees.
         ///
-        /// ⚠️ The machine's own reading is NOT stored here. `DayFlow` recomputes
+        /// The machine's own reading is not stored here. `DayFlow` recomputes
         /// it from the event log every time, so moving a threshold re-reads
         /// history instead of leaving a file full of stale verdicts.
         case flow
@@ -39,11 +37,11 @@ enum DayScore {
     struct DayAnswers: Equatable {
         var rhythm: Int? = nil
         var progress: Int? = nil
-        /// ⚠️ `nil` means nobody argued, NOT that the day was quiet.
+        /// `nil` means nobody argued, not that the day was quiet.
         var flow: Int? = nil
-        /// ⚠️ The one-number score from before the split. Kept readable, never
-        /// written again, and never folded into either answer — which of the two
-        /// questions it was answering is not knowable.
+        /// The one-number score from before the split. It stays readable, is
+        /// never written again, and is never folded into either answer: which
+        /// of the two questions it answered cannot be known.
         var legacy: Int? = nil
 
         subscript(field: Field) -> Int? {
@@ -63,7 +61,7 @@ enum DayScore {
             }
         }
 
-        /// ⚠️ `flow` takes no part: it is a correction, not one of the two
+        /// `flow` takes no part: it is a correction, not one of the two
         /// questions, and a day nobody argued with is not an unanswered day.
         var isComplete: Bool { rhythm != nil && progress != nil }
     }
@@ -72,9 +70,9 @@ enum DayScore {
         AppGroup.containerURL.appendingPathComponent("day-scores.jsonl")
     }
 
-    /// Which day a line is about, `yyyy-MM-dd`. ⚠️ Local time on purpose: "how
-    /// did yesterday go" is a question about a human's day, not a UTC one —
-    /// the same trap as in `AgentEventLog`. Every writer here keeps its own copy.
+    /// Which day a line is about, `yyyy-MM-dd`, in local time on purpose: "how
+    /// did yesterday go" is about a person's day, not a UTC one (the same trap
+    /// as in `AgentEventLog`). Every writer here keeps its own copy.
     static let dayFormatter: DateFormatter = {
         let f = DateFormatter()
         f.dateFormat = "yyyy-MM-dd"
@@ -82,7 +80,7 @@ enum DayScore {
         return f
     }()
 
-    /// Last line per FIELD wins: a line updates only the keys it carries.
+    /// The last line per field wins: a line updates only the keys it carries.
     static func scores(from url: URL = fileURL) -> [String: DayAnswers] {
         guard let text = try? String(contentsOf: url, encoding: .utf8) else { return [:] }
         var out: [String: DayAnswers] = [:]
@@ -94,20 +92,19 @@ enum DayScore {
             var answers = out[date] ?? DayAnswers()
             var carried = false
             for field in Field.allCases {
-                // Absent and null are DIFFERENT answers, and the difference is
-                // the whole of taking an answer back. A line carries only the
-                // keys it names, so an absent key must leave the field alone;
-                // an explicit null is a line that names the field in order to
-                // empty it. Reading both as "no integer here" would make it
-                // impossible to say anything but a number.
+                // Absent and null are different answers, and taking an answer
+                // back relies on the difference. A line carries only the keys
+                // it names, so an absent key leaves the field alone; an
+                // explicit null names the field in order to empty it. Reading
+                // both as "no integer here" would make it impossible to say
+                // anything but a number.
                 //
-                // ⚠️ …but only where emptying is a thing that can be said. The
-                // writer refuses to empty anything except `flow`, and a rule
-                // enforced at one end of a file is not a rule: a hand-edited or
-                // future line carrying `rhythm: null` would silently erase an
-                // answer nothing else in the world can supply. Here the same
-                // limit is read back — for the other fields a null is not an
-                // answer, so it changes nothing, exactly as an absent key does.
+                // Only `flow` can be emptied. The writer refuses to empty any
+                // other field, and a rule enforced at one end of a file is not
+                // a rule: a hand-edited or future line carrying `rhythm: null`
+                // would silently erase an answer nothing else can supply. So
+                // the reader applies the same limit: for the other fields a
+                // null changes nothing, exactly as an absent key does.
                 if row[field.rawValue] is NSNull, field == .flow {
                     answers[field] = nil
                     carried = true
@@ -120,8 +117,8 @@ enum DayScore {
                 answers.legacy = legacy
                 carried = true
             }
-            // A line that names a day but answers nothing changes nothing —
-            // it must not conjure an empty day into the map.
+            // A line that names a day but answers nothing must not conjure an
+            // empty day into the map.
             if carried { out[date] = answers }
         }
         return out
@@ -147,14 +144,13 @@ enum DayScore {
         return (try? data.write(to: url)) != nil
     }
 
-    /// Take an answer back: appended like every other line, because the file is
-    /// a record of what was said and unsaying is something said.
+    /// Take an answer back. It is appended like every other line, because the
+    /// file records what was said, and unsaying is something said.
     ///
-    /// ⚠️ Only `flow` can be taken back, and only because it is the one field
-    /// that argues with a reading the island recomputes anyway — take away the
-    /// argument and the reading is still there. `rhythm` and `progress` answer
-    /// questions nothing else can answer, so an empty one is a hole, not a
-    /// default.
+    /// Only `flow` can be taken back: it argues with a reading the island
+    /// recomputes anyway, so without the argument the reading is still there.
+    /// `rhythm` and `progress` answer questions nothing else can answer, so an
+    /// empty one would be a hole, not a default.
     @discardableResult
     static func clear(date: String, field: Field,
                       now: Date = Date(), to url: URL = fileURL) -> Bool {
@@ -175,9 +171,9 @@ enum DayScore {
     }
 
     /// Which day the stars are asking about. Whole-day truth is best given at
-    /// the end of the day, and the end of a day is often the next morning —
-    /// "how did yesterday go" survives a night's sleep where "were you at your
-    /// desk at 14:35" does not.
+    /// the end of the day, and the end of a day is often the next morning: "how
+    /// did yesterday go" survives a night's sleep, and "were you at your desk at
+    /// 14:35" does not.
     static func target(now: Date, calendar: Calendar = .current,
                        answers: [String: DayAnswers]) -> (date: String, isBackfill: Bool) {
         let today = dayFormatter.string(from: now)
@@ -185,7 +181,8 @@ enum DayScore {
               let previous = calendar.date(byAdding: .day, value: -1, to: now)
         else { return (today, false) }
         let yesterday = dayFormatter.string(from: previous)
-        // ⚠️ BOTH or it is not answered: nothing else will ever ask again.
+        // Both answers, or the day counts as unanswered: nothing else will
+        // ever ask again.
         // (An old one-number score answers neither question.)
         return (answers[yesterday]?.isComplete ?? false) ? (today, false) : (yesterday, true)
     }

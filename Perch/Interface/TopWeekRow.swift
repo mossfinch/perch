@@ -1,7 +1,8 @@
 // Row 1 of the top band: the week's branch on the left, the matching status
 // on the right.
 // On hover the cell shows that day's flow and agent run time; otherwise it
-// cycles today's readings and any finished project.
+// cycles today's readings and any finished project. After a long unbroken
+// stretch it asks for a break instead.
 // Both rotations share CarouselClock, each with its own cadence and origin.
 // This file only arranges the display: DayFlow supplies the data and
 // CarouselClock decides the page.
@@ -29,6 +30,10 @@ private struct TodayFlowCell: View {
     /// Keyed to absolute time instead, leaving hover can land straight on a
     /// completion and the starting point becomes unpredictable.
     let carouselOrigin: Date
+    /// Whether the island is asking for a break. At rest the ask replaces the
+    /// cycle; hovering a day still shows that day, so today's own reading stays
+    /// one hover away.
+    let nudge: Bool
 
     private static let weekdays = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
 
@@ -42,10 +47,10 @@ private struct TodayFlowCell: View {
     /// the durations only after a linger.
     /// 3s comes from use on the real thing: 4 dragged, 2 was too short to read.
     static let hoverSlotSeconds: TimeInterval = 3
-    /// Origin of the hover pages. Reset ONLY on entering from outside the
+    /// Origin of the hover pages. Reset only on entering from outside the
     /// branch; sliding across days keeps the current page.
-    /// Reset per day, crossing a day line snaps back to page zero and the
-    /// second page becomes hard to reach.
+    /// Reset per day, crossing a day line would snap back to page zero and the
+    /// second page would be hard to reach.
     let inspectOrigin: Date
 
     /// A duration in words, or nil when there is no reading yet.
@@ -62,21 +67,21 @@ private struct TodayFlowCell: View {
         projects.filter { $0.status == .done }.sorted { $0.updatedAt < $1.updatedAt }
     }
 
-    /// Today's readings on the resting cycle, each duration wearing its name.
-    /// The labels are what keep flow and agent run time from being read as
-    /// hours worked.
     /// A day's flow reading, or nil when there is none to give.
     ///
-    /// The two zeros are different answers and used to look alike: a day that
-    /// really measured zero showed `—`, which claims no data about a day that
-    /// was measured; and a day too thin to judge was painted 1/5 on the branch,
-    /// which claims a reading that was never taken. This is the text half —
-    /// `WeekPerch.paints` is the colour half, and they must agree.
+    /// The two zeros are different answers and must not look alike. A day that
+    /// really measured zero reads `0m`; `—` would claim no data about a day that
+    /// was measured. A day too thin to judge reads nothing; painting it 1/5
+    /// would claim a reading that was never taken. This is the text half, and
+    /// `WeekPerch.paints` is the colour half; they must agree.
     static func flowLabel(_ day: DayFlow.Day) -> String? {
         guard day.judged else { return nil }
         return label(seconds: day.seconds) ?? "0m"
     }
 
+    /// Today's readings on the resting cycle, each duration wearing its name.
+    /// The labels are what keep flow and agent run time from being read as
+    /// hours worked.
     private var todayReadings: [String] {
         guard let today = week.first(where: { $0.date == todayKey }) else { return [] }
         var out: [String] = []
@@ -90,6 +95,7 @@ private struct TodayFlowCell: View {
     /// Nothing to restart when the set of projects changes, and no way to skip
     /// round faster than one slot per `slotSeconds`.
     private func restingSlot(at now: Date) -> (text: String, isReading: Bool)? {
+        if nudge { return (StretchNudge.line, true) }
         let readings = todayReadings
         let items = finished
         let n = readings.count + items.count
@@ -104,7 +110,7 @@ private struct TodayFlowCell: View {
     /// Builds the pages for the hovered day. Page zero carries that day's level
     /// and flow duration.
     /// A page for agent run time follows when there is one; with no reading at
-    /// all the day answers "—".
+    /// all the day answers `—`.
     /// Hover content always belongs to the hovered day and may never fall back
     /// to today's resting content.
     private func inspectedPages(_ day: DayFlow.Day) -> [String] {
@@ -124,29 +130,28 @@ private struct TodayFlowCell: View {
         }
         var pages = [flow]
         if let ran = Self.label(seconds: day.workSeconds) { pages.append("\(name) agents ran \(ran)") }
-        // A day carrying a hand correction says so BEFORE it says the number,
+        // A day carrying a hand correction says so before it says the number,
         // because the number alone is what sends someone looking for an
         // explanation: 4/5 beside a day that measured 3/5 reads like the
-        // island's own verdict, and nothing on screen said otherwise.
+        // island's own verdict, and nothing on screen would say otherwise.
         // The pencil marks the score; the rest of the line says how to take it
         // back, which is the one thing a marker alone cannot tell you.
         if corrections[day.date] != nil {
-            // ⚠️ No weekday here, and not for brevity's sake alone: this page is
-            // an instruction about the mark, while the two below it are
-            // readings about the day and keep their name. Measured at the
-            // caption's own font it is 119pt against the 140 the cell gives —
-            // with the name it came to 145 and the sentence lost its last word
-            // on screen, which is the one that said what right-click does.
-            // ⚠️ The SCORE rides on this page, not just the mark. A press
-            // confirms itself in words here because one step of the paint is
-            // not perceptible on a 6pt bar — so the page a press lands on has
-            // to carry the number it just set, or pressing answers nothing.
-            // Shorter than the fuller sentence on purpose, and shorter than
-            // the widest page this cell already prints: at this font
-            // `right-click to undo` puts the line at 139.9pt inside 140pt,
-            // which is not a margin but a coin toss between two different
-            // pieces of text-measuring code. No middle dot either — the mark
-            // already separates the score from the instruction.
+            // No weekday here: this page is an instruction about the mark, and
+            // the pages after it are readings about the day and keep their
+            // name. Measured at the caption's own font it is 119pt against the
+            // 140 the cell gives; with the name it came to 145, and the sentence
+            // lost its last word on screen, the one that says what right-click
+            // does.
+            // The score rides on this page too, not just the mark. One step of
+            // the paint is not perceptible on a 6pt bar, so the page a press
+            // lands on has to carry the number it just set, or pressing
+            // answers nothing.
+            // The wording is short on purpose: `right-click to undo` puts the
+            // line at 139.9pt inside 140pt, which is a coin toss between two
+            // pieces of text-measuring code, not a margin. No middle dot
+            // either; the mark already separates the score from the
+            // instruction.
             pages.insert("\(level)/5 ✎ undo: right-click", at: 0)
         }
         return pages
@@ -163,7 +168,7 @@ private struct TodayFlowCell: View {
         // redraws one line of text.
         TimelineView(.periodic(from: .now, by: 1)) { context in
             let resting = restingSlot(at: context.date)
-            // Hover has strict priority: a day with nothing to say prints "—"
+            // Hover has strict priority: a day with nothing to say prints `—`
             // rather than today's resting content.
             let text = inspecting.map { self.inspected($0, at: context.date) } ?? resting?.text
             let tint = (inspecting == nil && resting?.isReading == false) ? IslandPalette.statusDone : IslandPalette.cue
@@ -220,16 +225,15 @@ struct TopWeekRow: View {
                           },
                           onClear: { date in
                               viewModel.clearDay(date)
-                              // ⚠️ Say it in the cell, now. Taking the
-                              // correction back changes what this day reads AND
-                              // drops a page, but the carousel keeps its own
-                              // clock: left alone, the line rolls on as if
-                              // nothing happened and the page that offered the
-                              // undo just vanishes whenever the rotation next
-                              // comes round. Restarting the pages puts the
-                              // restored reading on screen at the moment of the
-                              // press — the answer to "did that work?" is the
-                              // number itself.
+                              // Say it in the cell, now. Taking the correction
+                              // back changes what this day reads and drops a
+                              // page, but the carousel keeps its own clock:
+                              // left alone, the line rolls on as if nothing
+                              // happened, and the undo page vanishes whenever
+                              // the rotation next comes round. Restarting the
+                              // pages puts the restored reading on screen at
+                              // the moment of the press, so the number itself
+                              // answers "did that work?".
                               inspectOrigin = Date()
                           },
                           onInspect: { day in
@@ -253,6 +257,7 @@ struct TopWeekRow: View {
                           inspecting: inspecting,
                           corrections: viewModel.weekCorrections,
                           carouselOrigin: carouselOrigin,
+                          nudge: viewModel.stretchNudge,
                           inspectOrigin: inspectOrigin)
                 .frame(width: GuidedCareLayout.rightColumnWidth, alignment: .leading)
                 .alignmentGuide(.bottom) { d in

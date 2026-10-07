@@ -12,6 +12,7 @@
 		00A1CE0000000000000000FA /* TopWeekRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00A1CE0000000000000000F9 /* TopWeekRow.swift */; };
 		00A1CE0000000000000000F8 /* WeekPerch.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00A1CE0000000000000000F7 /* WeekPerch.swift */; };
 		00A1CE000000000000000A02 /* IslandViewModel+Week.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00A1CE000000000000000A01 /* IslandViewModel+Week.swift */; };
+		00A1CE000000000000000A06 /* IslandViewModel+Flow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00A1CE000000000000000A05 /* IslandViewModel+Flow.swift */; };
 		00A1CE000000000000000A04 /* CarouselClock.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00A1CE000000000000000A03 /* CarouselClock.swift */; };
 		00A1CE0000000000000000F6 /* ProjectCaption.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00A1CE0000000000000000F5 /* ProjectCaption.swift */; };
 		00A1CE0000000000000000F4 /* IslandPalette.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00A1CE0000000000000000F3 /* IslandPalette.swift */; };
@@ -20,6 +21,7 @@
 		00A1CE000000000000000006 /* StalePolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00A1CE000000000000000005 /* StalePolicy.swift */; };
 		00A1CE000000000000000008 /* CareLedger.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00A1CE000000000000000007 /* CareLedger.swift */; };
 		00A1CE00000000000000000A /* CareMovePool.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00A1CE000000000000000009 /* CareMovePool.swift */; };
+		00A1CE000000000000000A08 /* StretchNudge.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00A1CE000000000000000A07 /* StretchNudge.swift */; };
 		00A1CE00000000000000000C /* CareSessionClock.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00A1CE00000000000000000B /* CareSessionClock.swift */; };
 		00A1CE00000000000000000E /* CareSessionRecorder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00A1CE00000000000000000D /* CareSessionRecorder.swift */; };
 		00A1CE000000000000000010 /* IslandView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00A1CE00000000000000000F /* IslandView.swift */; };
@@ -50,6 +52,7 @@
 		00A1CE0000000000000000F9 /* TopWeekRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TopWeekRow.swift; sourceTree = "<group>"; };
 		00A1CE0000000000000000F7 /* WeekPerch.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WeekPerch.swift; sourceTree = "<group>"; };
 		00A1CE000000000000000A01 /* IslandViewModel+Week.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "IslandViewModel+Week.swift"; sourceTree = "<group>"; };
+		00A1CE000000000000000A05 /* IslandViewModel+Flow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "IslandViewModel+Flow.swift"; sourceTree = "<group>"; };
 		00A1CE000000000000000A03 /* CarouselClock.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CarouselClock.swift; sourceTree = "<group>"; };
 		00A1CE0000000000000000F5 /* ProjectCaption.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProjectCaption.swift; sourceTree = "<group>"; };
 		00A1CE0000000000000000F3 /* IslandPalette.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IslandPalette.swift; sourceTree = "<group>"; };
@@ -58,6 +61,7 @@
 		00A1CE000000000000000005 /* StalePolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StalePolicy.swift; sourceTree = "<group>"; };
 		00A1CE000000000000000007 /* CareLedger.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CareLedger.swift; sourceTree = "<group>"; };
 		00A1CE000000000000000009 /* CareMovePool.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CareMovePool.swift; sourceTree = "<group>"; };
+		00A1CE000000000000000A07 /* StretchNudge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StretchNudge.swift; sourceTree = "<group>"; };
 		00A1CE00000000000000000B /* CareSessionClock.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CareSessionClock.swift; sourceTree = "<group>"; };
 		00A1CE00000000000000000D /* CareSessionRecorder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CareSessionRecorder.swift; sourceTree = "<group>"; };
 		00A1CE00000000000000000F /* IslandView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IslandView.swift; sourceTree = "<group>"; };
@@ -117,6 +121,7 @@
 			children = (
 				00A1CE000000000000000007 /* CareLedger.swift */,
 				00A1CE000000000000000009 /* CareMovePool.swift */,
+				00A1CE000000000000000A07 /* StretchNudge.swift */,
 				00A1CE00000000000000000B /* CareSessionClock.swift */,
 				00A1CE00000000000000000D /* CareSessionRecorder.swift */,
 			);
@@ -136,6 +141,7 @@
 				00A1CE0000000000000000F3 /* IslandPalette.swift */,
 				00A1CE000000000000000011 /* IslandViewModel.swift */,
 				00A1CE000000000000000A01 /* IslandViewModel+Week.swift */,
+				00A1CE000000000000000A05 /* IslandViewModel+Flow.swift */,
 				00A1CE000000000000000A03 /* CarouselClock.swift */,
 			);
 			path = Interface;
@@ -266,6 +272,7 @@
 				00A1CE000000000000000020 /* AppGroup.swift in Sources */,
 				00A1CE000000000000000008 /* CareLedger.swift in Sources */,
 				00A1CE00000000000000000A /* CareMovePool.swift in Sources */,
+				00A1CE000000000000000A08 /* StretchNudge.swift in Sources */,
 				00A1CE00000000000000000C /* CareSessionClock.swift in Sources */,
 				00A1CE00000000000000000E /* CareSessionRecorder.swift in Sources */,
 				00A1CE000000000000000014 /* IslandCapsuleShape.swift in Sources */,
@@ -283,6 +290,7 @@
 				00A1CE000000000000000040 /* AgentStatus.swift in Sources */,
 				00A1CE000000000000000012 /* IslandViewModel.swift in Sources */,
 				00A1CE000000000000000A02 /* IslandViewModel+Week.swift in Sources */,
+				00A1CE000000000000000A06 /* IslandViewModel+Flow.swift in Sources */,
 				00A1CE000000000000000A04 /* CarouselClock.swift in Sources */,
 				00A1CE00000000000000001E /* IslandWindowController.swift in Sources */,
 				00A1CE000000000000000022 /* PerchApp.swift in Sources */,

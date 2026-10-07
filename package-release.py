@@ -17,7 +17,7 @@ standard archive formats can preserve build-machine metadata:
                              the packer's timezone
     ditto -c -k              __MACOSX/._* sidecars, carrying the xattrs whole
     ditto with every "clean" flag it has, under TZ=UTC
-                             still writes an 0x5855 extra into each **local**
+                             still writes an 0x5855 extra into each local
                              header carrying the packer's uid and gid
     hdiutil (dmg)            all of the above
 
@@ -27,11 +27,11 @@ another packer. Naming known-bad fields cannot terminate. Declaring the whole
 archive can, so every entry below is written with its extra and comment
 explicitly empty, and the audit refuses anything it did not declare.
 
-**The audit parses the archive's raw bytes rather than reading it through
-zipfile.** `ZipInfo.extra` exposes only the *central directory* copy of an
-entry's extra field; the uid above lives only in the *local* header, where that
-view structurally cannot reach it — the same shape as the bundle-vs-archive
-mistake this file exists to prevent.
+The audit parses the archive's raw bytes instead of reading it through
+zipfile. `ZipInfo.extra` exposes only the central directory copy of an entry's
+extra field; the uid above lives only in the local header, where that view
+cannot reach it. That is the same shape as the bundle-versus-archive mistake
+this file exists to prevent.
 
 Run it:
 
@@ -50,8 +50,8 @@ import zipfile
 from pathlib import Path
 from typing import NamedTuple
 
-# A fixed stamp, so the archive says nothing about when — or during which hours
-# of which day — it was built. It has to be >= 1980: the zip format's DOS
+# A fixed stamp, so the archive says nothing about when it was built, not even
+# the hour of the day. It has to be >= 1980: the zip format's DOS
 # timestamp cannot represent anything earlier, and out-of-range values get
 # silently clamped rather than rejected.
 EPOCH_DOS = (2026, 1, 1, 0, 0, 0)
@@ -94,7 +94,7 @@ def needles() -> list[tuple[bytes, str]]:
     """The build-path root in every encoding a Mach-O or a plist might use.
 
     A raw `find(b"/Users/")` reads only the ASCII case. UTF-16 is not exotic
-    here — plists and some resource formats use it — and UTF-32 sails past a
+    here (plists and some resource formats use it), and UTF-32 sails past a
     search written for the other two.
 
     Lowercased, because the buffer is lowercased before searching: `bytes.lower`
@@ -113,9 +113,9 @@ def run(cmd: list[str], **kwargs) -> None:
 def manifest(app: Path) -> dict[str, Entry]:
     """Declare exactly what the archive must contain, read off the real bundle.
 
-    This is the whole point of the redesign: the audit downstream compares the
-    archive against this and refuses any difference in either direction, so a
-    field, an entry or a byte that nothing here declared cannot ship.
+    The audit downstream compares the archive against this and refuses any
+    difference in either direction, so a field, an entry or a byte that nothing
+    here declared cannot ship.
     """
     want: dict[str, Entry] = {}
 
@@ -132,11 +132,11 @@ def manifest(app: Path) -> dict[str, Entry]:
                 raise SystemExit(
                     f"{rel}: build by-product (debug symbols or Swift module) inside the bundle, "
                     "refusing to ship it — these carry the builder's absolute source paths")
-        # The FULL st_mode, file-type bits included, not just the permissions.
+        # The full st_mode, file-type bits included, not just the permissions.
         # ditto reads an entry whose mode lacks S_IFREG/S_IFDIR as not-Unix and
         # falls back to 0644, which costs the executable its execute bit and the
         # app its ability to launch. `unzip` honours the permissions either way,
-        # so it cannot be the tool this is verified with — see prove_extractable.
+        # so it cannot be the tool this is verified with (see prove_extractable).
         mode = p.lstat().st_mode & 0xFFFF
         if p.is_dir():
             want[rel + "/"] = Entry(True, mode, "")
@@ -194,15 +194,15 @@ def dos_datetime(date: int, time: int) -> tuple[int, int, int, int, int, int]:
 
 
 def read_structure(raw: bytes) -> list[dict]:
-    """Account for **every byte** of the archive, from 0 to EOF.
+    """Account for every byte of the archive, from 0 to EOF.
 
     Read by hand because `zipfile` shows only the central directory's copy of
-    each entry's extra field, and the packer identity that prompted this rewrite
-    lived in the local headers alone.
+    each entry's extra field, and a packer's identity can live in the local
+    headers alone.
 
-    Byte accounting rather than boundary checks, because checking boundaries is
+    Byte accounting instead of boundary checks, because checking boundaries is
     the same losing game as naming bad fields: a zip has spans no boundary
-    touches — between the last file's data and the central directory, for one —
+    touches (between the last file's data and the central directory, for one),
     and anything can sit there while every boundary holds. Every span has to be
     claimed by a record, or the claim is not worth making: the cursor below
     starts at 0, is handed from one record to the next, and must land exactly
@@ -321,9 +321,9 @@ def audit(zip_path: Path, want: dict[str, Entry]) -> None:
 
     for e in entries:
         declared = want[e["name"]]
-        # Declared and then never checked is how the last hole got through: pack()
-        # writes a fixed stamp so the archive says nothing about when — or in which
-        # timezone — it was built, and nothing downstream confirmed it had.
+        # A value that is declared but never checked is a hole: pack() writes a
+        # fixed stamp so the archive says nothing about when, or in which
+        # timezone, it was built, and this confirms that it did.
         if e["when"] != EPOCH_DOS:
             raise SystemExit(f"{e['name']}: stamped {e['when']}, not the fixed {EPOCH_DOS}. "
                              "A real clock here leaks the packer's timezone.")
@@ -378,7 +378,7 @@ def prove_extractable(zip_path: Path, app_name: str) -> None:
     content under this file's control, and both are things the signature and the
     launch depend on. Neither is assumed.
 
-    Unpacked with **ditto specifically**, because that is what expands the zip
+    Unpacked with ditto specifically, because that is what expands the zip
     when someone double-clicks the download. `unzip` applies an entry's
     permissions where ditto refuses them, so verifying with `unzip` reports a
     launchable app for an archive that produces an unlaunchable one.
@@ -395,21 +395,22 @@ def prove_extractable(zip_path: Path, app_name: str) -> None:
 def refuse_team_signature(app: Path) -> None:
     """Refuse an archive whose signature names a development team.
 
-    A local install is DELIBERATELY signed with the owner's team: macOS gives a
-    prefixed App Group container to a team-signed app, and the desktop widget
-    needs that container. `install-island-app.py` injects it at install time
-    from a gitignored file, and nothing about it reaches the repository.
+    A local install is signed with its owner's team on purpose: macOS gives a
+    team-signed app a prefixed App Group container, and that is where the local
+    data lives (see `inject_team_prefix` in install-island-app.py). The
+    installer injects the team at install time from a gitignored file, and
+    nothing about it reaches the repository.
 
     None of that may leave the machine. A Team ID is registered to a named
     person, so a released binary carrying one links a pseudonymous repository
-    to whoever pays for the developer account — and `codesign -dv` reads it out
+    to whoever pays for the developer account, and `codesign -dv` reads it out
     of the download in one command.
 
-    ⚠️ Until now this held because the release build path simply never signed
-    with a team (the project sets CODE_SIGNING_ALLOWED = NO, and `sign_adhoc`
-    is what runs without a config). That is a habit, not a guard: pointing this
-    script at the copy in /Applications would have packaged the team signature
-    with everything else and reported success.
+    The release build path does not sign with a team (the project sets
+    `CODE_SIGNING_ALLOWED = NO`, and `sign_adhoc` is what runs without a
+    config), but that is a habit, not a guard: pointing this script at the copy
+    in /Applications would package the team signature with everything else and
+    report success.
     """
     out = subprocess.run(["codesign", "-dv", str(app)],
                          capture_output=True, text=True).stderr

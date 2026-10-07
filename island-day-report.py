@@ -1,70 +1,70 @@
 #!/usr/bin/env python3
-"""The island's daily work report — counts facts, guesses no states.
+"""The island's daily work report: it counts facts and guesses no states.
 
 Data comes from `AgentEventLog` (the island appends every agent event it
 receives, verbatim, one line each).
 
-**What it knows**: when you first put an agent to work, when you last did,
-how many turns went back and forth, how long each turn ran, which project and
+What it knows: when you first put an agent to work, when you last did, how
+many turns went back and forth, how long each turn ran, which project and
 which agent the time landed on. All of it is counted off timestamps.
 
-**What it does not know** (the report's wording must hold this line):
-  · "started" = the first time you handed out work, not when you sat down.
+What it does not know (the report's wording must hold this line):
+  - "started" is the first time you handed out work, not when you sat down.
     Half an hour of reading docs beforehand doesn't count.
-  · A turn's duration is time the AGENT was running — you were waiting for
+  - A turn's duration is time the agent was running: you were waiting for
     it, not doing the work yourself.
-  · A gap is indistinguishable: lunch, a meeting, or you writing code by
-    hand — the island only sees agents.
+  - A gap cannot be told apart: lunch, a meeting, or you writing code by
+    hand. The island only sees agents.
 So the report says "how long you and the agents worked together" and never
 claims to know how focused you were.
 
-**How turns are cut**: the hooks push both UserPromptSubmit and PostToolUse
-as `working`, so one `working` line cannot tell "you hit enter" from "a tool
+How turns are cut: the hooks push both UserPromptSubmit and PostToolUse as
+`working`, so one `working` line cannot tell "you hit enter" from "a tool
 finished". The boundaries still derive: `complete` closes a turn, and the
-first `working` after it opens a new one. Grouped by (source, project) — two
+first `working` after it opens a new one. Grouped by (source, project): two
 agents running in two projects in parallel are two independent conversations.
 
-**Two layers, on purpose.** `turns()` is the raw cut: it holds no thresholds
-and reports exactly what the log shows, open ends included. `settled()` sits
-on top and holds the judgment calls, because the raw cut alone gets whole
-days wrong: interrupting an agent (Esc, closed window) leaves a turn with no
-`complete`, and pure pairing then welds it to the NEXT session, so a stretch of
-seconds can come out hours long and drag the whole day's total with it.
+Two layers, on purpose. `turns()` is the raw cut: it holds no thresholds and
+reports exactly what the log shows, open ends included. `settled()` sits on
+top and holds the judgment calls, because the raw cut alone gets whole days
+wrong: interrupting an agent (Esc, closed window) leaves a turn with no
+`complete`, and pure pairing then welds it to the next session, so a stretch
+of seconds can come out hours long and drag the whole day's total with it.
 The settle rules:
-  · `complete` settles a turn, and the silence before it is trusted whenever
-    the last thing seen was `working` — a single tool can run for many quiet
-    minutes mid-turn, and truncating across that silence would have cut a
-    genuine turn in half;
-  · unless that last event was `waiting` and the complete came more than
+  - `complete` settles a turn, and the silence before it is trusted whenever
+    the last thing seen was `working`: a single tool can run for many quiet
+    minutes mid-turn, and truncating across that silence would cut a genuine
+    turn in half;
+  - unless that last event was `waiting` and the complete came more than
     IDLE_CUT later. Then the silence is an empty chair, not a tool: the agent
     asked for approval and nobody was there, so the turn ends at the waiting
     event and is truncated. Answering half an hour later does not turn the
     half hour into work;
-  · an open turn whose conversation goes quiet longer than IDLE_CUT is
-    truncated at its last event (the cut has to sit WELL beyond the gap between
-    one working event and the next, or it would truncate live turns; the
-    boundary is pinned by behaviour tests).
+  - an open turn whose conversation goes quiet longer than IDLE_CUT is
+    truncated at its last event (the cut has to sit well beyond the gap
+    between one working event and the next, or it would truncate live turns;
+    behaviour tests pin the boundary).
 
-**Flow** is the island's own verdict, laid over the day — the same words the
-wave on screen is saying, not a second idea wearing the same name. Someone is in
-flow when the median of the last five pickup delays is under 90 seconds AND
+Flow is the island's own verdict, laid over the day: the same words the wave
+on screen is saying, not a second idea wearing the same name. Someone is in
+flow when the median of the last five pickup delays is under 90 seconds and
 something was set to work less than 4.5 minutes ago (`in_flow`; the three
 numbers are copied from `FlowSense.swift` and a test compares them, so neither
-side can hold its own opinion). `flow_spans` walks that verdict along the day —
-the answer can only change where a turn STARTS, or 4.5 minutes after the last
-one did — and the `flow` column is their total.
+side can hold its own opinion). `flow_spans` walks that verdict along the day
+(the answer can only change where a turn starts, or 4.5 minutes after the last
+one did), and the `flow` column is their total.
 
-⚠️ **`flow` and the bridged measure answer different questions.** `flow` counts
-only the stretches where orders were really going out fast. The bridged measure
+`flow` and the bridged measure answer different questions. `flow` counts only
+the stretches where orders were really going out fast. The bridged measure
 asks "how long were agents running, with every gap under FLOW_BRIDGE welded
-shut", which counts an agent grinding away alone all evening — it survives only
+shut", which counts an agent grinding away alone all evening. It survives only
 inside the shadow features, and reading one as a version of the other is the
 mistake this split exists to prevent.
 
 The old measure is still computed, under its own names and never called flow:
 `flow_stretches` (bridged wall-clock) and `run_intervals` (no bridging at all)
 feed the shadow features, and both readings are needed beside the self-scores.
-⚠️ FLOW_BRIDGE stays a provisional constant, to be re-fitted rather than tuned.
+FLOW_BRIDGE stays a provisional constant, to be fitted again rather than tuned.
 
 Usage:
     python3 island-day-report.py            # today
@@ -73,12 +73,23 @@ Usage:
     python3 island-day-report.py --summary  # every day: flow, busy, score
     python3 island-day-report.py --features [day|--all]   # one raw JSON line per day
     python3 island-day-report.py --reading  [day|--all]   # the shipped readings, machine-readable
+    python3 island-day-report.py --reading  [day|--all] --via-bridge   # same readings, asked of the running island
 
-⚠️ `--reading` and `--features` are not two views of the same thing. `--reading`
+`--reading` and `--features` are not two views of the same thing. `--reading`
 carries what the island shows; `--features` carries a shadow experiment computed
 with different bridge thresholds, and the two do not agree. Anything that acts on a
-number takes `--reading` — a day with no log prints no line there, so a caller
+number takes `--reading`: a day with no log prints no line there, so a caller
 can tell "nothing recorded" from "measured zero".
+
+`--via-bridge` is for schedulers. The log lives in the island's App Group
+container, and macOS treats a program reading another app's container as
+"accessing data from other apps": it stops the read and asks the person at the
+screen. A launchd job has nobody at the screen, and a command-line tool gets
+asked again on every launch, so a scheduled `--reading` hangs until it times
+out. Asking the island over its own socket sidesteps that: connecting to a
+socket is not a read of the container, and the reply is the day files' own
+bytes, so the readings are the same. It needs the island running, and reaches
+back 31 days; for anything older, read the directory.
 """
 from __future__ import annotations   # so `X | None` annotations parse on macOS's stock python 3.9
 
@@ -87,12 +98,13 @@ import math
 import os
 import subprocess
 import sys
+import time
 from collections import defaultdict
 from datetime import datetime, timedelta
 
 def group_core(group: str) -> str:
-    """The `group.x` core from either spelling the OS uses — `group.x` bare,
-    or `TEAMID.group.x` once the installer stamps a signing Team into the
+    """The `group.x` core from either spelling the OS uses: `group.x` bare,
+    or `<TeamID>.group.x` once the installer stamps a signing Team into the
     entitlement (macOS names the on-disk container with the prefix then).
     Returns "" when it is neither. Same rule as both hook installers; the
     full value, prefix and all, is what names the container directory."""
@@ -103,7 +115,7 @@ def group_core(group: str) -> str:
 
 
 def _app_group() -> str:
-    """Read the App Group from the installed island; never hard-coded — a
+    """Read the App Group from the installed island; never hard-coded: a
     Team ID links to the Apple developer account's registrant name."""
     plist = "/Applications/Perch.app/Contents/Info.plist"
     if not os.path.exists(plist):
@@ -118,7 +130,7 @@ def _app_group() -> str:
 def events_dir() -> str:
     """Where the island writes its event log.
 
-    Resolved lazily, NOT at import time: the tests import this module to drive
+    Resolved lazily, not at import time: the tests import this module to drive
     the real turn-cutting function, and reading the installed app during
     import would make them depend on whether this machine happens to have
     Perch installed.
@@ -126,27 +138,100 @@ def events_dir() -> str:
     return os.path.expanduser(f"~/Library/Group Containers/{_app_group()}/agent-events")
 
 
-# A quiet stretch at least this long shows as a "gap" — display only, feeds no logic
+def bridge_socket() -> str:
+    """Where the island listens. The socket sits inside the container too, but
+    connecting to it is not reading the container, and that is the whole point
+    of `--via-bridge` (see the module docstring)."""
+    return os.path.expanduser(f"~/Library/Group Containers/{_app_group()}/bridge.sock")
+
+
+BRIDGE_MAX_BYTES = 8 * 1024 * 1024   # the island's cap on one ledger reply
+BRIDGE_MAX_DAYS = 31                 # the island refuses a longer lookback
+
+
+def request_ledger(socket_path, lookback_days, attempts=5, sleep=time.sleep):
+    """Ask the island for its raw event ledger: the same request the history
+    rebuild sends, answered with the day files' bytes back to back after an
+    `OK` line. The island only serves files touched within the lookback.
+
+    Fails loud. A scheduler that got a silent empty answer would book a zero
+    day; a scheduler that got a non-zero exit knows the island was not there."""
+    import socket
+    request = ("hook-ledger-request\t%d\t0\treconciler" % lookback_days).encode("ascii")
+    response = bytearray()
+    for attempt in range(attempts):
+        response = bytearray()
+        try:
+            with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as connection:
+                connection.settimeout(10)
+                connection.connect(socket_path)
+                connection.sendall(request)
+                connection.shutdown(socket.SHUT_WR)
+                while len(response) <= BRIDGE_MAX_BYTES + 64:
+                    chunk = connection.recv(65536)
+                    if not chunk:
+                        break
+                    response.extend(chunk)
+            break
+        except OSError as error:
+            if attempt + 1 == attempts:
+                raise SystemExit(f"Perch bridge unavailable at {socket_path}: {error}. Is the island running?")
+            sleep(0.5)   # the socket appears a moment after login; give it that moment
+    if len(response) > BRIDGE_MAX_BYTES + 64:
+        raise SystemExit("Perch bridge reply exceeds the island's 8 MiB cap")
+    if not response.startswith(b"OK\n"):
+        detail = bytes(response[:256]).decode("utf-8", errors="replace")
+        raise SystemExit(f"Perch could not export its ledger: {detail}")
+    return bytes(response[3:])
+
+
+def load_via_bridge(days, socket_path=None):
+    """The events `load()` would read for each of `days`, fetched over the
+    bridge instead. `days` is a list of YYYY-MM-DD, or None for every day the
+    bridge can reach. Returns {day: events-or-None}; None keeps the same
+    meaning as in `load()`: nothing recorded, so `--reading` prints no line.
+
+    The reply has no file boundaries, so each event goes to the local date of
+    its own `t`. That is the rule the island names the day files by, so a day
+    here is the day its file would have been."""
+    today = datetime.now().date()
+    if days is None:
+        lookback = BRIDGE_MAX_DAYS - 1
+    else:
+        lookback = max(((today - datetime.strptime(d, "%Y-%m-%d").date()).days for d in days), default=0)
+        lookback = max(lookback, 0)          # a day in the future has no file either way
+        if lookback + 1 > BRIDGE_MAX_DAYS:
+            raise SystemExit(f"the bridge reaches back {BRIDGE_MAX_DAYS} days only; read older days from the directory")
+    text = request_ledger(socket_path or bridge_socket(), lookback + 1)
+    by_day = defaultdict(list)
+    for e in parse_events(text.decode("utf-8", errors="replace").splitlines()):
+        by_day[e["dt"].strftime("%Y-%m-%d")].append(e)
+    if days is None:
+        return dict(by_day)
+    return {d: by_day.get(d) for d in days}
+
+
+# A quiet stretch at least this long shows as a "gap"; display only, it feeds no logic
 GAP = timedelta(minutes=30)
 # A turn open longer than this most likely lost its complete (session killed);
 # excluded from the "agents ran in total" number
 MAX_TURN = timedelta(hours=2)
-# An OPEN turn whose conversation stays quiet this long is truncated at its
+# An open turn whose conversation stays quiet this long is truncated at its
 # last event (see the docstring for the measured basis). A complete is trusted
-# across silence that sits behind a `working` event — a tool running quietly —
-# but not behind a `waiting` one, which is a person who walked away.
+# across silence after a `working` event (a tool running quietly) but not after
+# a `waiting` one, which is a person who walked away.
 IDLE_CUT = timedelta(seconds=120)
 # Provisional: a finish picked up within this counts as unbroken flow for the
-# OLD measure (flow_stretches). To be re-fitted against self-scored days, not
+# old measure (flow_stretches). To be fitted again against self-scored days, not
 # tuned by hand.
 FLOW_BRIDGE = timedelta(minutes=5)
 
-# The island's own three numbers, for the verdict the `flow` column now reports.
-# ⚠️ COPIED FROM `FlowSense.swift` — quickPickup / window / dropOut, in that
-# order — and compared against it by the island suite. They are one number
-# each living in two files; this side gets no opinion of its own. Like
-# FLOW_BRIDGE they are provisional: hand-set, to be fitted against recorded
-# corrections one day — nothing reads those yet — and not nudged by hand until then.
+# The island's own three numbers, for the verdict the `flow` column reports.
+# Copied from `FlowSense.swift` (quickPickup, window, dropOut, in that order)
+# and compared against it by the island suite. Each is one number living in two
+# files, and this side gets no opinion of its own. Like FLOW_BRIDGE they are
+# provisional: set by hand, to be fitted against recorded corrections one day
+# (nothing reads those yet), and not nudged by hand until then.
 QUICK_PICKUP = timedelta(seconds=90)
 FLOW_WINDOW = 5
 DROP_OUT = timedelta(minutes=4.5)
@@ -156,8 +241,15 @@ def load(day, directory):
     path = os.path.join(directory, f"{day}.jsonl")
     if not os.path.exists(path):
         return None
+    with open(path, encoding="utf-8") as lines:
+        return parse_events(lines)
+
+
+def parse_events(lines):
+    """One parser for both roads in: the day file and the bridge reply are the
+    same lines, so they must be read by the same code."""
     out = []
-    for line in open(path, encoding="utf-8"):
+    for line in lines:
         line = line.strip()
         if not line:
             continue
@@ -201,7 +293,7 @@ def settled(events, idle_cut=IDLE_CUT):
     """The judgment layer over the raw cut: every turn gets an end.
 
     Returns (start, end, project, source, truncated). `truncated` marks turns
-    whose end is the last thing the log SAW rather than a received complete —
+    whose end is the last thing the log saw instead of a received complete;
     downstream may count them, but must not present them as cleanly finished.
 
     Kept separate from turns() so the raw layer stays threshold-free and its
@@ -217,13 +309,13 @@ def settled(events, idle_cut=IDLE_CUT):
         for e in evs:
             if e["event"] == "complete":
                 if start is not None:
-                    # Which silence just ended? Behind a `working` event it is a
-                    # tool running quietly (one can go many minutes without a
-                    # word), so the complete is trusted whole. Behind a
-                    # `waiting` event it is an empty chair — the agent asked for
-                    # approval and nobody was there — and the answer, whenever it
-                    # finally came, does not make those minutes work. End the turn
-                    # where the log last saw anything, and mark it truncated.
+                    # After a `working` event the silence was a tool running
+                    # quietly (one can go many minutes without a word), so the
+                    # complete is trusted whole. After a `waiting` event it was
+                    # an empty chair: the agent asked for approval and nobody
+                    # was there, and a late answer does not make those minutes
+                    # work. End the turn where the log last saw anything, and
+                    # mark it truncated.
                     if last_kind == "waiting" and e["dt"] - last > idle_cut:
                         result.append((start, last, project, source, True))
                     else:
@@ -247,28 +339,27 @@ def settled(events, idle_cut=IDLE_CUT):
 
 
 def flow_stretches(settled_turns, bridge=FLOW_BRIDGE, max_turn=MAX_TURN):
-    """THE OLD MEASURE, kept for comparison — **not what "flow" means here**.
+    """The old measure, kept for comparison. It is not what "flow" means here.
 
-    ⚠️ It answers "how long were agents running today, with every gap under
+    It answers "how long were agents running today, with every gap under
     `bridge` welded shut", which counts an agent grinding away alone all evening
     as flow and has no opinion at all about the person. The product meaning of
-    the word lives in
-    `in_flow` / `flow_spans` (the island's own verdict). This one stays because
-    the shadow features record it, and the two readings have to sit side by side
-    before anyone can say which was actually being felt — the name is
-    deliberately unchanged so that everything already written down about it
-    still points at the same number.
+    the word lives in `in_flow` and `flow_spans` (the island's own verdict).
+    This one stays because the shadow features record it, and the two readings
+    have to sit side by side before anyone can say which was actually being
+    felt. The name is unchanged on purpose, so that everything already written
+    down about it still points at the same number.
 
     Merge settled turns (any agent, any project) into unbroken stretches.
     Two turns belong to one stretch when the later one starts before the
-    earlier one ends plus `bridge` — which covers both "picked up quickly"
+    earlier one ends plus `bridge`, which covers both "picked up quickly"
     and "another line was already running through the gap". Returns
     (start, end) per stretch, wall-clock.
 
     Turns at or beyond `max_turn` are skipped, for the same reason "agents ran
     in total" already skips them: the machine slept or the session sat open all
     night, and one such turn would spread a night nobody worked across the
-    headline number. The SAME constant, so the hill chart and the headline can
+    headline number. The same constant, so the hill chart and the headline can
     never disagree about which turns were real.
     """
     stretches = []
@@ -285,19 +376,18 @@ def flow_stretches(settled_turns, bridge=FLOW_BRIDGE, max_turn=MAX_TURN):
 def run_intervals(settled_turns, max_turn=MAX_TURN):
     """When an agent was actually running, as non-overlapping spans.
 
-    Also an OLD-measure companion, kept for the same reason as
+    Also a companion of the old measure, kept for the same reason as
     `flow_stretches`: the shadow features record it (`net_agent_min`) and the
     comparison needs it. It is machine runtime, never a claim about the person.
 
-    Unlike `flow_stretches` this bridges NOTHING — the gaps between spans are
-    real gaps — and unlike summing turn durations it counts parallel work once.
+    Unlike `flow_stretches` this bridges nothing (the gaps between spans are
+    real gaps), and unlike summing turn durations it counts parallel work once.
     Turns at or beyond `max_turn` are dropped for the same reason the headline
     drops them.
 
-    ⚠️ Has a Swift twin again — `DayFlow.workSeconds` totals these same
-    spans for the island's "agents ran" reading — held together by a test
-    that feeds both the same turns. Expects turns sorted by start, which
-    `settled` returns.
+    It has a Swift twin: `DayFlow.workSeconds` totals these same spans for the
+    island's "agents ran" reading, and a test feeds both the same turns.
+    Expects turns sorted by start, which `settled` returns.
     """
     out = []
     for a, b, _, _, _ in settled_turns:
@@ -311,17 +401,17 @@ def run_intervals(settled_turns, max_turn=MAX_TURN):
 
 
 def net_ran(settled_turns):
-    """Wall-clock agent time: the union's total, the ONE number "agents ran"
+    """Wall-clock agent time: the union's total, the one number "agents ran"
     may mean anywhere. The island shows this same number (DayFlow.workSeconds,
-    cross-pinned). Summing turns instead counts parallel lines as extra hours
-    — a 12-hour wall of parallel agents prints as 22h "ran"."""
+    cross-pinned). Summing turns instead counts parallel lines as extra hours:
+    a 12-hour wall of parallel agents prints as 22h "ran"."""
     return sum(((b - a) for a, b in run_intervals(settled_turns)), timedelta())
 
 
 def same_project_stretches(settled_turns, bridge=FLOW_BRIDGE, max_turn=MAX_TURN):
     """The same day cut the other way: a stretch may never span two projects.
 
-    `flow_stretches` merges across projects on purpose — another line running
+    `flow_stretches` merges across projects on purpose: another line running
     through the gap is still work. But "I stayed on one thing" and "I never sat
     idle" are different sensations, and only one of them may be what is scored.
     So both cuts get recorded every day, and once enough self-scored days exist
@@ -343,17 +433,16 @@ def pickup_gaps(settled_turns, max_turn=MAX_TURN):
     """After an agent finished, how long until the next one was set to work.
 
     Only a turn closed by a real `complete` starts a gap: a truncated turn's
-    "end" is the last thing the log SAW, which is not a finish, and an
+    end is the last thing the log saw, which is not a finish, and an
     implausible turn's end sits on the far side of a sleeping machine. The
-    other end is the first start after it on ANY line — a start is always a
+    other end is the first start after it on any line. A start is always a
     real observed event, so implausible and truncated turns are fine as the
     landing point even though they are not fine as the take-off.
 
     Only positive gaps exist by construction (the next start must be strictly
-    later). ⚠️ What this measures is "how long until the next order went out",
-    NOT "how long nothing was running" — another line may well have been
-    running straight through the gap. `run_intervals` is the one that answers
-    that other question.
+    later). This measures "how long until the next order went out", not "how
+    long nothing was running": another line may well have been running
+    straight through the gap. `run_intervals` answers that other question.
     """
     starts = sorted(a for a, *_ in settled_turns)
     found = []
@@ -363,14 +452,14 @@ def pickup_gaps(settled_turns, max_turn=MAX_TURN):
         nxt = next((s for s in starts if s > b), None)
         if nxt is not None:
             found.append((b, nxt - b))
-    # ⚠️ Ordered by the turn's END, and `FlowSense.pickupGaps` orders the same
-    # way. Callers take the LAST FLOW_WINDOW of these, so the order is part of
-    # the answer and the two languages must agree on it.
+    # Ordered by the turn's end, as `FlowSense.pickupGaps` is. Callers take the
+    # last FLOW_WINDOW of these, so the order is part of the answer and the two
+    # languages must agree on it.
     #
-    # ⚠️ End, not start. A pickup delay belongs to the moment the agent
-    # FINISHED; ordering by start files a long-running turn as old news when its
-    # pickup only just happened, and lets turns that began later but finished
-    # sooner push it out of the window.
+    # A pickup delay belongs to the moment the agent finished; ordering by start
+    # would file a long-running turn as old news when its pickup just happened,
+    # and let turns that began later but finished sooner push it out of the
+    # window.
     return [g for _, g in sorted(found, key=lambda p: p[0])]
 
 
@@ -387,22 +476,22 @@ def _median(values):
 
 
 def in_flow(settled_turns, now):
-    """In flow at `now` — the island's verdict, computed here.
+    """In flow at `now`: the island's verdict, computed here.
 
-    ⚠️ **This is a second implementation of `FlowSense.inFlow`**, and the only
-    thing keeping the two one judgment is the cross-language test that feeds
-    both the same cases and compares the ANSWERS and the three CONSTANTS. The
-    island cannot shell out to python (sandboxed app), the report cannot link
-    Swift; so the meaning is duplicated on purpose and pinned by test.
+    This is a second implementation of `FlowSense.inFlow`, and the only thing
+    keeping the two one judgment is the cross-language test that feeds both the
+    same cases and compares the answers and the three constants. The island
+    cannot shell out to Python (sandboxed app) and the report cannot link Swift,
+    so the meaning is duplicated on purpose and pinned by test.
 
     The two halves are independent on purpose. The median says how the work has
-    been going; the drop-out says whether it is still going at all — a stretch of
-    quick pickups half an hour ago must not keep the column filling in while
-    the desk is empty.
+    been going; the drop-out says whether it is still going at all. Quick
+    pickups half an hour ago must not keep the column filling in while the desk
+    is empty.
 
     Both comparisons are strict: landing exactly on a provisional threshold is
-    not evidence of anything, and the conservative answer to "not sure" is no.
-    Fewer than FLOW_WINDOW pickups is likewise always no — someone who has just
+    not evidence of anything, and the cautious answer to "not sure" is no.
+    Fewer than FLOW_WINDOW pickups is likewise always no: someone who has just
     sat down has not shown enough for anyone to claim anything.
 
     Pickup delays come from `pickup_gaps`, never from a second copy of that
@@ -425,18 +514,19 @@ def flow_spans(settled_turns):
 
     An instant judgment becomes a duration only if you know when it can change,
     and it can change at exactly two kinds of moment:
-      · a turn STARTS — a new pickup delay has landed, so judge again;
-      · DROP_OUT after the last start — nothing was set to work, so: out.
+      - a turn starts: a new pickup delay has landed, so judge again;
+      - DROP_OUT after the last start: nothing was set to work, so the answer
+        is out.
     Between two starts nothing can move: a gap only becomes measurable when the
     next start lands on it, and time passing can only ever push the answer out.
 
     So each start that judges "in flow" holds until the next start (which gets
     judged on its own) or until it times out, whichever comes first; touching
-    spans merge. ⚠️ **Nothing is bridged.** A silence is a break, full stop —
-    welding gaps shut is what `flow_stretches` does, and the two must never be
-    read as versions of each other. A span may therefore reach up to DROP_OUT
-    past the day's last start: that is the island still saying "in flow" with
-    nothing new to go on yet, which is exactly what it does on screen.
+    spans merge. Nothing is bridged: a silence is a break. Welding gaps shut is
+    what `flow_stretches` does, and the two must never be read as versions of
+    each other. A span may therefore reach up to DROP_OUT past the day's last
+    start: that is the island still saying "in flow" with nothing new to go on
+    yet, which is exactly what it does on screen.
     """
     starts = sorted(a for a, *_ in settled_turns)
     spans = []
@@ -455,13 +545,13 @@ def flow_spans(settled_turns):
 
 
 def waiting_bounds(events):
-    """How long each `waiting` could have lasted — at most.
+    """How long each `waiting` could have lasted, at most.
 
     A `waiting` event says the agent asked for approval and stopped. Nothing in
-    the log says when the human answered; the next event on the SAME line is
+    the log says when the person answered; the next event on the same line is
     the only hard fact, and it says the answer came no later than that. So this
-    returns an upper BOUND per waiting event — `None` when nothing followed on
-    that line at all — and the name says bound because this must never be
+    returns an upper bound per waiting event (`None` when nothing followed on
+    that line at all), and the name says bound because this must never be
     dressed up as a response time.
 
     Returns (waiting event time, bound or None), sorted by time.
@@ -493,15 +583,15 @@ def _nearest_rank(values, q):
 def daily_reading(day, events):
     """The island's own readings for one day, in one machine-readable line.
 
-    This is the SHIPPED arithmetic — the same `flow_spans` total that the human
+    This is the shipped arithmetic: the same `flow_spans` total that the human
     report prints as `flow  5h20m`, and the same `net_ran` behind `agents ran`.
     Anything that acts on these numbers reads them from here.
 
-    ⚠️ Not `--features`. That line carries `flow2/5/10_min` from a shadow
+    Not `--features`. That line carries `flow2/5/10_min` from a shadow
     experiment: different bridge thresholds, a different answer, and
-    `flow5_min` reads like the field an integrator would reach for.
-    Taking it would put a third reading into circulation with nothing on screen
-    to say so. The two outputs are pinned together by a test.
+    `flow5_min` reads like the field an integrator would reach for. Taking it
+    would put a third reading into circulation with nothing on screen to say
+    so. A test pins the two outputs together.
 
     `judged` answers a question a spender cannot ask of the minutes alone:
     fewer than FLOW_WINDOW pickups means the day was never measured, which is a
@@ -518,17 +608,17 @@ def daily_reading(day, events):
 
 
 def day_features(day, events):
-    """One day, one flat dict of what the log MEASURED. No judgement, no score.
+    """One day, one flat dict of what the log measured. No judgement, no score.
 
     Everything is computed from the event log at read time: nothing is stored,
-    nothing feeds a number the island shows, nothing reaches the widget. It
-    exists so that once enough self-scored days pile up, these columns can be
-    laid beside the self-scores and asked which of them was actually
-    feeling — the fitting comes later, and by hand.
+    and nothing feeds a number the island shows. It exists so that once enough
+    self-scored days pile up, these columns can be laid beside the self-scores
+    and asked which of them was actually being felt. The fitting comes later,
+    and by hand.
 
-    House rule for the derived groups: they count PLAUSIBLE turns only (under
+    House rule for the derived groups: they count plausible turns only (under
     MAX_TURN), the same ones flow and "agents ran in total" already count. The
-    quality group is the deliberate exception — reporting the anomalies is its
+    quality group is the deliberate exception: reporting the anomalies is its
     whole job.
     """
     events = events or []
@@ -609,17 +699,17 @@ def day_features(day, events):
 def day_scores():
     """The days answered by hand, {date: {"rhythm", "progress", "legacy"}}.
 
-    LAST LINE PER FIELD wins, not per date: a line updates exactly the keys it
-    carries. That is what lets three kinds of line share one append-only file —
-    the pre-split one-number `score` lines (kept as `legacy`, never written
-    again) and the island's `rhythm` / `progress` lines — without any of them
+    The last line per field wins, not per date: a line updates exactly the keys
+    it carries. That lets three kinds of line share one append-only file (the
+    pre-split one-number `score` lines, kept as `legacy` and never written
+    again, and the island's `rhythm` and `progress` lines) without any of them
     knocking the others out.
 
-    ⚠️ Same rule, byte for byte, as `DayScore.swift`'s `scores()`. Two readers,
-    one file, and nothing but the island suite holding the ends together.
+    The same rule, byte for byte, as `DayScore.swift`'s `scores()`. Only the
+    island suite holds the two readers of this one file together.
 
     Read-only here: the report lays the derived number beside the stated one
-    and computes nothing from it — the check must stay a check.
+    and computes nothing from it, so the check stays a check.
     """
     path = os.path.join(os.path.dirname(events_dir()), "day-scores.jsonl")
     out = {}
@@ -643,7 +733,7 @@ def day_scores():
 
 def score_mark(row):
     """One cell for a day's own answers: `r3·p2`, `—` for a question nobody has
-    not answered yet, and a pre-split score printed as it always was, labelled
+    answered yet, and a pre-split score printed as it always was, labelled
     for what it is. One formatter, so the table and the day report cannot
     disagree about the same ledger."""
     if not row:
@@ -712,7 +802,7 @@ def report(day, events):
     print()
     print(f"  {len(st)} turns; agents ran {hm(ran)}")
     if busy - ran >= timedelta(minutes=1):
-        # A different, honest quantity — labor across parallel lines — under
+        # A different, honest quantity (labour across parallel lines) under
         # its own name, never as "ran". Only when the two meaningfully differ:
         # a few seconds of overlap is scheduling noise, not parallel work.
         print(f"    ({hm(busy)} agent-hours summed across parallel lines)")
@@ -720,9 +810,9 @@ def report(day, events):
         mid = closed[len(closed) // 2]
         print(f"  longest {hm(closed[-1])}   shortest {hm(closed[0])}   median {hm(mid)}")
     if dropped:
-        # These turns DID complete; they just ran longer than the plausible
+        # These turns did complete; they just ran longer than the plausible
         # ceiling, which usually means the machine slept or the session sat
-        # open. Don't claim they never completed — say what is actually known.
+        # open. Don't claim they never completed; say what is actually known.
         print(f"  ⚠️ {dropped} completed turn(s) ran longer than {MAX_TURN}; excluded from the total as implausible")
     truncated = sum(1 for *_, tr in st if tr)
     if truncated:
@@ -757,6 +847,23 @@ def report(day, events):
 
 def main():
     args = [a for a in sys.argv[1:]]
+    if "--via-bridge" in args:
+        # Decided before `events_dir()` is even looked at: listing that
+        # directory is the read the flag exists to avoid.
+        if "--reading" not in args:
+            raise SystemExit("--via-bridge goes with --reading only; the other views read the directory")
+        rest = [a for a in args if a not in ("--reading", "--via-bridge")]
+        if "--all" in rest:
+            wanted = None
+        else:
+            wanted = [rest[0]] if rest else [datetime.now().strftime("%Y-%m-%d")]
+        by_day = load_via_bridge(wanted)
+        for d in sorted(by_day):
+            evs = by_day[d]
+            if evs is None:
+                continue
+            print(json.dumps(daily_reading(d, evs), sort_keys=True))
+        return
     directory = events_dir()
     if not os.path.isdir(directory):
         print(f"No data directory yet: {directory}")
@@ -809,7 +916,7 @@ def main():
         return
     if "--features" in args:
         # Shadow observation: one raw JSON line per day, straight to stdout.
-        # Nothing here is stored and nothing is scored — the log stays the only
+        # Nothing here is stored and nothing is scored: the log stays the only
         # record, and these are just the questions we are learning to ask of it.
         rest = [a for a in args if a != "--features"]
         if "--all" in rest:

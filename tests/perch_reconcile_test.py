@@ -15,11 +15,8 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-# Dual layout, the same two worlds tests/island-paths.js resolves: upstream the
-# Since the 2026-08-31 split both the working repo and the package are flat, so
-# the repo root. Probed by a directory only the package has — never by counting
-# levels up from this file, which is what pinned these tests to one layout and
-# left them unable to run inside the extracted package at all.
+# The working repo and the extracted package have the same flat layout, so the
+# package root is the repo root in both (as in tests/island-paths.js).
 PKG = ROOT
 MODULE_PATH = PKG / "perch-reconcile.py"
 
@@ -33,7 +30,7 @@ def load_module():
 
 # The scheduled job does not run this file. The installer takes a byte copy to
 # `~/.perch/bin/perch-reconcile` and launchd runs that, so editing the source
-# changes nothing until the installer runs again -- and every other test here
+# changes nothing until the installer runs again, and every other test here
 # reads the source, which means a fully green suite can sit beside a deployed
 # copy that is months behind and quietly seeing fewer rows.
 # Both helper scripts are deployed the same way and go stale the same way: a
@@ -49,19 +46,19 @@ DEPLOYED_COPIES = (
 def _code_only(path):
     """The file with its agent sticky notes taken out.
 
-    ⚠️ Sticky notes are BY DEFINITION the lines that do not ship: the publishing
+    Sticky notes are by definition the lines that do not ship: the publishing
     step strips them, so a published copy and the tree it came from differ in
-    exactly those lines and in no others. Comparing raw bytes therefore calls a
-    freshly published package "stale" against the very install it was made from
-    — which is not a stale install, it is the same code wearing fewer notes.
-    Everything that decides behaviour survives this, so a real drift still shows.
+    exactly those lines and in no others. Comparing raw bytes would call a
+    freshly published package "stale" against the very install it was made
+    from, when it is the same code wearing fewer notes. Everything that decides
+    behaviour survives this, so a real drift still shows.
     """
-    # ⚠️ The SAME rule the publishing step uses, not a looser one of our own: it
-    # drops a line only when the line IS a note — leading space, a comment
-    # marker, then the tag. Dropping every line that merely CONTAINS the tag
+    # The same rule the publishing step uses, not a looser one of our own: it
+    # drops a line only when the line is a note (leading space, a comment
+    # marker, then the tag). Dropping every line that merely contains the tag
     # would also swallow a line of real code that mentions it, and a genuine
     # drift on that line would then be normalised away into "same".
-    # ⚠️ The tag is spelled in halves for the same reason export-perch.py spells
+    # The tag is spelled in halves for the same reason export-perch.py spells
     # it that way: a file carrying it whole fails the residue check.
     tag = "AIDEV"
     note = re.compile(r"\s*(#|//)\s*" + tag + r"-(NOTE|TODO|QUESTION)\b", re.I)
@@ -70,7 +67,7 @@ def _code_only(path):
 
 
 def deployed_copy_verdict(installed, source):
-    """Say whether the copy that runs is the CODE in this tree.
+    """Say whether the copy that runs is the code in this tree.
 
     "absent" when nothing is installed, "same" when the two carry the same code,
     and "stale" for anything else. Not mtime: a checkout resets mtime, so a fresh
@@ -133,7 +130,7 @@ def with_ordinal(records):
     """Re-emit Codex records the way a newer Codex writes them.
 
     Codex began putting an ``ordinal`` between ``timestamp`` and ``type`` on
-    2026-08-21.  Nothing about the record's meaning changed — but a scanner
+    2026-08-21.  Nothing about the record's meaning changed, but a scanner
     that assumes the two fields touch stops seeing the record at all, and says
     nothing, because in its eyes the line was never a lifecycle row.
     """
@@ -162,7 +159,7 @@ def claude_assistant_real_order(session_id, uuid, timestamp, cwd, stop_reason, a
 
     The fixtures above put ``type`` first, which is why they never noticed the
     scanner reading only the head of a line: in a real transcript the whole
-    message body — the answer text and every tool input — sits BEFORE the
+    message body (the answer text and every tool input) sits before the
     top-level ``type``, so the longer the answer, the further out that field
     lands.  And the field that settles a turn only ever rides a long line: a
     turn ends when the model stops talking, which is when it has said the most.
@@ -438,7 +435,7 @@ class PerchReconcileTest(unittest.TestCase):
         self.assertEqual(len({turn["record_id"] for turn in turns}), 2)
 
     def test_resumed_session_replays_history_and_must_not_overwrite_the_original_end(self):
-        # Codex "resume" opens a NEW rollout file and replays the whole prior
+        # Codex "resume" opens a new rollout file and replays the whole prior
         # conversation into it: the old session_meta comes along, and every past
         # turn is re-emitted stamped with the instant of the replay.  Reading
         # those as fresh events made a 5-minute turn look like it ran for a day.
@@ -488,7 +485,7 @@ class PerchReconcileTest(unittest.TestCase):
         self.assertEqual(
             turns["codex:session-a:turn-1"]["ended_at"], "2026-08-12T10:05:00.000Z"
         )
-        # the resumed file is identified by its OWN (first) session_meta, so the
+        # the resumed file is identified by its own (first) session_meta, so the
         # live turn is filed under session-b and never collides with session-a
         self.assertIn("codex:session-b:turn-2", turns)
         # the replayed copy is history, not work, and it is not in the ledger
@@ -583,7 +580,7 @@ class PerchReconcileTest(unittest.TestCase):
         differ only by an ``ordinal`` the newer one inserts.  A scanner keyed to
         the two fields touching sees one session and not the other, and reports
         no error either way: the rows it drops were never lifecycle rows to it.
-        The control is the old shape — green before this test existed, so it
+        The control is the old shape, green before this test existed, so it
         cannot be what makes this test fail.
         """
         write_jsonl(
@@ -610,10 +607,10 @@ class PerchReconcileTest(unittest.TestCase):
     def test_a_long_claude_answer_still_settles_its_turn(self):
         """Scanning one end of a line only is the same as not scanning it.
 
-        Both sessions here end the same way — the model finishes talking — and
+        Both sessions here end the same way (the model finishes talking) and
         differ only in how much it said.  A scanner that reads a bounded head
         keeps every prompt (prompts are short) and drops every completion
-        (completions are long), so every turn stays open until the NEXT prompt
+        (completions are long), so every turn stays open until the next prompt
         closes it as interrupted, wearing that prompt's clock.  Resume a
         session days later and the turn reads days long.
         """
@@ -978,9 +975,8 @@ class PerchReconcileTest(unittest.TestCase):
 
     def test_a_published_copy_is_not_stale_merely_for_having_lost_its_notes(self):
         # What publishing does to a file, done here by hand: the sticky notes go
-        # and nothing else moves. This is the shape that broke the export once —
-        # the copied package was compared against the install it came from and
-        # declared out of date.
+        # and nothing else moves. A package compared against the install it
+        # came from must not be declared out of date for that.
         source = self.base / "perch-reconcile.py"
         installed = self.base / "bin" / "perch-reconcile"
         installed.parent.mkdir(parents=True)
@@ -995,8 +991,8 @@ class PerchReconcileTest(unittest.TestCase):
         self.assertEqual(deployed_copy_verdict(installed, source), "stale")
 
     def test_a_line_that_merely_mentions_the_tag_is_still_compared(self):
-        # The publishing step drops a line only when the line IS a note. A rule
-        # that dropped every line MENTIONING the tag would erase this drift.
+        # The publishing step drops a line only when the line is a note. A rule
+        # that dropped every line mentioning the tag would erase this drift.
         tag = "AIDEV" + "-NOTE"
         source = self.base / "perch-reconcile.py"
         installed = self.base / "bin" / "perch-reconcile"

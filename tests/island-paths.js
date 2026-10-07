@@ -8,18 +8,17 @@ const path = require("node:path");
 
 const ROOT = path.resolve(__dirname, "..");
 
-// ⚠️ Since the 2026-08-31 split the working repo and the extracted package have the SAME
-// flat layout, so there is nothing to detect any more: the package root is the repo root in
-// both. PKG survives as a name because every guard reads paths through it — collapsing it
-// into ROOT everywhere would be a rename touching a hundred call sites for no gain.
+// The working repo and the extracted package have the same flat layout, so the package
+// root is the repo root in both. `PKG` survives as a name because every guard reads paths
+// through it; collapsing it into `ROOT` everywhere would be a rename touching a hundred
+// call sites for no gain.
 const PKG = ROOT;
 
-// Is this the working repo, or the extracted package? Since the split the two have the
-// same flat layout, so the old `PKG === ROOT` test no longer separates them. `docs/` does:
-// the exporter never copies it, and the manifest declares it excluded on purpose.
-// ⚠️ One owner. Two guards ask this question and they must not answer it differently.
+// Is this the working repo, or the extracted package? The two have the same flat layout,
+// so `PKG === ROOT` cannot separate them. `docs/` does: the exporter never copies it, and
+// the manifest declares it excluded on purpose.
+// One owner: two guards ask this question, and they must not answer it differently.
 const WORKING = fs.existsSync(path.join(ROOT, "docs"));
-// Joins relative segments onto the detected package root and returns an absolute path.
 const pkgPath = (...p) => path.join(PKG, ...p);
 
 const ISLAND_DIR = pkgPath("Perch");
@@ -50,20 +49,19 @@ function islandPath(name) {
 
 
 // ── The named sources the guards read ──────────────────────────────────────
-// These sat in island.test.js while the suite was one file. They moved here when it
-// split: six files each keeping their own copy is six chances to drift, and a guard
-// reading a stale path is a guard that passes without looking.
-// ⚠️ Every one resolves through islandPath, which throws on absence and on a duplicate
-// name — so a rename surfaces here instead of as a quiet green.
+// Shared here because each test file keeping its own copy would be one more chance to
+// drift, and a guard reading a stale path passes without looking.
+// Every one resolves through islandPath, which throws on absence and on a duplicate
+// name, so a rename surfaces here instead of as a quiet green.
 const ISLAND_CARE_LEDGER_SWIFT = islandPath("CareLedger.swift");
 const ISLAND_CATALOG = islandPath("Assets.xcassets");
-// Most view guards assert what the whole layer DOES, never which file a type
+// Most view guards assert what the whole layer does, never which file a type
 // sits in.
 // The seven view files are joined before they are scanned, so moving a type
 // inside the layer cannot dodge a guard.
 // The few tests that must pin ownership read their own file directly.
 //
-// ⚠️ Side effect worth knowing: every `doesNotMatch` against this sweeps the
+// Side effect worth knowing: every `doesNotMatch` against this sweeps the
 // whole layer rather than one file, which makes it strictly harder to pass.
 const ISLAND_VIEW_FILES = ["IslandView.swift", "IslandPalette.swift", "ProjectCaption.swift",
                            "GuidedCareCard.swift", "AgentActivityStrip.swift",
@@ -71,11 +69,11 @@ const ISLAND_VIEW_FILES = ["IslandView.swift", "IslandPalette.swift", "ProjectCa
 const islandViews = () =>
   ISLAND_VIEW_FILES.map((f) => fs.readFileSync(islandPath(f), "utf8")).join("\n\n");
 const ISLAND_VIEW_SWIFT = islandPath("IslandView.swift");
-// ⚠️ The view model is its own file plus its extensions. Every guard about what
-// the view model DOES must read ALL of them, or a rule is dodged by moving the
-// code one file sideways — which is exactly what happened to `refreshWeek`.
+// The view model is its own file plus its extensions. Every guard about what
+// the view model does must read all of them, or a rule is dodged by moving the
+// code one file sideways.
 //
-// ⚠️ DERIVED from the tree, never a hand-written list: a list of two is a list
+// Derived from the tree, never a hand-written list: a list of two is a list
 // that a third `IslandViewModel+*.swift` walks straight past, taking every
 // `doesNotMatch` rule with it.
 const viewModelFiles = () =>

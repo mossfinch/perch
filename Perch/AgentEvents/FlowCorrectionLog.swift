@@ -2,34 +2,32 @@ import Foundation
 
 /// Corrections to the flow verdict.
 ///
-/// ⚠️ This file is the data the three numbers in `FlowSense` are meant to be
-/// fitted against one day. Nothing reads it yet: the only reference in the
-/// tree is the `append` in the view model, and the three numbers are hand-set
-/// provisional values. Not nudging them by hand in the meantime is a
-/// discipline the comments ask for, not a mechanism this file provides.
+/// This is the data the three numbers in `FlowSense` are meant to be fitted
+/// against one day. Nothing reads it yet: the only reference is the `append`
+/// in the view model, and the three numbers are provisional values set by
+/// hand. Leaving them alone until then is a rule the comments state; nothing
+/// in this file enforces it.
 ///
-/// ⚠️ A separate directory from the observations, and the separation is the
-/// point: the events stay exactly as recorded and a correction is an annotation
-/// on top of a record nothing rewrites. Tuning a threshold means laying what the
-/// island said beside what it was told and finding where they disagree, which is
-/// impossible once nobody can tell judged lines from told ones. This directory
-/// holds that one question's answers and nothing else, so a line in it needs no
-/// field saying which account it belongs to.
+/// Corrections live in their own directory so the events stay exactly as
+/// recorded, with each correction a note on top of a record nothing rewrites.
+/// Tuning a threshold means laying what the island said beside what it was
+/// told, which is impossible once judged lines and told ones are mixed. The
+/// directory holds only these answers, so a line needs no field saying which
+/// kind it is.
 ///
-/// ⚠️ A correction that cannot be written down still takes effect. Broken
-/// observability must never reach into the island's actual job, so every failure
-/// here is swallowed and reported only as a `false` nobody must read.
+/// A correction that cannot be written down still takes effect. A failure to
+/// record must never reach the island's actual job, so every failure here is
+/// swallowed, and its only trace is a `false` return no caller should act on.
 enum FlowCorrectionLog {
     private static var directory: URL {
         AppGroup.containerURL.appendingPathComponent("flow-corrections")
     }
 
-    /// Serial queue: the tap arrives on the main thread, and writing must not
-    /// occupy it.
+    /// The tap arrives on the main thread, and writing must not hold it.
     private static let queue = DispatchQueue(label: "io.github.mossfinch.perch.flow-corrections")
 
-    /// One file per day, named after the day in LOCAL time: this records a
-    /// human's day and has to line up with the event log it is read against.
+    /// One file per local day: this records a person's day and has to line up
+    /// with the event log it is read against.
     static func file(for when: Date, in directory: URL) -> URL {
         let day = DateFormatter()
         day.dateFormat = "yyyy-MM-dd"
@@ -43,21 +41,20 @@ enum FlowCorrectionLog {
         queue.async { _ = write(said: said, machine: machine, at: when, into: directory) }
     }
 
-    /// The whole of the writing, synchronous and pointed at a caller-named
-    /// directory — split out from `append` so a test can run it for real, into a
-    /// temporary directory and into a path that cannot be written.
+    /// Synchronous and pointed at a caller-named directory, so a test can run
+    /// the real write into a temporary directory and into one that cannot be
+    /// written.
     ///
-    /// The formatters are built per call rather than held as statics: a handful
-    /// of presses a day is nothing worth a shared mutable object and the
-    /// `nonisolated(unsafe)` that would come with it.
+    /// The formatters are built per call: a handful of presses a day does not
+    /// justify a shared mutable object and the `nonisolated(unsafe)` it needs.
     @discardableResult
     static func write(said: FlowVerdict, machine: FlowVerdict,
                       at when: Date, into directory: URL) -> Bool {
         let stamp = ISO8601DateFormatter()
         stamp.formatOptions = [.withInternetDateTime]   // carries the offset, so a cross-timezone read stays correct
-        // ⚠️ Must be set explicitly: ISO8601DateFormatter defaults to UTC while
-        // the day split above is local. Two clocks in one file would misalign
-        // every correction against the stretch it was correcting.
+        // Set explicitly: ISO8601DateFormatter defaults to UTC, and the day
+        // split above is local. Two clocks in one file would misalign every
+        // correction against the stretch it corrects.
         stamp.timeZone = TimeZone.current
         let row: [String: Any] = [
             "t": stamp.string(from: when),
@@ -72,7 +69,7 @@ enum FlowCorrectionLog {
         if let handle = try? FileHandle(forWritingTo: url) {
             defer { try? handle.close() }
             // If seeking to the end fails, do not write: the handle still sits
-            // at 0 and writing would OVERWRITE the day's earlier corrections.
+            // at 0, and writing would overwrite the day's earlier corrections.
             guard (try? handle.seekToEnd()) != nil else { return false }
             return (try? handle.write(contentsOf: data)) != nil
         }

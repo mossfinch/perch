@@ -4,7 +4,7 @@ import SwiftUI
 /// The week, as a branch under a bird.
 ///
 /// Position is the weekday: seven segments, Monday through Sunday, and the bird
-/// stands on today. No letters and no dates — where the bird is tells you the
+/// stands on today. No letters and no dates: where the bird is tells you the
 /// day, everything right of it has not happened yet, and everything left of it
 /// is lit to how much of that day was spent in flow.
 struct WeekPerch: View {
@@ -17,18 +17,18 @@ struct WeekPerch: View {
     /// not a value: the ladder has no rung for "nothing said".
     let onClear: (String) -> Void
     /// Which day the cursor is on, so the cell beside it can say what that day
-    /// reads. ⚠️ Needed because one step along `alphas` is not perceptible on a
-    /// 6pt bar: the colour is the reading and must not be exaggerated to be
-    /// seen, so a press confirms itself in words instead.
+    /// reads. One step along `alphas` is not perceptible on a 6pt bar, and the
+    /// colour is the reading and must not be exaggerated to be seen, so a press
+    /// confirms itself in words instead.
     let onInspect: (DayFlow.Day?) -> Void
-    /// Given by the layout — see `dayWidth`.
+    /// Given by the layout; see `dayWidth`.
     let width: CGFloat
 
     @State private var hovering: Int? = nil
     @State private var focused: Int? = nil
 
     /// 18 wide so a day is never narrower than the bird standing on it (15pt),
-    /// 6 tall because colour needs area to be judged — a 2pt rod can only be lit
+    /// 6 tall because colour needs area to be judged: a 2pt rod can only be lit
     /// or unlit, and this one has five things to say. Not private: row 1 aligns
     /// its right-hand cell on this rod's centreline.
     static let segment = CGSize(width: 18, height: 6)
@@ -36,42 +36,42 @@ struct WeekPerch: View {
     /// the wave beside it, and the seven days split whatever it is given.
     private var dayWidth: CGFloat { width / CGFloat(max(1, days.count)) }
 
-    /// The gap between two days, cut into the PAINT and never into the wood:
+    /// The gap between two days, cut into the paint and never into the wood:
     /// what reads as a progress bar is the unbroken run of coral, so the coral
     /// is what gets cut and wood is what shows through.
     ///
-    /// ⚠️ Never draw this in the card's ground colour. Background punched
-    /// through wood is a hole, and six holes turn the branch into seven dashes.
+    /// Never draw this in the card's ground colour. Background punched through
+    /// wood is a hole, and six holes turn the branch into seven dashes.
     static let dayGap: CGFloat = 1.5
     /// The visible branch is 6pt and nobody hits 6pt, so the hit area is 24pt
     /// and invisible. Drawn bigger instead, it reads as a progress track.
-    /// ⚠️ The LAYOUT stays 24pt — the hover shape below is inset a further
-    /// -8pt on every side, because drifting a few points off the wood snapped
+    /// The layout stays 24pt, and the hover shape below reaches a further 8pt
+    /// out on every side, because drifting a few points off the wood snapped
     /// the cell back to today mid-read. Growing the frame instead would push
     /// the rows apart.
     private static let hitHeight: CGFloat = 24
-    /// 20pt is the floor for this asset, not a preference — see ClosedIslandMark.
+    /// 20pt is the floor for this asset; see ClosedIslandMark.
     private static let birdHeight: CGFloat = 20
     /// Measured, not guessed: PerchBird.png is 15×20.
     private static let birdWidth: CGFloat = 15
 
-    /// The one coral every lived day is painted in. A day's LEVEL is how much of
-    /// it got painted on — see `alphas`.
+    /// The one coral every lived day is painted in. A day's level is how much of
+    /// it got painted on (see `alphas`).
     static let paint = Color(red: 1.000, green: 0.800, blue: 0.720)
 
     /// Five levels as five opacities of that one coral.
     ///
-    /// ⚠️ What the paint fades INTO is the whole question. Faded into the wood
-    /// the coral loses its hue and level 1 arrives a muddy grey — a different,
-    /// dirtier colour rather than the same coral, fainter. Faded into the ground
-    /// the hue survives exactly. Hence `composited(level:)` and never
-    /// `.opacity()`, which would blend into the wood sitting underneath.
+    /// What the paint fades into decides the colour. Faded into the wood, the
+    /// coral loses its hue and level 1 arrives as a muddy grey, a different
+    /// colour instead of the same coral, fainter. Faded into the ground, the hue
+    /// survives exactly. Hence `composited(level:)` and never `.opacity()`,
+    /// which would blend into the wood underneath.
     ///
-    /// ⚠️ The 0.45 floor is measured. Fading toward black bottoms out AT black,
-    /// so the low end must be held up or a lived day sinks to the unlived wood
-    /// and starts claiming the day never happened. At 0.45: level 1 sits 1.89:1
-    /// above the wood (danger line ≈1.5), the five span 5.70× of emitted light,
-    /// smallest step 1.36.
+    /// The 0.45 floor is measured. Fading toward black bottoms out at black, so
+    /// the low end must be held up, or a lived day sinks to the unlived wood and
+    /// claims the day never happened. At 0.45, level 1 sits 1.89:1 above the
+    /// wood (danger line ≈1.5), the five span 5.72× of emitted light, and the
+    /// smallest step is 1.36:1.
     static let alphas: [Double] = [0.45, 0.5875, 0.725, 0.8625, 1.0]
 
     /// The paint at a level, already blended against the card's ground.
@@ -82,8 +82,8 @@ struct WeekPerch: View {
 
     /// A day that has not happened yet still gets a segment: "not yet" must look
     /// different from "nothing", or the week reads as broken instead of young.
-    /// ⚠️ Bright, not dim — the seven have to hold together as ONE piece of wood,
-    /// and what keeps an unlived day from competing with a lived one is HUE.
+    /// Bright, not dim: the seven have to hold together as one piece of wood,
+    /// and what keeps an unlived day from competing with a lived one is hue.
     /// rgb(56,56,56): clearly there, clearly not coral.
     private static let unlived = 0.22
 
@@ -99,13 +99,13 @@ struct WeekPerch: View {
     ///
     /// Three ways to have none: it has not happened yet; the verdict was never
     /// answerable on it (too few pickups); or the days array is shorter than
-    /// the branch. A corrected day always paints — the correction IS the
+    /// the branch. A corrected day always paints: the correction is the
     /// reading, and it is the one case where a person outranks the measurement.
     ///
-    /// ⚠️ An unjudged day drawing nothing looks like a future day, and that is
-    /// the intended reading: the bird says which side of today you are on, so
-    /// "left of the bird and bare" says "this happened, and nothing could be
-    /// read on it" without a fourth colour nobody would learn.
+    /// An unjudged day drawing nothing looks like a future day, and that is the
+    /// intended reading: the bird says which side of today you are on, so "left
+    /// of the bird and bare" says "this happened, and nothing could be read on
+    /// it" without a fourth colour nobody would learn.
     private func paints(_ index: Int) -> Bool {
         guard !isFuture(index), index < days.count else { return false }
         let day = days[index]
@@ -130,7 +130,7 @@ struct WeekPerch: View {
                 // the branch, not a seam between days.
                 .padding(.trailing, isLast ? 0 : Self.dayGap)
             }
-            // ⚠️ The cursor gets its own channel and may not touch the colour
+            // The cursor gets its own channel and may not touch the colour
             // underneath: that colour is the reading itself.
             if lit {
                 Rectangle().fill(IslandPalette.paper.opacity(0.28))
@@ -146,9 +146,9 @@ struct WeekPerch: View {
 
     var body: some View {
         ZStack(alignment: .bottomLeading) {
-            // ⚠️ ONE piece of wood, not seven pills: a row of short rounded
-            // dashes is already a macOS shape for something else. The dim white
-            // IS the branch and the coral days are painted onto it.
+            // One piece of wood, not seven pills: a row of short rounded dashes
+            // is already a macOS shape for something else. The dim white is the
+            // branch, and the coral days are painted onto it.
             Capsule()
                 .fill(IslandPalette.paper.opacity(Self.unlived))
                 .frame(width: width, height: Self.segment.height)
@@ -161,9 +161,9 @@ struct WeekPerch: View {
                         }
                     }
                 }
-                // ⚠️ Nothing is drawn between two days. On a 6pt branch over
+                // Nothing is drawn between two days. On a 6pt branch over
                 // black there is no darker wood to draw a divider with, so days
-                // are told apart by COLOUR alone — and two days at the same
+                // are told apart by colour alone, and two days at the same
                 // level merging into one stretch is true, not a bug.
                 .clipShape(Capsule())
 
@@ -196,16 +196,15 @@ struct WeekPerch: View {
             }
         }
         .onTapGesture { correct(hovering ?? focused) }
-        // Secondary click undoes, and undoes at once. A confirming menu was
-        // weighed and turned down: what this exists to repair is a stray
-        // PRIMARY click, and a stray secondary click costs only a correction
-        // that primary clicks can put back — the asymmetry runs the other way
-        // from the usual argument for confirmation.
+        // A secondary click undoes at once, with no confirming menu. What this
+        // repairs is a stray primary click, and a stray secondary click costs
+        // only a correction that primary clicks can put back, so the usual
+        // argument for confirmation runs the other way here.
         //
-        // ⚠️ Not `TapGesture().modifiers(.control)`: that is control-click,
-        // which macOS treats AS a secondary click but which the right mouse
-        // button never produces. A right button press arrives only as
-        // `rightMouseDown`, so the catcher below is what actually hears it.
+        // Not `TapGesture().modifiers(.control)`: that is control-click, which
+        // macOS treats as a secondary click but which the right mouse button
+        // never produces. A right button press arrives only as
+        // `rightMouseDown`, so the catcher below is what hears it.
         .overlay(SecondaryClickCatcher { clear(hovering ?? focused) })
         .focusable()
         .onMoveCommand { direction in
@@ -258,11 +257,11 @@ struct WeekPerch: View {
 
 /// Hears the right mouse button, which no SwiftUI gesture does.
 ///
-/// It reports only that a secondary click happened; WHICH day it landed on
+/// It reports only that a secondary click happened; which day it landed on
 /// comes from the same hover state the primary click reads, so the two can
 /// never disagree about what is under the pointer.
 ///
-/// ⚠️ Hit testing stays off for everything else: an overlay that swallowed
+/// Hit testing stays off for everything else: an overlay that swallowed
 /// ordinary clicks would take the primary press with it.
 private struct SecondaryClickCatcher: NSViewRepresentable {
     let onSecondaryClick: () -> Void
@@ -271,7 +270,7 @@ private struct SecondaryClickCatcher: NSViewRepresentable {
         var onSecondaryClick: (() -> Void)?
         override func rightMouseDown(with event: NSEvent) { onSecondaryClick?() }
 
-        /// ⚠️ Claim the click ONLY while the event in hand is a secondary one.
+        /// Claim the click only while the event in hand is a secondary one.
         /// Returning nil always would keep every event out, this one included;
         /// returning self always would swallow the primary click the branch
         /// under here is listening for.

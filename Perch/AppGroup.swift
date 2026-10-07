@@ -1,26 +1,26 @@
 import Foundation
 
-/// The island's App Group container id — the socket, the care ledger, and the
-/// event log all live in this container.
+/// The App Group container that holds the socket, the care ledger and the
+/// event log.
 ///
-/// The value is hard-coded in Info.plist (no Team ID prefix, identical for
-/// every builder). Code reads Info.plist and nothing else; the duplicate
-/// declaration in the entitlements is checked against it by the installer
-/// before install. Kept in its own file so that "who needs the container"
-/// does not depend on "who listens on the socket".
+/// The code reads the id from Info.plist only. In the repo it has no Team ID
+/// prefix and is the same for every builder. The entitlements declare it
+/// again, and the installer checks the two agree before installing. It has its
+/// own file so that finding the container does not depend on who listens on
+/// the socket.
 enum AppGroup {
     static let id: String = {
         let value = Bundle.main.object(forInfoDictionaryKey: "AppGroupID") as? String ?? ""
         // Two accepted shapes:
-        //   group.<non-empty suffix>            — the repo default, same for everyone
-        //   <TeamID>.group.<non-empty suffix>   — stamped in at install time
+        //   group.<non-empty suffix>            the repo default, same for everyone
+        //   <TeamID>.group.<non-empty suffix>   stamped in at install time
         //
-        // ⚠️ The second shape exists because macOS 15+ TCC-protects group
-        // containers: containermanagerd only waves a process through when the
-        // group id carries the signature's Team ID. A UI app can fall back to a
-        // consent prompt, but a faceless extension cannot prompt and gets EPERM
-        // forever. The prefix never appears in the repo — the installer injects
-        // it into the BUILT product only.
+        // The second shape exists because macOS 15 and later protect group
+        // containers with TCC: containermanagerd lets a process through only
+        // when the group id carries the signature's Team ID. A UI app can fall
+        // back to a consent prompt; a faceless extension cannot prompt and gets
+        // EPERM every time. The prefix never appears in the repo. The installer
+        // writes it into the built product only.
         let isPlain = value.hasPrefix("group.") && value.count > "group.".count
         let isTeamPrefixed: Bool = {
             guard let dot = value.firstIndex(of: ".") else { return false }
@@ -34,16 +34,14 @@ enum AppGroup {
         return value
     }()
 
-    /// The container directory. Crash on the spot if unavailable, never fall
-    /// back — in a sandboxed app, any self-computed fallback path silently
-    /// sends the socket and the ledger into a shadow directory nothing else
-    /// can read.
+    /// Crashes when the container is unavailable instead of falling back. In a
+    /// sandboxed app, a computed fallback path would quietly put the socket and
+    /// the ledger in a directory nothing else can read.
     ///
-    /// Note: macOS's containerURL(forSecurityApplicationGroupIdentifier:)
-    /// does NOT validate membership — it returns a path even for a made-up
-    /// id, so this guard is only a backstop. What actually catches
-    /// misconfiguration is the format check above plus the installer's
-    /// check of the signed entitlements.
+    /// containerURL(forSecurityApplicationGroupIdentifier:) does not check
+    /// membership; it returns a path even for a made-up id. So this guard is
+    /// only a backstop. Misconfiguration is caught by the format check above
+    /// and by the installer's check of the signed entitlements.
     static let containerURL: URL = {
         guard let url = FileManager.default
             .containerURL(forSecurityApplicationGroupIdentifier: id) else {

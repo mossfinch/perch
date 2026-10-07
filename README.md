@@ -4,8 +4,7 @@
 
 # Perch
 
-**A Mac notch companion that watches your coding agents, keeps the week you
-spent with them, and fills the wait.**
+**Work with coding agents. Keep your focus, and take care of your body too.**
 
 [![License: MIT](https://img.shields.io/badge/license-MIT-4C4238.svg)](LICENSE)
 ![Platform](https://img.shields.io/badge/macOS-15%2B-C86B4A.svg)
@@ -33,19 +32,13 @@ spent with them, and fills the wait.**
 - [Contributing](#contributing)
 - [License](#license)
 
-You hand a task to Claude Code or codex. Perch watches it for you: blue means
-an agent is running, yellow means it needs you, green means it is done. You can
-look away — no more sitting on the terminal just so you don't miss an approval.
+Perch is a little companion in your Mac's notch. It uses the rhythm of your work
+with Claude Code and codex to keep track of focused time and remind you to move
+after a long stretch of work.
 
-Unfold the card and Perch also:
-
-- shows, project by project, whether its agent is running, waiting, or done;
-- uses this week's handoff rhythm to help you see your own focus;
-- offers a 30-second move while you wait, with an illustration and a beat, and
-  leaves a local record once you finish it.
-
-The wait was going to happen anyway. Perch only keeps it from turning into more
-screen time.
+The branch beneath the bird holds this week's focus record. The card has short
+moves with illustrations and a beat to follow. While you wait for an agent,
+give your body 30 seconds.
 
 ![The unfolded card: the week under the bird, today's rotating readings, the flow wave, and a move with its beat and Start button](perch-card.png)
 
@@ -60,22 +53,23 @@ minutes, but because you never know when the agent will come back, it is easy
 to end up half-watching the terminal while your phone or another tab takes the
 rest of you.
 
-Perch is trying to protect two things:
+Perch is trying to protect two things: your focus and your health.
 
-- **Focus** — from how fast you pick the agent's work back up and start the
-  next round, it judges whether this stretch of collaboration is still
-  running continuously, then shows you the shape of your focus across the day
-  and the week;
-- **Health** — turning a wait that was already happening into a short recovery.
-  The illustration means you don't have to work out how the move goes, the beat
-  means you don't have to watch a separate timer; follow it through and you are
-  back for the next round.
+For focus, Perch looks at how fast you pick the agent's work back up and start
+the next round, judges from that whether this stretch of collaboration is
+still running continuously, and shows you the shape of your focus across the
+day and the week.
 
-It is not here to give anyone a performance score. It is here to make visible
-two things that normally aren't: the focus rhythm you can't otherwise see, and
-the recovery openings that are easy to waste — when the collaboration was
-running smoothly, when the rhythm slackened, and whether those scattered waits
-were actually spent on yourself.
+For health, Perch turns a wait that was already happening into a short
+recovery. The illustration means you don't have to work out how the move
+goes, and the beat means you don't have to watch a separate timer. Follow it
+through and you are back for the next round.
+
+Perch gives no one a performance score. It shows two things you normally
+can't see: the rhythm of your focus, and the chances to recover that are easy
+to waste. You can see when the collaboration was running smoothly, when the
+rhythm slackened, and whether those scattered waits were actually spent on
+yourself.
 
 ---
 
@@ -84,13 +78,13 @@ were actually spent on yourself.
 Hooks in Claude Code and codex hand Perch the lifecycle states: running,
 waiting for approval, and finished.
 
-Collapsed, the counts for each state sit on either side of the notch, and the
-leaf takes the colour of whatever needs your attention most. Hover the notch
+Collapsed, the bird on the left takes the colour of whatever needs your attention
+most, and the counts for each state sit on the right. Hover the notch
 and the card unfolds: one status dot per project, with the project names
 cycling through one at a time. As long as one of those projects is waiting on
 your approval, the name stops there until you deal with it.
 
-![Perch collapsed: a leaf and one count per state](perch-status-key.png)
+![Perch collapsed with a status key: blue for running, yellow for waiting for approval, green for done](perch-status-key.png)
 
 ---
 
@@ -103,9 +97,9 @@ brightness, showing the handoff rhythm Perch measured.
 
 To the right of the branch, three things take their turn:
 
-- **in flow 2h 37m** — the total time Perch judged your recent handoffs to be
+- **in flow 2h 37m**: the total time Perch judged your recent handoffs to be
   staying tight;
-- **agents ran 5h 10m** — wall-clock time with at least one agent running.
+- **agents ran 5h 10m**: wall-clock time with at least one agent running.
   Several agents in parallel still count once;
 - the name of the project that finished most recently.
 
@@ -131,7 +125,7 @@ handoffs, so they never get counted.
 
 So it **infers** focus rather than reading attention directly. Reading,
 thinking and deciding can be just as focused, and they get undercounted because
-they leave no handoff behind — the number can sometimes read lower than the
+they leave no handoff behind, so the number can sometimes read lower than the
 time you actually spent focused. This reading is good for watching how
 continuous the collaboration was; it cannot judge the quality of the work, your
 ability, or your output. When there is no `in flow` duration to show for a day,
@@ -165,6 +159,12 @@ the neck, shoulder and eye care that is easiest to skip during a wait into
 switch, and you never have to leave what you are doing to go find a tutorial or
 a timer.
 
+When you are busy, a wait does not always feel like a rest. After an hour of
+steady work with your agents, Perch picks a moment when you hand something off
+and gently opens the card: *stretch your wings*. The little reminder stays under
+the notch, and now and then it stretches too. Follow the illustration and the
+beat for a moment; finish one move, and next time there is a different one.
+
 When you finish one, Perch leaves a line in a local move log, so later you can
 see what you actually did, not just that today you meant to get up and move
 again.
@@ -178,11 +178,8 @@ promises. If a move causes pain, stop and talk to a professional.
 
 ## Local data and privacy
 
-Perch needs no account and has no telemetry. There is no networking code
-anywhere in this package: the agents and the app talk over a Unix domain socket
-inside an App Group container, and an `AF_UNIX` socket cannot reach the network
-at all — that is enforced by the operating system, not by the code being
-polite.
+Perch needs no account and does not connect to the internet or upload usage data.
+Agent states and move records stay on your Mac.
 
 Perch does not store prompts or response text. It does store:
 
@@ -338,11 +335,11 @@ covers.
 
 ## Contributing
 
-Issues and pull requests are welcome. [CONTRIBUTING.md](CONTRIBUTING.md) says
-what the tests will refuse and why, which is the part that catches people out.
-Security or privacy problems go through a
-[private advisory](https://github.com/mossfinch/perch/security/advisories/new)
-rather than a public issue — see [SECURITY.md](SECURITY.md).
+Use issues to ask questions, report problems, or suggest improvements. Pull requests
+are welcome too; see [CONTRIBUTING.md](CONTRIBUTING.md) to get started.
+If you find a security vulnerability or your report contains personal information,
+use a [private advisory](https://github.com/mossfinch/perch/security/advisories/new).
+See [SECURITY.md](SECURITY.md) for details.
 
 ## License
 

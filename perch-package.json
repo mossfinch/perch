@@ -48,6 +48,7 @@
     "tests/island-roster.js",
     "tests/island-runtime.test.js",
     "tests/island-week-ui.test.js",
+    "tests/island_report_bridge_test.py",
     "tests/perch_reconcile_test.py"
   ],
   "neverCopy": {

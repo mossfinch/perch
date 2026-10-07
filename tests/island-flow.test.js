@@ -1,7 +1,7 @@
-// The flow verdict — and the guards that hold the island's Swift and the daily report to
-// the SAME number. Those two answering differently is the failure this file exists for.
+// The flow verdict, and the guards that hold the island's Swift and the daily report to
+// the same number. Those two answering differently is the failure this file exists for.
 // One of the island suite's files; `tests/island-roster.js` is what knows they all
-// exist. Run them together — a single file run is a partial answer.
+// exist. Run them together; a single file run is a partial answer.
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
@@ -11,22 +11,21 @@ const path = require("node:path");
 const { execFileSync } = require("node:child_process");
 const { APP_GROUP_SWIFT, islandPath, pkgPath } = require("./island-paths");
 
-// ⚠️ The whole point of the split: the island (Swift) computes the desktop
-// widget's numbers, the daily report (python) computes the terminal's. One
-// algorithm, two implementations, and nothing but this test standing between
-// them and a slow drift nobody notices — the two are never read side by side.
+// The island (Swift) and the daily report (Python) compute the same numbers: one
+// algorithm, two implementations, and nothing but this test standing between them
+// and a slow drift nobody notices, because the two are never read side by side.
 //
 // The cases below are not decoration. Each one is a boundary where a
 // plausible-looking reimplementation goes wrong:
-//   · the 4-hour weld (the bug the settle layer exists for)
-//   · a complete after a long quiet middle (must be trusted anyway)
-//   · a gap of EXACTLY the cutoff (must not cut — the rule is "longer than")
-//   · a gap one second past it (must cut)
-//   · a single event that never completes (a turn of zero length, not nothing)
-//   · stretches bridging at exactly the bridge, and breaking one second past
-//   · a complete arriving long after a WAITING event (the empty chair — the
-//     silence is a human who walked off, and must not be backfilled as work)
-//   · a completed turn past the plausible ceiling (dropped from flow, kept as
+//   - the 4-hour weld (the bug the settle layer exists for)
+//   - a complete after a long quiet middle (must be trusted anyway)
+//   - a gap of exactly the cutoff (must not cut: the rule is "longer than")
+//   - a gap one second past it (must cut)
+//   - a single event that never completes (a turn of zero length, not nothing)
+//   - stretches bridging at exactly the bridge, and breaking one second past
+//   - a complete arriving long after a waiting event (the empty chair: the
+//     silence is a person who walked off, and must not be backfilled as work)
+//   - a completed turn past the plausible ceiling (dropped from flow, kept as
 //     a settled turn)
 const FLOW_CASES = [
   // line A: interrupted at 30s, silent ~4h, new session, complete
@@ -37,7 +36,7 @@ const FLOW_CASES = [
   // line C: a gap of exactly the cutoff -> one turn, not two
   [20000, "working", "/x/c", "claude"], [20120, "working", "/x/c", "claude"],
   [20130, "complete", "/x/c", "claude"],
-  // line D: one second past the cutoff -> cut at the LAST EVENT SEEN (so the
+  // line D: one second past the cutoff -> cut at the last event seen (so the
   // truncated turn is 40s long, not 121), then a fresh turn opens
   [30000, "working", "/x/d", "claude"], [30040, "working", "/x/d", "claude"],
   [30161, "working", "/x/d", "claude"], [30200, "complete", "/x/d", "claude"],
@@ -49,18 +48,18 @@ const FLOW_CASES = [
   [40701, "working", "/x/g", "claude"], [40800, "complete", "/x/g", "claude"],
   // line H: the empty chair. The agent asked for approval, nobody was there for
   // half an hour, then the answer came and closed the turn. Those 30 minutes are
-  // an empty chair, not an agent working -> the turn ends at the WAITING event
+  // an empty chair, not an agent working -> the turn ends at the waiting event
   // and is truncated, because that is the last thing the log actually saw.
   [50000, "working", "/x/h", "claude"], [50020, "waiting", "/x/h", "claude"],
   [51820, "complete", "/x/h", "claude"],
-  // line I: a synthetic 480-second quiet turn behind a WORKING event.
-  // The silence sits behind a WORKING event, so the complete stays trusted whole
+  // line I: a synthetic 480-second quiet turn behind a working event.
+  // The silence sits behind a working event, so the complete stays trusted whole
   // -> line H's rule must never reach in here and halve a genuine turn.
   [60000, "working", "/x/i", "codex"], [60480, "complete", "/x/i", "codex"],
   // line J: a 3-hour completed turn (the machine slept, or the session sat open
   // all night), then a 5-minute turn exactly one bridge later. The implausible
-  // one is dropped from flow — it stays a settled turn, and busy/runIntervals
-  // already drop it — so the stretch is those 5 minutes alone, not 3h05m.
+  // one is dropped from flow (it stays a settled turn, and busy/runIntervals
+  // already drop it), so the stretch is those 5 minutes alone, not 3h05m.
   [70000, "working", "/x/j", "claude"], [80800, "complete", "/x/j", "claude"],
   [81100, "working", "/x/j", "claude"], [81400, "complete", "/x/j", "claude"],
 ];
@@ -90,12 +89,10 @@ print(json.dumps({
   "flow": int(sum((b - a).total_seconds() for a, b in fl)),
 }, sort_keys=True))
 `;
-  // ⚠️ The python side above still computes the old measure (`flow_stretches`
-  // / `run_intervals`); the Swift side has no half of either, because nothing
-  // in the island calls them and comparing one live function against a corpse
-  // proves nothing about drift. The genuine PAIR is `settle` ↔ `settled`, and
-  // that is what gets compared turn for turn. The old measure's own numbers
-  // stay asserted below, python-only, so they cannot move unnoticed either.
+  // The Python side above also computes the old measure (`flow_stretches`,
+  // `run_intervals`). This test compares only `settle` and `settled`, turn for
+  // turn: the pair the island itself uses. The old measure's own numbers stay
+  // asserted below, Python-only, so they cannot move unnoticed either.
   const fromPython = JSON.parse(execFileSync("python3", ["-B", "-c", py], { encoding: "utf8" }));
 
   const main = path.join(tmp, "main.swift");
@@ -115,7 +112,7 @@ let turnRows = turns.map {
 }
 print("{\\"turns\\":[\\(turnRows.joined(separator: ","))]}")
 
-// The plausible ceiling is still the island's own — FlowSense reads it — so the
+// The plausible ceiling is still the island's own (FlowSense reads it), so the
 // case list must keep containing a turn past it, or every assertion below about
 // implausible turns is being made against a list that has none.
 let plausible = turns.filter { $0.seconds < FlowMath.maxTurn }
@@ -130,7 +127,7 @@ precondition(plausible.count < turns.count,
   assert.deepEqual(fromSwift, { turns: fromPython.turns },
     "the Swift settle layer and the python report have drifted apart");
 
-  // ...and then what they must BOTH say, so a shared mistake cannot pass either.
+  // ...and then what they must both say, so a shared mistake cannot pass either.
   const secs = (t) => t.end - t.start;
   assert.deepEqual(fromPython.turns.filter((t) => t.truncated).map(secs).sort((a, b) => a - b),
     [0, 20, 30, 40],
@@ -145,23 +142,23 @@ precondition(plausible.count < turns.count,
   assert.equal(fromPython.flow, 2329);
 
   // The two leaks this case list was extended for, named one at a time so a
-  // failure says WHICH lie came back rather than "some total moved".
+  // failure says which lie came back rather than "some total moved".
   //
-  // ① The empty chair. A complete more than the idle cut after a WAITING event
-  //    settles the turn at that waiting event, not at the complete: the human
+  // ① The empty chair. A complete more than the idle cut after a waiting event
+  //    settles the turn at that waiting event, not at the complete: the person
   //    was gone for the 30 minutes in between, and counting them paints agent
   //    work over an empty chair.
   const chair = fromPython.turns.find((t) => t.project === "/x/h");
   assert.deepEqual([chair.start, chair.end, chair.truncated], [50000, 50020, true],
     "the waiting tail was backfilled: the turn must end at the waiting event, marked truncated");
-  // ② …and the same rule must NOT touch silence behind a working event.
+  // ② …and the same rule must not touch silence behind a working event.
   const nail = fromPython.turns.find((t) => t.project === "/x/i");
   assert.deepEqual([nail.start, nail.end, nail.truncated], [60000, 60480, false],
     "the synthetic quiet turn broke: WORKING still means the agent is active, so its complete stays trusted");
-  // ③ The implausible turn is in the settled record and in no stretch at all —
+  // ③ The implausible turn is in the settled record and in no stretch at all,
   //    the same turn run_intervals and busy already drop. One reader must not
   //    strike it off one number and count it in the next.
-  //    ⚠️ python-only: the old measure lives on that side alone.
+  //    Python-only: the old measure lives on that side alone.
   assert.ok(fromPython.turns.some((t) => t.start === 70000 && secs(t) === 10800),
     "the 3-hour turn must still be reported as a settled turn");
   assert.ok(!fromPython.stretches.some((s) => s.start === 70000),
@@ -172,8 +169,8 @@ precondition(plausible.count < turns.count,
   // ④ run_intervals answers a different question than flow_stretches ("was a
   //    machine actually running", no bridging at all), so numbers that only
   //    ever agreed with the stretches would prove nothing: the counts must
-  //    differ. The shadow features read both, which is why they are kept —
-  //    under their own names, and no longer called "flow".
+  //    differ. The shadow features read both, which is why they are kept,
+  //    under their own names, and never called "flow".
   assert.equal(fromPython.runs.length, 11,
     "runs merge only where turns genuinely overlap — parallel A+B become one span, the rest stay apart");
   assert.ok(fromPython.runs.length > fromPython.stretches.length,
@@ -190,19 +187,18 @@ precondition(plausible.count < turns.count,
 // ── In flow right now ─────────────────────────────────────────────────────
 //
 // The rule:
-//   in flow = the median of the last 5 pickup delays is under 90 seconds
-//             AND less than 4.5 minutes have passed since a turn last STARTED
+//   in flow = the median of the last 5 pickup delays is under 90 seconds,
+//             and less than 4.5 minutes have passed since a turn last started
 //
 // A pickup delay is the gap between an agent really finishing and the next turn
-// being set to work — "how long after the agent finishes does the person pick
-// it up". The daily report has recorded it for a long time; this is the first
-// time it reaches the screen.
+// being set to work: "how long after the agent finishes does the person pick
+// it up".
 //
-// ⚠️ 90s / 5 / 4.5min are PROVISIONAL: hand-set, to be fitted against recorded
+// 90s, 5 and 4.5min are provisional: set by hand, to be fitted against recorded
 // corrections one day (nothing reads those yet), and not nudged by hand until then.
 //
-// `chain` lays out one line of turns: each turn works 10 seconds, the next
-// starts `gap` seconds after it finished. N gaps need N+1 turns — the last one
+// `chain` lays out one line of turns: each turn works 10 seconds, and the next
+// starts `gap` seconds after it finished. N gaps need N+1 turns; the last one
 // is only a landing point, and contributes no pickup of its own.
 const chain = (gaps) => {
   const turns = [];
@@ -221,22 +217,22 @@ const FLOW_SENSE_CASES = [
   // ① Five quick pickups: the plain yes.
   { name: "five 30s pickups", turns: chain([30, 30, 30, 30, 30]), after: 1,
     gaps: [30, 30, 30, 30, 30], inFlow: true },
-  // ② One trip to the kettle must not throw the verdict out. This is the whole
-  //    reason it is a median and not a mean — the mean here is 84s and sits
-  //    under the line by luck, but push that one gap to 20 minutes and a mean
-  //    convicts where the median would not notice.
+    // ② One trip to the kettle must not throw the verdict out. This is why it is a
+    //    median and not a mean: the mean here is 84s and sits under the line by
+    //    luck, but push that one gap to 20 minutes and a mean convicts where the
+    //    median would not notice.
   { name: "four quick, one five-minute", turns: chain([30, 30, 300, 30, 30]), after: 1,
     gaps: [30, 30, 300, 30, 30], inFlow: true },
   // ③ Three slow out of five: now the middle number itself is slow.
   { name: "three slow of five", turns: chain([30, 300, 300, 300, 30]), after: 1,
     gaps: [30, 300, 300, 300, 30], inFlow: false },
-  // ④ Both sides of the pickup boundary — the rule is strictly under.
+    // ④ Both sides of the pickup boundary: the rule is strictly under.
   { name: "median exactly 90s", turns: chain([30, 30, 90, 300, 300]), after: 1,
     gaps: [30, 30, 90, 300, 300], inFlow: false },
   { name: "median 89s", turns: chain([30, 30, 89, 300, 300]), after: 1,
     gaps: [30, 30, 89, 300, 300], inFlow: true },
-  // ⑤ Four records is not five. Someone who just sat down has not shown enough
-  //    for the island to claim anything — silence defaults to "no".
+    // ⑤ Four records is not five. Someone who just sat down has not shown enough
+    //    for the island to claim anything, so silence defaults to "no".
   { name: "only four pickups", turns: chain([30, 30, 30, 30]), after: 1,
     gaps: [30, 30, 30, 30], inFlow: false },
   // ⑥ The drop-out works on its own: every pickup was quick, and nothing has
@@ -250,27 +246,27 @@ const FLOW_SENSE_CASES = [
     gaps: [30, 30, 30, 30, 30], inFlow: false },
   { name: "271s since the last start", turns: chain([30, 30, 30, 30, 30]), after: 271,
     gaps: [30, 30, 30, 30, 30], inFlow: false },
-  // ⑧ Who may be a take-off. A truncated turn's "end" is the last thing the
-  //    log SAW — an interrupt, or a person who walked away from an approval —
-  //    and an implausible turn's end sits on the far side of a sleeping
-  //    machine. Neither is a finish, so neither starts a pickup; both may
-  //    still be LANDED on, because a start is always a real observed event.
-  //    Here only the two 90-second gaps are real: allow the truncated turn to
-  //    take off and a third gap appears out of nothing.
+    // ⑧ Who may be a take-off. A truncated turn's end is the last thing the log
+    //    saw (an interrupt, or a person who walked away from an approval), and
+    //    an implausible turn's end sits on the far side of a sleeping machine.
+    //    Neither is a finish, so neither starts a pickup; both may still be
+    //    landed on, because a start is always a real observed event.
+    //    Here only the two 90-second gaps are real: allow the truncated turn to
+    //    take off and a third gap appears out of nothing.
   { name: "truncated and implausible turns are no take-off",
     turns: [[0, 10, true], [100, 110, false], [200, 210, false],
             [300, 8000, false], [9000, 9010, false]],
     after: 1, gaps: [90, 90], inFlow: false },
-  // ⑨ Two lines running at once, and the ORDER is the whole case. The long line
+  // ⑨ Two lines running at once, and the order is the whole case. The long line
   //    starts first and finishes last, so listed in turn order its 100s pickup
-  //    comes FIRST — but it happened LAST. Ordered by turn end (the rule), the
+  //    comes first, though it happened last. Ordered by turn end (the rule), the
   //    last five are [10, 10, 1000, 1500, 100]: median 100, no flow. Left in
   //    input order they are [100, 10, 10, 10, 1000, 1500]: median 10, flow all
-  //    afternoon — the flattering answer.
+  //    afternoon, the flattering answer.
   //
-  //    ⚠️ Until this case existed, reverting the sort on either side left every
-  //    pickup-level test green; only the day-total test one layer up caught it.
-  //    Every other fixture here is a single line, where the two orders agree.
+  //    Without this case, reverting the sort on either side leaves every
+  //    pickup-level test green, because every other fixture here is a single
+  //    line, where the two orders agree.
   { name: "a long line overlapping short ones",
     turns: [[0, 3000, false], [100, 200, false], [210, 300, false],
             [310, 400, false], [410, 500, false], [1500, 1600, false],
@@ -337,7 +333,7 @@ test("the island judges flow from pickup delays, and a truncated turn is no take
 
   // Mutation. Every line above is one comparison, and a test that cannot be
   // made to fail is not testing them.
-  // ⚠️ Prove the ammunition was loaded: a replacement string that matches
+  // Prove the ammunition was loaded: a replacement string that matches
   // nothing mutates nothing, and the "red" never comes.
   let mutant = 0;
   const mutate = (from, to) => {
@@ -350,7 +346,7 @@ test("the island judges flow from pickup delays, and a truncated turn is no take
   };
   const mustDie = (source, why) => {
     const out = source.replace(/\.swift$/, "");
-    compile(source, out);          // it must still COMPILE, or nothing is proved
+    compile(source, out);          // it must still compile, or nothing is proved
     assert.throws(() => execFileSync(out, { stdio: "pipe" }), /Command failed/, why);
   };
   // ① A truncated turn allowed to start a pickup: case ⑧ grows a third gap
@@ -369,7 +365,7 @@ test("the island judges flow from pickup delays, and a truncated turn is no take
   // ④ The drop-out loosened the same way.
   mustDie(mutate("sinceLastStart < dropOut", "sinceLastStart <= dropOut"),
     "the drop-out threshold must stay strict");
-  // ⑤ Mean instead of median: case ② is the one that separates them — four
+  // ⑤ Mean instead of median: case ② is the one that separates them, with four
   //    quick pickups and one trip to the kettle.
   mustDie(mutate("sorted.count % 2 == 1 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2",
                  "values.reduce(0, +) / Double(values.count)"),
@@ -423,9 +419,9 @@ print("{\\"gaps\\":[\\(gaps.map(String.init).joined(separator: ","))],"
   assert.ok(fromPython.truncated >= 3, "the shared case list must contain truncated turns, or nothing is proved");
   assert.deepEqual(fromSwift, fromPython, "the island's pickup delay and the report's have drifted apart");
 
-  // ...and what they must BOTH say. Thirteen settled turns, four of them
+  // ...and what they must both say. Thirteen settled turns, four of them
   // truncated and one implausible: eight may take off, and the one that ends
-  // last has no start after it to land on — so seven pickups, not thirteen.
+  // last has no start after it to land on, so seven pickups, not thirteen.
   assert.equal(fromPython.turns, 13);
   assert.equal(fromPython.gaps.length, 7,
     "only a turn closed by a real complete, inside the plausible ceiling, and with a later start "
@@ -435,10 +431,10 @@ print("{\\"gaps\\":[\\(gaps.map(String.init).joined(separator: ","))],"
 // ── One flow, one definition ──────────────────────────────────────────────
 //
 // The report and island answer the same question through the cross-language
-// pair `FlowSense.inFlow` ↔ `in_flow()`.
-// ⚠️ The three provisional numbers (90s / 5 / 4.5min) live in two files, and
-// this test is the only thing keeping each of them ONE number: it compares the
-// constants themselves, and then every boundary case for case. The python side
+// pair `FlowSense.inFlow` and `in_flow()`.
+// The three provisional numbers (90s, 5, 4.5min) live in two files, and this
+// test is the only thing keeping each of them one number: it compares the
+// constants themselves, and then every boundary case for case. The Python side
 // is not allowed its own opinion about any of them.
 const FLOW_VERDICT_PY = `
 import importlib.util, json, sys
@@ -520,10 +516,10 @@ print("{\\"cases\\":[\\(rows.joined(separator: ","))],"
       `flow verdict wrong for: ${c.name}`);
   }
 
-  // Mutation. ⚠️ Twice over: count the ammunition before firing (an anchor that
-  // matches nothing mutates nothing), and count the hits after (a mutation that
-  // changes six cases when it should change one is telling you the case list,
-  // not the rule, is what died).
+  // Mutation, checked twice over: count the ammunition before firing (an anchor
+  // that matches nothing mutates nothing), and count the hits after (a mutation
+  // that changes six cases when it should change one is telling you the case
+  // list, not the rule, is what died).
   let mutant = 0;
   const mutate = (from, to) => {
     const src = fs.readFileSync(pkgPath("island-day-report.py"), "utf8");
@@ -552,21 +548,21 @@ print("{\\"cases\\":[\\(rows.joined(separator: ","))],"
   // ③ The drop-out loosened the same way.
   mustFlip(mutate("now - last_start >= DROP_OUT", "now - last_start > DROP_OUT"),
     ["270s since the last start"], "the drop-out threshold must stay strict");
-  // ④ Mean instead of median. ⚠️ The separating case is NOT the trip to the
-  //    kettle (its mean is 84s and slips under the line by luck) — it is the
-  //    89-second median, whose mean is 149.8s.
+  // ④ Mean instead of median. The separating case is not the trip to the kettle
+  //    (its mean is 84s and slips under the line by luck); it is the 89-second
+  //    median, whose mean is 149.8s.
   mustFlip(mutate("return s[mid] if len(s) % 2 else (s[mid - 1] + s[mid]) / 2",
                   "return sum(s, timedelta()) / len(s)"),
     ["median 89s"], "one slow pickup out of five must not drag the verdict with it");
-  // ⑤ The verdict must go through `pickup_gaps` and nothing else — a second
-  //    copy of that rule is exactly the drift this file exists to prevent. Let
-  //    a truncated turn take off and case ⑧ grows a gap that never happened.
+  // ⑤ The verdict must go through `pickup_gaps` and nothing else: a second copy
+  //    of that rule is exactly the drift this file exists to prevent. Let a
+  //    truncated turn take off and case ⑧ grows a gap that never happened.
   mustFlip(mutate("if truncated or b - a >= max_turn:", "if b - a >= max_turn:"),
     ["truncated and implausible turns are no take-off"],
     "in_flow must read pickup_gaps, truncation rule included");
   // ⑥⑦⑧ Each constant is live, and none of them is duplicated as a literal
   //    somewhere down the file where an edit here would not reach it.
-  //    ⚠️ Two cases sit between 90 and 120 now: the boundary case, and the
+  //    Two cases sit between 90 and 120: the boundary case, and the
   //    overlapping-lines case whose end-ordered median is exactly 100.
   mustFlip(mutate("QUICK_PICKUP = timedelta(seconds=90)", "QUICK_PICKUP = timedelta(seconds=120)"),
     ["a long line overlapping short ones", "median exactly 90s"],
@@ -580,28 +576,21 @@ print("{\\"cases\\":[\\(rows.joined(separator: ","))],"
 
 // The verdict is instantaneous; the report's column is a duration. `flow_spans`
 // is the bridge, and it may only change its answer at the two moments the
-// verdict itself can change: a turn STARTS (a new pickup delay lands, so judge
+// verdict itself can change: a turn starts (a new pickup delay lands, so judge
 // again), or 4.5 minutes pass since the last start (the drop-out fires). No
-// third rule, and in particular no bridging — the welding is what the old
-// column did.
-
-// The verdict is instantaneous; the report's column is a duration. `flow_spans`
-// is the bridge, and it may only change its answer at the two moments the
-// verdict itself can change: a turn STARTS (a new pickup delay lands, so judge
-// again), or 4.5 minutes pass since the last start (the drop-out fires). No
-// third rule, and in particular no bridging — the welding is what the old
-// column did.
+// third rule, and in particular no bridging: welding gaps shut is what the old
+// measure does.
 
 // ── A day's flow total is the verdict walked along the day ────────────────
 //
-// ⚠️ `DayFlow.seconds` ↔ `flow_spans()` is a FOURTH cross-language pair, and
+// `DayFlow.seconds` and `flow_spans()` are a fourth cross-language pair, and
 // this is the only thing keeping them one answer. The three pins above cover
-// `settle`, `pickupGaps` and `inFlow` — the verdict AT A MOMENT — and not one
-// of them notices when the two sides disagree about how to TOTAL a day.
+// `settle`, `pickupGaps` and `inFlow`, the verdict at a moment, and not one of
+// them notices when the two sides disagree about how to total a day.
 //
-// ⚠️ The failure this exists to catch is directional, and it flatters. A total
+// The failure this exists to catch is directional, and it flatters. A total
 // built by bridging gaps ("that silence was short enough, count it") makes a
-// BREAK ADD TIME: step away for a quarter of an hour and the day scores higher
+// break add time: step away for a quarter of an hour and the day scores higher
 // than working straight through it. Nothing on screen would say so, and the
 // number is the one the week perch paints.
 const DAY_FLOW_PY = `
@@ -625,19 +614,13 @@ print(json.dumps(rows))
 `;
 
 // [start, end, project, truncated]
-
-// [start, end, project, truncated]
-
-// [start, end, project, truncated]
-
-// [start, end, project, truncated]
 const dayChain = (count, every, length, from = 0, project = "/p/a") =>
   Array.from({ length: count }, (_, i) => [from + i * every, from + i * every + length, project, false]);
 
 const DAY_FLOW_CASES = [
   // ① A plain worked stretch: ten turns, 30s between finishing one and setting
   //    the next going. Every start after the fifth judges "in flow", and each
-  //    span runs to the next start — so the total is the working day itself,
+  //    span runs to the next start, so the total is the working day itself,
   //    plus DROP_OUT of the island still saying yes after the last start.
   { name: "ten quick pickups", turns: dayChain(10, 90, 60) },
   // ② An 830-second gap sits between two worked stretches, past the 270s
@@ -645,19 +628,18 @@ const DAY_FLOW_CASES = [
   //    The gap sits under a 900s bridging threshold (890s between starts), so
   //    a bridge would count it whole as flow.
   { name: "a break longer than the drop-out", turns: [...dayChain(10, 90, 60), ...dayChain(10, 90, 60, 1700)] },
-  // ③ Two lines running at once — the case every pin above is blind to,
-  //    because their fixtures contain no long turn that both OVERLAPS the short
-  //    ones and has a later start to land on. An afternoon of parallel agents
-  //    is this shape, not ①'s.
+  // ③ Two lines running at once, the case every pin above is blind to: their
+  //    fixtures contain no long turn that both overlaps the short ones and has
+  //    a later start to land on. An afternoon of parallel agents is this shape,
+  //    not ①'s.
   //
-  //    ⚠️ The numbers are chosen, not decorative, and this case is what pins
-  //    the ORDER. Sorted by turn end — the rule — the pickups are
-  //    [10, 10, 10, 1000, 1500, 100], so the last five are
-  //    [10, 10, 1000, 1500, 100]: median 100, over the line, no flow. Sorted by
-  //    turn START instead, the long line's 100 moves to the front and the last
-  //    five become [10, 10, 10, 1000, 1500]: median 10, under the line, flow all
-  //    afternoon. Take any of it away and the two orders agree and this case
-  //    proves nothing.
+  //    The numbers are chosen, and this case is what pins the order. Sorted by
+  //    turn end (the rule), the pickups are [10, 10, 10, 1000, 1500, 100], so
+  //    the last five are [10, 10, 1000, 1500, 100]: median 100, over the line,
+  //    no flow. Sorted by turn start instead, the long line's 100 moves to the
+  //    front and the last five become [10, 10, 10, 1000, 1500]: median 10, under
+  //    the line, flow all afternoon. Take any of it away and the two orders
+  //    agree, and this case proves nothing.
   { name: "two lines overlapping", turns: [
       [0, 3000, "/p/long", false],
       [100, 200, "/p/short", false],
@@ -671,7 +653,7 @@ const DAY_FLOW_CASES = [
   //    total zero. Without this the comparison could pass on two zeros.
   { name: "only three turns", turns: dayChain(3, 90, 60) },
   { name: "nothing at all", turns: [] },
-  // ⑤ A turn exactly at the cap must be excluded on BOTH sides; the boundary
+  // ⑤ A turn exactly at the cap must be excluded on both sides; the boundary
   //    is strictly `< maxTurn`.
   { name: "a turn at the cap", turns: [[0, 2 * 60 * 60, "/p/cap", false],
                                        [100, 160, "/p/a", false]] },
@@ -690,7 +672,7 @@ test("a day's flow total is the same number in Swift and in the daily report", (
 import Foundation
 let raw = try! JSONSerialization.jsonObject(with: Data(CommandLine.arguments[1].utf8)) as! [[String: Any]]
 let t0 = Date(timeIntervalSince1970: 0)
-// The ladder is fractions of an eight-hour day — 1h=⅛, 2h=¼, 4h=½, 6h=¾ — and
+// The ladder is fractions of an eight-hour day (1h=⅛, 2h=¼, 4h=½, 6h=¾), and
 // the uneven spacing is the shape of the fractions themselves.
 // Absolute rungs mean a level says the same thing on every install, rather
 // than quintiles of one person's history.
@@ -729,7 +711,7 @@ print(String(data: try! JSONSerialization.data(withJSONObject: out), encoding: .
 
   assert.deepEqual(fromSwift, fromPython, "the island's day total and the report's have drifted apart");
 
-  // …and what they must BOTH say, so agreement alone cannot be the whole test.
+  // …and what they must both say, so agreement alone cannot be the whole test.
   const said = Object.fromEntries(fromPython.map((r) => [r.name, r.seconds]));
   assert.equal(said["only three turns"], 0, "fewer than five pickups can never total any flow");
   assert.equal(said["nothing at all"], 0, "an empty day totals nothing");
@@ -740,7 +722,7 @@ print(String(data: try! JSONSerialization.data(withJSONObject: out), encoding: .
   assert.equal(said["a break longer than the drop-out"], 1710,
     "a break longer than the drop-out is not flow — bridged, this day reads 2960");
   assert.equal(said["ten quick pickups"], 630, "the plain worked stretch moved");
-  // Work and flow are DIFFERENT numbers, and this case must make the two come
+  // Work and flow are different numbers, and this case must make the two come
   // out different.
   const work = Object.fromEntries(fromPython.map((r) => [r.name, r.work]));
   assert.equal(work["only three turns"], 180,
@@ -748,17 +730,17 @@ print(String(data: try! JSONSerialization.data(withJSONObject: out), encoding: .
   assert.equal(said["only three turns"], 0, "control: that same day's flow is 0");
   assert.equal(work["a turn at the cap"], 60,
     "a turn exactly at maxTurn leaked into the work total — the bound went <=");
-  // Work time is the wall-clock union; overlapping parallel turns count ONCE.
+  // Work time is the wall-clock union; overlapping parallel turns count once.
   assert.equal(work["two lines overlapping"], 3100,
     "parallel turns are being SUMMED — a day of parallel agents reads as more hours than the day has");
-  // ⚠️ The order pin. A pickup is dated by the moment the agent FINISHED, so
-  //    the most recent one here is the long line's 100s — over the line. Read in
-  //    start order instead this day reads as flow throughout, which is the
+  // The order pin. A pickup is dated by the moment the agent finished, so the
+  //    most recent one here is the long line's 100s, over the line. Read in
+  //    start order instead, this day reads as flow throughout, which is the
   //    flattering answer and the wrong one.
   assert.equal(said["two lines overlapping"], 0,
     "the most recent pickup was 100s: a day judged on turn-END order cannot read as flow here");
 
-  // Mutation. ⚠️ Ammunition counted before firing: an anchor that matches
+  // Mutation, with the ammunition counted before firing: an anchor that matches
   // nothing mutates nothing, and the green means only that the shot was blank.
   const mutate = (from, to) => {
     const src = fs.readFileSync(pkgPath("island-day-report.py"), "utf8");
@@ -768,14 +750,14 @@ print(String(data: try! JSONSerialization.data(withJSONObject: out), encoding: .
     fs.writeFileSync(probe, src.replace(from, to));
     return runPython(probe);
   };
-  // ① The span must stop at DROP_OUT after a start. Bridge it to the old 15
-  //    minutes instead and the break case swells — which is the exact bug.
+  // ① The span must stop at DROP_OUT after a start. Bridge it to 15 minutes
+  //    instead and the break case swells, which is the exact bug.
   const bridged = mutate("end = s + DROP_OUT if i + 1 == len(starts) else min(starts[i + 1], s + DROP_OUT)",
                          "end = s + timedelta(minutes=15) if i + 1 == len(starts) else min(starts[i + 1], s + timedelta(minutes=15))");
   assert.notDeepEqual(bridged, fromPython, "bridging gaps changed nothing — the day total is not being measured");
   // ② The verdict has to come from `in_flow`, not from a second copy of the
-  //    median rule inlined here — that is how the island's total drifted 3×
-  //    from this one in the first place.
+  //    median rule inlined here: a second copy is how the two totals drift
+  //    apart.
   const inlined = mutate("if not in_flow([t for t in settled_turns if t[0] <= s], s):",
                          "if not (len([t for t in settled_turns if t[0] <= s]) >= FLOW_WINDOW):");
   assert.notDeepEqual(inlined, fromPython, "replacing the verdict with a bare count changed nothing");
@@ -791,7 +773,7 @@ print(String(data: try! JSONSerialization.data(withJSONObject: out), encoding: .
     "a display site says 'agents ran' with the parallel sum again — a 12h wall prints as 22h");
 
   // The day report must accept both installed container spellings, `group.x`
-  // and `TEAMID.group.x`.
+  // and `<TeamID>.group.x`.
   // Pinned to the prefix-free shape alone, it refuses to run after a signed
   // install.
   const shapes = JSON.parse(execFileSync("python3", ["-B", "-c", `
@@ -805,7 +787,7 @@ print(json.dumps([rep.group_core("group.io.example.perch"),
   assert.deepEqual(shapes, ["group.io.example.perch", "group.io.example.perch", "", ""],
     "the report no longer accepts both container spellings (or accepts garbage)");
 
-  // ③ Pickups are ordered by turn END; ordering by start reads an overlapping
+  // ③ Pickups are ordered by turn end; ordering by start reads an overlapping
   //    day's gaps as flow.
   const byStart = mutate("return [g for _, g in sorted(found, key=lambda p: p[0])]",
                          "return [g for _, g in found]");
@@ -815,22 +797,22 @@ print(json.dumps([rep.group_core("group.io.example.perch"),
 });
 
 test("a day too thin to judge is not a day with the lowest reading", () => {
-  // `seconds == 0` had two meanings wearing one face. A day with plenty of
-  // handoffs and none of them quick really measured zero; a day with fewer
-  // than `window` pickups was never judged at all. The branch painted the
-  // second one at 1/5 (a colour claiming a reading nobody took) while the text
-  // showed `—` on the first (claiming no data about a day that was measured).
-  // Both halves are pinned here because fixing one alone just moves the lie.
+  // `seconds == 0` has two meanings that must not share one face. A day with
+  // plenty of handoffs and none of them quick really measured zero; a day with
+  // fewer than `window` pickups was never judged at all. Painting the second at
+  // 1/5 claims a reading nobody took, and showing `—` on the first claims no
+  // data about a day that was measured. Both halves are pinned here because
+  // fixing one alone just moves the lie.
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "perch-judged-"));
   const main = path.join(tmp, "main.swift");
   fs.writeFileSync(main, `
 import Foundation
 
-// ⚠️ TODAY, not yesterday. The week runs Monday…Sunday, so on a Monday
-// "yesterday" is Sunday and belongs to the PREVIOUS week — DayFlow.week would
+// Today, not yesterday. The week runs Monday…Sunday, so on a Monday
+// "yesterday" is Sunday and belongs to the previous week: DayFlow.week would
 // not contain it, report() would fall through to its missing branch, and the
-// assertions below would read undefined instead of a verdict. This test was
-// green six days a week and red every Monday. Today is always in this week.
+// assertions below would read undefined instead of a verdict, green six days
+// a week and red every Monday. Today is always in this week.
 let day = Calendar.current.startOfDay(for: Date())
 func at(_ s: Double) -> Date { day.addingTimeInterval(3600 + s) }
 
@@ -851,7 +833,7 @@ let quick = (0..<8).map { i in
                 project: "/p/a", source: "claude", truncated: false)
 }
 
-// ⚠️ Go through DayFlow.week, not through judgedness recomputed in the harness;
+// Go through DayFlow.week, not through judgedness recomputed in the harness;
 // otherwise the shipped judged field is never exercised.
 func events(_ turns: [FlowMath.Turn]) -> [FlowMath.Event] {
   turns.flatMap { [

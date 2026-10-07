@@ -1,7 +1,7 @@
 // What the day report prints: the columns, the shadow features, the machine-readable
 // reading other projects pull, and the score line.
 // One of the island suite's files; `tests/island-roster.js` is what knows they all
-// exist. Run them together — a single file run is a partial answer.
+// exist. Run them together; a single file run is a partial answer.
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
@@ -12,12 +12,12 @@ const { execFileSync } = require("node:child_process");
 const { islandViews, islandPath, pkgPath } = require("./island-paths");
 
 test("the machine-readable reading is the same number the human reads", () => {
-  // A number that gets SPENT downstream must not be a second opinion. The
+  // A number that gets spent downstream must not be a second opinion. The
   // report already prints the island's reading as prose; anything that reads
   // it with a program has to get that same number, not a neighbour of it.
   //
-  // ⚠️ The trap this exists to close: `--features` carries `flow2/5/10_min`
-  // from a shadow experiment — different bridge thresholds and a different
+  // The trap this exists to close: `--features` carries `flow2/5/10_min`
+  // from a shadow experiment, with different bridge thresholds and a different
   // answer, and `flow5_min` reads like the obvious field to take. Wiring
   // to it would put a third algorithm into circulation with nothing on screen
   // to say so.
@@ -80,17 +80,10 @@ print(json.dumps({"human": human, "machine": rep.daily_reading("2026-07-28", evs
 
 // The verdict is instantaneous; the report's column is a duration. `flow_spans`
 // is the bridge, and it may only change its answer at the two moments the
-// verdict itself can change: a turn STARTS (a new pickup delay lands, so judge
+// verdict itself can change: a turn starts (a new pickup delay lands, so judge
 // again), or 4.5 minutes pass since the last start (the drop-out fires). No
-// third rule, and in particular no bridging — the welding is what the old
-// column did.
-
-// The verdict is instantaneous; the report's column is a duration. `flow_spans`
-// is the bridge, and it may only change its answer at the two moments the
-// verdict itself can change: a turn STARTS (a new pickup delay lands, so judge
-// again), or 4.5 minutes pass since the last start (the drop-out fires). No
-// third rule, and in particular no bridging — the welding is what the old
-// column did.
+// third rule, and in particular no bridging: welding gaps shut is what the old
+// measure does.
 const FLOW_SPANS_PY = `
 import contextlib, importlib.util, io, json, os, sys
 from datetime import datetime, timedelta
@@ -153,14 +146,14 @@ test("the report's flow column is the island's verdict laid over the day, not th
     "python3", ["-B", "-c", FLOW_SPANS_PY, module, tmp], { encoding: "utf8" }));
   const r = run(pkgPath("island-day-report.py"));
 
-  // ① Dense commanding, one span. It opens at the SIXTH turn's start (200s),
-  //    because that is when the fifth pickup lands — before it the island has
-  //    not seen enough to claim anything — and it closes 4.5 minutes after the
+  // ① Dense commanding, one span. It opens at the sixth turn's start (200s),
+  //    because that is when the fifth pickup lands (before it the island has
+  //    not seen enough to claim anything), and it closes 4.5 minutes after the
   //    last start, which is the drop-out doing exactly what it says.
   assert.deepEqual(r.dense, [[200, 550]],
     "dense pickups must read as one unbroken span, opening at the fifth pickup and closing at the drop-out");
   // ② Half an hour of nothing in the middle: two spans, and the break is the
-  //    drop-out — no bridge, no welding, nothing carried across the silence.
+  //    drop-out: no bridge, no welding, nothing carried across the silence.
   assert.deepEqual(r.broken, [[200, 550], [2090, 2360]],
     "a long silence must break the span at the drop-out, not be bridged over");
   // ③ A day that never reached five pickups says nothing at all. Silence is
@@ -204,51 +197,14 @@ test("the report's flow column is the island's verdict laid over the day, not th
     "mutation: the --summary table went back to the bridged total and the assertion stayed quiet");
 });
 
-
-// ── A day's flow total is the verdict walked along the day ────────────────
-//
-// ⚠️ `DayFlow.seconds` ↔ `flow_spans()` is a FOURTH cross-language pair, and
-// this is the only thing keeping them one answer. The three pins above cover
-// `settle`, `pickupGaps` and `inFlow` — the verdict AT A MOMENT — and not one
-// of them notices when the two sides disagree about how to TOTAL a day.
-//
-// ⚠️ The failure this exists to catch is directional, and it flatters. A total
-// built by bridging gaps ("that silence was short enough, count it") makes a
-// BREAK ADD TIME: step away for a quarter of an hour and the day scores higher
-// than working straight through it. Nothing on screen would say so, and the
-// number is the one the week perch paints.
-
-// ── A day's flow total is the verdict walked along the day ────────────────
-//
-// ⚠️ `DayFlow.seconds` ↔ `flow_spans()` is a FOURTH cross-language pair, and
-// this is the only thing keeping them one answer. The three pins above cover
-// `settle`, `pickupGaps` and `inFlow` — the verdict AT A MOMENT — and not one
-// of them notices when the two sides disagree about how to TOTAL a day.
-//
-// ⚠️ The failure this exists to catch is directional, and it flatters. A total
-// built by bridging gaps ("that silence was short enough, count it") makes a
-// BREAK ADD TIME: step away for a quarter of an hour and the day scores higher
-// than working straight through it. Nothing on screen would say so, and the
-// number is the one the week perch paints.
-
 // One synthetic day, laid out so every shadow feature has something to be
 // wrong about. Seconds from 09:00.
-//   · lines A (claude) and B (codex) run in parallel on the SAME project
-//   · line C is a second project — the cross-project switch, and the one place
+//   - lines A (claude) and B (codex) run in parallel on the same project
+//   - line C is a second project: the cross-project switch, and the one place
 //     where merging across projects and merging within one disagree
-//   · line C also holds the day's single `waiting`, and an interrupt whose
+//   - line C also holds the day's single `waiting`, and an interrupt whose
 //     turn gets truncated
-//   · line D is the 3-hour implausible turn: it must vanish from every derived
-//     number and appear only in the quality group
-
-// One synthetic day, laid out so every shadow feature has something to be
-// wrong about. Seconds from 09:00.
-//   · lines A (claude) and B (codex) run in parallel on the SAME project
-//   · line C is a second project — the cross-project switch, and the one place
-//     where merging across projects and merging within one disagree
-//   · line C also holds the day's single `waiting`, and an interrupt whose
-//     turn gets truncated
-//   · line D is the 3-hour implausible turn: it must vanish from every derived
+//   - line D is the 3-hour implausible turn: it must vanish from every derived
 //     number and appear only in the quality group
 const FEATURE_DAY = [
   [0, "working", "/p/alpha", "claude"], [120, "complete", "/p/alpha", "claude"],
@@ -264,7 +220,7 @@ const FEATURE_DAY = [
 test("the shadow features record what the day measured, and judge none of it", () => {
   // The whole point of these numbers is to be laid beside hand-written answers
   // months from now. If one of them quietly means something other than it says,
-  // the comparison is worse than having none — so every field is pinned here on
+  // the comparison is worse than having none, so every field is pinned here on
   // a day whose right answers can be counted by hand.
   const out = execFileSync("python3", ["-B", "-c", `
 import importlib.util, json
@@ -299,8 +255,8 @@ print(json.dumps(rep.day_features("2026-08-03", evs), sort_keys=True))
   assert.equal(f.pickup_p90_s, 2740, "the 45-minute gap before the gamma turn is a real gap and must show at p90");
 
   // …and the asymmetry that gap list depends on: a turn that never finished
-  // cannot START a gap (its end is only what the log last saw), while any
-  // turn's START is a real observed event and may END one.
+  // cannot start a gap (its end is only what the log last saw), while any
+  // turn's start is a real observed event and may end one.
   assert.ok(f.pickup_p90_s === 2740,
     "the implausible turn's START closed the last gap — dropping it there would hide a 45-minute wait");
 
@@ -342,7 +298,7 @@ print(json.dumps(rep.day_features("2026-08-03", evs), sort_keys=True))
 
 test("--features prints one raw JSON line per day and touches nothing on disk", () => {
   // A day with no events must still produce a line (a silent day is data), and
-  // the whole feature must write NOTHING: the event log stays the only record.
+  // the whole feature must write nothing: the event log stays the only record.
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "perch-features-"));
   fs.writeFileSync(path.join(dir, "2026-08-03.jsonl"),
     FEATURE_DAY.map(([s, e, p, src]) => JSON.stringify({
@@ -384,7 +340,7 @@ const CLI_SCORE_LINE =
 
 // A ledger with every kind of line that can be in it. 8-11 is the island's own
 // pre-split format, re-scored; 8-10 is the case that separates the two read
-// rules — an old one-number score with a NEW answer appended after it, where
+// rules: an old one-number score with a new answer appended after it, where
 // "last line per date" and "last line per field" disagree.
 const SEED_LEDGER = [
   CLI_SCORE_LINE,
@@ -409,17 +365,16 @@ test("the day score came off the card, and its ledger did not move", () => {
   const view = islandViews();
   const pbx = fs.readFileSync(pkgPath("Perch.xcodeproj", "project.pbxproj"), "utf8");
 
-  // ① Compiled into the ISLAND target. A file that exists on disk but in no
-  //    target's sources builds green and ships nothing — same trap as an
+  // ① Compiled into the island target. A file that exists on disk but in no
+  //    target's sources builds green and ships nothing, the same trap as an
   //    .appex that is present but never registered.
   const islandSources = pbx.match(/00A1CE00000000000000002C \/\* Sources \*\/ = \{[\s\S]*?files = \(([\s\S]*?)\);/)?.[1] ?? "";
   assert.ok(islandSources.length > 0, "control: the island's Sources phase could not be read at all");
   assert.ok(islandSources.includes("DayScore.swift"), "DayScore.swift is not compiled into the island");
 
-  // ② The view is gone — declaration AND mount point. An empty overlay left
-  //    behind would be a layer that does nothing, which is the same smell as
-  //    the dead code a later pass had to come back for.
-  //    ⚠️ Control group first: a scan that finds nothing proves nothing until it
+  // ② The view is gone, declaration and mount point. An empty overlay left
+  //    behind would be a layer that does nothing, the same smell as dead code.
+  //    Control group first: a scan that finds nothing proves nothing until it
   //    has been shown to find something.
   const traces = (swift) => swift.match(/\bDayScoreDots\b|overlay\(alignment: \.bottomLeading\)/g) ?? [];
   assert.deepEqual(traces(view), [],
@@ -443,7 +398,7 @@ test("the day score came off the card, and its ledger did not move", () => {
   assert.equal(plantedCorner.length, 1,
     `control: the corner scanner cannot see a real mount — found ${plantedCorner.length}, wanted 1`);
 
-  // ③ Behaviour, compiled and run — not grepped. One stub stands in for the
+  // ③ Behaviour, compiled and run, not grepped. One stub stands in for the
   //    symbol DayScore touches but this test must not drag in (AppGroup pulls
   //    the app bundle); it is not on the code path under test, which always
   //    passes an explicit file URL.
@@ -472,7 +427,7 @@ precondition(DayScore.record(date: "2026-08-12", field: .progress, value: 2, to:
 precondition(DayScore.record(date: "2026-08-12", field: .rhythm, value: 3, to: url),
              "re-answering must append, not refuse")
 precondition(DayScore.record(date: "2026-08-10", field: .rhythm, value: 2, to: url))
-// ② Out of range is refused — and refused has to mean nothing reached the file.
+// ② Out of range is refused, and refused has to mean nothing reached the file.
 precondition(!DayScore.record(date: "2026-08-12", field: .rhythm, value: 0, to: url), "0 is not an answer")
 precondition(!DayScore.record(date: "2026-08-12", field: .progress, value: 6, to: url), "6 is not an answer")
 precondition(lineCount() == before + 4,
@@ -497,8 +452,7 @@ precondition(answers.count == 4, "a torn line must hide nothing and invent nothi
 // ④ Which day the stars ask about. Half an answer is not an answer.
 let cal = Calendar.current
 func day(_ d: Date) -> String { DayScore.dayFormatter.string(from: d) }
-// The formatter moved out of TodaySummary and into DayScore, three lines
-// unchanged. Pinned here because a formatter that stopped writing yyyy-MM-dd
+// The formatter is pinned here because one that stopped writing yyyy-MM-dd
 // would send the stars to a day nothing else in the system names.
 precondition(day(cal.date(from: DateComponents(year: 2026, month: 8, day: 9))!) == "2026-08-09",
              "DayScore.dayFormatter no longer writes yyyy-MM-dd")
@@ -546,8 +500,8 @@ print("{" + rows.joined(separator: ",") + "}")
   const fromSwift = JSON.parse(execFileSync(binary, [ledger], { encoding: "utf8" }));
   assert.deepEqual(fromSwift, LEDGER_EXPECTED, "the island reads its own ledger wrong");
 
-  // ⑤ The other end of the same contract. The report reads THE VERY FILE the
-  //    island just wrote — same bytes, torn tail and all — and must answer
+  // ⑤ The other end of the same contract. The report reads the very file the
+  //    island just wrote (same bytes, torn tail and all) and must answer
   //    identically. Nothing but this assertion stands between the two readers.
   const fromPython = JSON.parse(execFileSync("python3", ["-B", "-c", `
 import importlib.util, json, os
@@ -564,7 +518,7 @@ print(json.dumps(rep.day_scores(), sort_keys=True))
 
   // ⑥ Mutation. Both rules above are one line of code, and a test that cannot
   //    be made to fail is not testing them.
-  //    ⚠️ Prove the ammunition was loaded: a replacement string that matches
+  //    Prove the ammunition was loaded: a replacement string that matches
   //    nothing mutates nothing, and the "red" never comes.
   let mutant = 0;
   const mutate = (from, to) => {
@@ -577,7 +531,7 @@ print(json.dumps(rep.day_scores(), sort_keys=True))
   };
   const mustDie = (source, why) => {
     const out = source.replace(/\.swift$/, "");
-    compile(source, out);          // it must still COMPILE, or nothing is proved
+    compile(source, out);          // it must still compile, or nothing is proved
     assert.throws(() => execFileSync(out, [freshLedger()], { stdio: "pipe" }), why);
   };
   // Reinitialising answers for each line would make the last line per date win
@@ -639,7 +593,7 @@ rep.main()
   assert.ok(summary.includes("rhythm") && summary.includes("progress"),
     "the table uses r/p with no key to read them by");
 
-  // The single-day report goes through the same formatter — one implementation,
+  // The single-day report goes through the same formatter: one implementation,
   // or the two views of one ledger drift.
   assert.ok(run(["2026-08-01"]).includes("2 ●●○○○"), "the day report dropped the old score");
   assert.ok(run(["2026-08-12"]).includes("r3·p2"), "the day report dropped the two answers");

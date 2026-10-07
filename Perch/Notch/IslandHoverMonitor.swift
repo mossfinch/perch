@@ -1,21 +1,15 @@
 import AppKit
 
-/// Turns mouse movement and clicks in screen coordinates into the island's enter and exit
-/// callbacks.
-///
-/// Callers supply the closed and expanded zones and report the current presentation state
-/// through `isExpanded`. This type watches the pointer and absorbs jitter at the edges, but
-/// it does not itself change the window, the view model, or `IslandPresentationPhase`.
-/// All public state and callbacks are accessed on the main actor.
+/// Turns pointer movement and clicks, in screen coordinates, into the island's enter and
+/// exit callbacks, absorbing jitter at the edges. Callers supply the zones and the
+/// presentation state; this type changes neither.
 @MainActor
 public final class IslandHoverMonitor {
-    /// Reports whether the island is currently expanded. Treated as not expanded when unset.
+    /// Unset counts as not expanded.
     public var isExpanded: (() -> Bool)?
-    /// Called when the pointer's entry into the closed zone is confirmed, or the closed zone
-    /// is clicked.
+    /// After a confirmed hover over the closed zone, or a click on it.
     public var onHoverEntered: (() -> Void)?
-    /// Called when the pointer leaves the expanded zone while expanded, or a click lands
-    /// outside it.
+    /// When the pointer leaves the expanded zone, or a click lands outside it.
     public var onHoverExited: (() -> Void)?
 
     private var globalMoveMonitor: Any?
@@ -27,13 +21,10 @@ public final class IslandHoverMonitor {
     private var hoverCancelGraceTask: Task<Void, Never>?
     private var pointerHasEnteredExpandedSurface = false
     private var latestMouseLocation: NSPoint = .zero
-    /// A hover must last 150 ms before opening, so a pointer merely crossing the top of the
-    /// screen does not trigger it.
+    /// A pointer merely crossing the top of the screen must not open the island.
     private let hoverOpenDelay: UInt64 = 150_000_000
-    /// When the pointer briefly slips past the edge of the closed zone, wait 100 ms before
-    /// cancelling a pending open.
-    /// This is not a close delay for the expanded state; it only protects a hover-open that
-    /// is still waiting.
+    /// How long the pointer may slip past the closed zone's edge before a pending open is
+    /// cancelled. It only protects an open that is still waiting; it never delays closing.
     private let hoverCancelGrace: UInt64 = 100_000_000
 
     private var closedZone: NSRect = .zero
@@ -41,24 +32,18 @@ public final class IslandHoverMonitor {
 
     public init() {}
 
-    /// Whether the expanded zone should still count as occupied by the pointer.
-    /// Always false while the island is not expanded. Once expanded it checks the latest
-    /// location but also keeps a confirmed entry standing, until a later move or an outside
-    /// click explicitly triggers an exit.
+    /// A confirmed entry keeps counting until a later move or an outside click exits, even
+    /// when the latest location is outside the zone. Always false while not expanded.
     public var isPointerInsideExpandedSurface: Bool {
         guard isExpanded?() == true else { return false }
         return pointerHasEnteredExpandedSurface
             || rectContainsIncludingEdges(expandedZone, point: latestMouseLocation)
     }
 
-    /// Installs the in-process and out-of-process mouse monitors plus the position poll.
-    /// Calling it again while installed does nothing.
-    ///
-    /// AppKit's local monitor covers this app's events and the global monitor covers events
-    /// in other apps; without both, some pointer activity is missed. The 80 ms poll does not
-    /// depend on event delivery, so the current position is resampled even when no monitor
-    /// fires. Callers should set the zones and callbacks first, and call `stop()` before
-    /// discarding this object.
+    /// AppKit's local monitor sees this app's events and the global monitor sees other
+    /// apps'; without both, some pointer activity is missed. The 80 ms poll does not depend
+    /// on event delivery, so the position is resampled even when no monitor fires.
+    /// Set the zones and callbacks first, and call `stop()` before discarding this object.
     public func start() {
         guard globalMoveMonitor == nil, localMoveMonitor == nil else { return }
 
@@ -110,18 +95,15 @@ public final class IslandHoverMonitor {
         }
     }
 
-    /// Replaces the hit zones. Both rects and `NSEvent.mouseLocation` must use the same
-    /// screen coordinate space.
-    /// Callers must supply new zones after a change of screen, resolution, or window
-    /// geometry.
+    /// Both rects must be in the same screen coordinate space as `NSEvent.mouseLocation`.
+    /// Supply new zones after any change of screen, resolution or window geometry.
     public func updateZones(closed: NSRect, expanded: NSRect) {
         closedZone = closed
         expandedZone = expanded
     }
 
-    /// Removes every event monitor and the poll, and cancels any pending hover task.
-    /// Safe to call repeatedly; it does not clear the callbacks, the zones, or the latest
-    /// location, so `start()` can be called again afterwards.
+    /// Safe to call repeatedly. It keeps the callbacks and zones, so `start()` can be called
+    /// again afterwards.
     public func stop() {
         if let globalMoveMonitor {
             NSEvent.removeMonitor(globalMoveMonitor)
@@ -145,9 +127,6 @@ public final class IslandHoverMonitor {
         pointerHasEnteredExpandedSurface = false
     }
 
-    /// Handles one sample of the pointer's screen position.
-    /// While closed, a position inside the hit zone schedules the delayed open; while
-    /// expanded, it only tracks whether the pointer has left the expanded zone.
     func handleMouseMoved(_ mouseLocation: NSPoint) {
         latestMouseLocation = mouseLocation
 
@@ -164,9 +143,8 @@ public final class IslandHoverMonitor {
         }
     }
 
-    /// Handles one left click.
-    /// A click in the closed zone skips the hover delay and enters immediately; while
-    /// expanded, a click outside the zone exits immediately.
+    /// A click skips the hover delay: on the closed zone it enters at once, and outside the
+    /// expanded zone it exits at once.
     func handleMouseDown(_ mouseLocation: NSPoint) {
         latestMouseLocation = mouseLocation
 
@@ -184,8 +162,7 @@ public final class IslandHoverMonitor {
         onHoverEntered?()
     }
 
-    /// While expanded, sends the exit callback exactly once, on the transition from
-    /// "already entered" to "moved out of the zone".
+    /// Sends the exit callback once, when an entered pointer moves out of the zone.
     private func trackExpandedSurface(_ mouseLocation: NSPoint) {
         if rectContainsIncludingEdges(expandedZone, point: mouseLocation) {
             pointerHasEnteredExpandedSurface = true
@@ -197,8 +174,7 @@ public final class IslandHoverMonitor {
         onHoverExited?()
     }
 
-    /// Schedules the hover open; when the task wakes it rechecks the presentation state and
-    /// the latest pointer position.
+    /// The task rechecks the presentation state and the latest position when it wakes.
     private func scheduleHoverOpen() {
         hoverCancelGraceTask?.cancel()
         hoverCancelGraceTask = nil
@@ -216,10 +192,9 @@ public final class IslandHoverMonitor {
         }
     }
 
-    /// Defers cancelling a pending open.
-    /// If the pointer returns to the closed zone within the grace period,
-    /// `scheduleHoverOpen` revokes the cancellation and keeps the original 150 ms running,
-    /// so jitter at the edge does not restart the count over and over.
+    /// If the pointer returns within the grace period, `scheduleHoverOpen` revokes the
+    /// cancellation and the original 150 ms keeps running, so jitter at the edge does not
+    /// restart the count.
     private func cancelHoverOpen() {
         guard hoverOpenTask != nil else { return }
         guard hoverCancelGraceTask == nil else { return }
@@ -232,7 +207,6 @@ public final class IslandHoverMonitor {
         }
     }
 
-    /// Cancels the hover open and its cancellation grace immediately.
     private func cancelHoverOpenImmediately() {
         hoverCancelGraceTask?.cancel()
         hoverCancelGraceTask = nil

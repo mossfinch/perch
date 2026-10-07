@@ -8,6 +8,18 @@ Notable changes to Perch, newest first. The format follows
 
 ### Added
 
+- After an hour of steady work with your agents, the card opens once at your
+  next hand-off with a small shake and says `stretch your wings`. The words
+  then stay on a tab under the notch, stretching their letters now and then,
+  until you finish a move or your agents have been quiet for twenty minutes.
+  The shake and the stretching are skipped when Reduce Motion is on. Only
+  agent activity is read, and time the Mac is asleep counts as a break.
+- `island-day-report.py --reading --via-bridge` asks the running island for
+  the day's readings over its socket instead of reading the event log out of
+  the App Group container. A scheduled job reading that container gets
+  macOS's "access data from other apps" prompt on every launch, with nobody
+  there to answer it; the socket road gives the same numbers without the
+  prompt. Directory reading is unchanged for everything else.
 - A switch for the completion chime, in the bottom-right corner of the
   unfolded card: press the speaker to mute the chime, press it again to
   bring it back. The setting is remembered across launches. The beat that
@@ -23,6 +35,9 @@ Notable changes to Perch, newest first. The format follows
 
 ### Changed
 
+- The card no longer always opens on the chin tuck. It offers the move after
+  the last one you did, in catalog order; picking a category by hand still
+  works.
 - The bird on the closed island breathes by a Core Animation layer
   animation instead of a SwiftUI one, avoiding SwiftUI updates on each
   animation frame. The breathing motion and status colours are unchanged.

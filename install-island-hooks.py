@@ -2,33 +2,33 @@
 """Additively install Perch's Claude Code hooks.
 
 The installer backs up ~/.claude/settings.json, then installs only Perch's
-hooks. Existing hooks — other tools' included — are left intact.
+hooks. Existing hooks, other tools' included, are left intact.
 
-Transport: each hook pushes one tab-delimited line
+Transport: each hook runs the launcher (`perch-hook.sh`, installed as
+~/.perch/bin/perch-hook), which pushes one tab-delimited line
 "<event>\t<projectDir>\t<nonce>\t<source>" to the island's Unix domain socket
-in the App Group container via `nc -U`. projectDir = ${CLAUDE_PROJECT_DIR:-$PWD}
+in the App Group container with `nc -U`. projectDir = ${CLAUDE_PROJECT_DIR:-$PWD}
 so the island can track each project on its own status dot.
 UserPromptSubmit→working (blue), PermissionRequest→waiting (yellow, waiting
-for your choice/approval), PostToolUse→working (blue: you approved it or no
+for your choice or approval), PostToolUse→working (blue: you approved it or no
 approval was needed, work continues), Stop→complete (green). If the island is
 not running the connect fails and the hook exits 0 (fail-open).
 
-Why PostToolUse also pushes working: yellow would otherwise never exit.
-Approving a tool emits NO event, and UserPromptSubmit only fires when the
-human types — so "asked once" would mean "yellow until the turn ends": you
-approve, the agent works for 20 minutes, and the dot stays yellow, looking
-like something forever awaits review.
-PostToolUse is the only signal that DISPROVES "something is stuck": a tool
-finished, therefore nothing is waiting on a human. Without approval the tool
-never runs, there is no PostToolUse, and yellow stays yellow — as it should.
+PostToolUse also pushes working because yellow would otherwise never end.
+Approving a tool emits no event, and UserPromptSubmit only fires when a person
+types, so "asked once" would mean "yellow until the turn ends": you approve,
+the agent works for 20 minutes, and the dot stays yellow as if something still
+awaited review. PostToolUse is the only signal that proves nothing is stuck: a
+tool finished, so nothing is waiting on a person. Without approval the tool
+never runs, there is no PostToolUse, and yellow stays yellow, as it should.
 
-Migration-safe: a Perch hook is any command that points at one of our own
-artifacts inside a Group Container (bridge.sock / agent-event.txt), so
-re-running removes a prior Perch hook — the old file-writer, an earlier
-socket version, or one written for a *different App Group* — before
-installing the current one. Recognition is by SHAPE, not by the current group
-id: using a changeable value as identity misses the old entries the day the
-container changes (see the ARTIFACT_PATTERN comment).
+Migration-safe: a Perch hook is any command that runs the launcher, or that
+points at one of our own artifacts inside a Group Container (bridge.sock,
+agent-event.txt), so re-running removes a prior Perch hook (the old
+file-writer, an earlier socket version, or one written for a different App
+Group) before installing the current one. Recognition is by shape, not by the
+current group id: a changeable value used as identity misses the old entries
+the day the container changes (see the ARTIFACT_PATTERN comment).
 """
 from __future__ import annotations   # so `X | None` annotations parse on macOS's stock python 3.9
 
@@ -43,14 +43,14 @@ SETTINGS = os.path.expanduser("~/.claude/settings.json")
 
 
 def app_group_id() -> str:
-    """Read the App Group from the INSTALLED app's own Info.plist. Never
-    hard-coded — a Team ID links to the registrant's real name.
+    """Read the App Group from the installed app's own Info.plist. Never
+    hard-coded: a Team ID links to the registrant's real name.
 
-    Read the installed app rather than source/config: the hooks push to the
-    island that is actually running, and only its Info.plist is authoritative.
-    If the island is not installed, error out — installing hooks that point at
-    a nonexistent container installs a dud, and **the push failure is silent**
-    (fail-open), nearly impossible to debug after the fact.
+    The installed app, not the source or config: the hooks push to the island
+    that is actually running, and only its Info.plist is authoritative. With no
+    island installed this errors out, because hooks pointing at a nonexistent
+    container fail silently (fail-open), which is nearly impossible to debug
+    after the fact.
     """
     plist = "/Applications/Perch.app/Contents/Info.plist"
     if not os.path.exists(plist):
@@ -61,15 +61,14 @@ def app_group_id() -> str:
         )
     out = subprocess.run(["/usr/libexec/PlistBuddy", "-c", "Print :AppGroupID", plist],
                          capture_output=True, text=True).stdout.strip()
-    # Two shapes are accepted, mirroring AppGroup.swift:
-    #   group.<suffix>            — the repo default, prefix-free
-    #   <TeamID>.group.<suffix>   — install-island-app.py stamped a signing Team
-    #                               ID into this machine's build so the faceless
-    #                               desktop widget can read the container on
-    #                               macOS 15+ (containermanagerd's TCC rule).
-    # The socket lives in whichever container the installed app actually uses,
-    # so the full value (prefix included) is what we return. A Team ID never
-    # appears here as a literal — it rides in from the installed plist.
+    # Two shapes are accepted, as in AppGroup.swift:
+    #   group.<suffix>            the repo default, prefix-free
+    #   <TeamID>.group.<suffix>   install-island-app.py stamped a signing Team ID
+    #                             into this machine's build (containermanagerd's
+    #                             TCC rule on macOS 15 and later; see AppGroup.swift)
+    # The socket lives in whichever container the installed app uses, so the
+    # full value, prefix included, is what we return. A Team ID never appears
+    # here as a literal; it comes from the installed plist.
     # Strip an optional "<TeamID>." prefix, then the core must be group.<suffix>.
     core = out[out.index("group."):] if ".group." in out and not out.startswith("group.") else out
     if not core.startswith("group.") or not core.removeprefix("group."):
@@ -80,7 +79,7 @@ def app_group_id() -> str:
 def socket_path() -> str:
     """Where the island listens.
 
-    Resolved lazily, NOT at import time: the tests import this module to
+    Resolved lazily, not at import time: the tests import this module to
     exercise the real matcher functions, and reading the installed app during
     import would make them depend on whether this machine happens to have
     Perch installed.
@@ -90,50 +89,48 @@ def socket_path() -> str:
     )
 
 
-# Ownership marker: **recognized by shape, not by the current App Group.**
+# Ownership is recognized by shape, not by the current App Group.
 #
-# ⚠️ Never use a changeable value (like the current group id) as identity: the
+# Never use a changeable value (like the current group id) as identity: the
 # moment the container changes, old commands still carry the old id, stop
-# being recognized as "ours", and can't be removed — old and new coexist,
-# every hook runs twice, and one of the two can never connect (nobody listens
-# on the old socket anymore).
+# being recognized as ours, and cannot be removed. Old and new then coexist,
+# every hook runs twice, and one of the two can never connect, because nobody
+# listens on the old socket any more.
 #
-# The island's own artifact names are stable across container changes; and
+# The island's own artifact names are stable across container changes, and
 # other tools' commands never touch them (their bridge scripts live in their
 # own home directories and never enter Group Containers).
 OWN_ARTIFACTS = ("bridge.sock", "agent-event.txt")
 ARTIFACT_PATTERN = re.compile(
     r"Group Containers/[^\"'\s]*/(?:" + "|".join(re.escape(a) for a in OWN_ARTIFACTS) + ")"
 )
-# ⚠️ The path alone is NOT enough. `bridge.sock` is as ordinary as file names
-# get — another tool could use the same name inside ITS OWN App Group, and
+# The path alone is not enough. `bridge.sock` is as ordinary as file names get:
+# another tool could use the same name inside its own App Group, and
 # reinstalling our hooks would delete theirs.
-# So a second condition: the command must also carry OUR wire-protocol
-# signature — the `-$$\t claude|codex` slice of
+# So a second condition: the command must also carry our wire-protocol
+# signature, the `-$$\t claude|codex` slice of
 # `<event>\t<projectDir>\t<nanos-$$>\t<source>`.
 # Both must hold to count as ours: paths can collide, the protocol signature
 # cannot.
-# Both spellings count: hook commands live in JSON where the tab is an escaped
-# `\\t`; the completion-bell block is shell script where the tab is a REAL tab
-# character. Same protocol signature, different host file format — accept only
-# one and you fail to recognize yourself in the other.
+# Both spellings count: hook commands live in JSON, where the tab is an escaped
+# `\\t`, and the completion-bell block is shell script, where the tab is a real
+# tab character. Accept only one and the installer fails to recognize its own
+# entries in the other.
 WIRE_PATTERN = re.compile("-\\$\\$(?:\\\\t|\\t)(?:claude|codex)")
 
 
-# The launcher's own path is the identity of every command written from now
-# on. It is ours by construction — no other tool invokes a binary out of
-# `~/.perch/bin` — so it needs no second condition the way an inline
-# `bridge.sock` did.
+# The launcher's own path identifies every command this installer writes. It
+# is ours by construction (no other tool runs a binary out of `~/.perch/bin`),
+# so it needs no second condition the way an inline `bridge.sock` does.
 LAUNCHER = os.path.expanduser("~/.perch/bin/perch-hook")
 LAUNCHER_PATTERN = re.compile(r"\.perch/bin/perch-hook")
 
 
 def is_perch_command(command: str) -> bool:
-    """⚠️ Recognizes BOTH shapes, and must keep doing so. Commands written
-    before the launcher carry the socket inline; if a reinstall stopped
-    recognizing those, it would leave them in place and append the new ones
-    beside them — every hook firing twice, one of the two pushing at a socket
-    nobody listens on."""
+    """Recognizes both shapes, and must keep doing so. Older commands carry the
+    socket inline; if a reinstall stopped recognizing those, it would leave
+    them in place and append the new ones beside them, so every hook would
+    fire twice, one of the two pushing at a socket nobody listens on."""
     if LAUNCHER_PATTERN.search(command):
         return True
     return bool(ARTIFACT_PATTERN.search(command) and WIRE_PATTERN.search(command))
@@ -159,8 +156,8 @@ def install_launcher(source: str | None = None, target: str | None = None) -> st
 
 # Order = write order; has no behavioral meaning (Claude's side has no
 # position-based trust hash like codex's).
-# PostToolUse and UserPromptSubmit push the same word (working) — they say the
-# same thing: "running". They differ only in who says it first.
+# PostToolUse and UserPromptSubmit push the same word (working): both mean
+# "running", and they differ only in who says it first.
 EVENTS = {
     "UserPromptSubmit": "working",
     "PermissionRequest": "waiting",
@@ -172,16 +169,14 @@ EVENTS = {
 def hook_command(event: str, launcher: str | None = None) -> str:
     """Build one hook command.
 
-    ⚠️ **This string must never change again.** It used to carry the socket
-    path inline, so every container rename rewrote all four commands — which
-    on the codex side means the owner is asked to re-approve them by hand
-    (trust is recorded per command text), and on both sides means a writer
-    that nobody remembered to reinstall keeps pushing at a socket that moved.
-    That happened: codex's hooks were missed when the island moved to a
-    Team-prefixed container and a day of its events was lost, silently.
+    This string must never change. A command carrying the socket path inline
+    changes with every container rename: on the codex side each change means
+    approving the hooks again by hand (trust is recorded per command text),
+    and on both sides a writer nobody remembered to reinstall keeps pushing,
+    silently, at a socket that moved.
 
-    Everything variable now lives inside the launcher, which resolves the
-    socket at run time. `launcher` is a seam for tests only.
+    Everything variable lives inside the launcher, which resolves the socket
+    at run time. `launcher` is a seam for tests only.
     """
     return f"'{launcher or LAUNCHER}' {event} claude"
 
@@ -223,8 +218,8 @@ def backup_settings() -> str | None:
         return None
     stem = f"{SETTINGS}.perch-backup-{int(time.time())}"
     backup, n = stem, 1
-    # Two runs within the same second must not overwrite the FIRST backup —
-    # that one is the only copy of the config as it was before we touched it.
+    # Two runs within the same second must not overwrite the first backup: it
+    # is the only copy of the config as it was before we touched it.
     while os.path.exists(backup):
         backup, n = f"{stem}-{n}", n + 1
     shutil.copy2(SETTINGS, backup)

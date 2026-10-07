@@ -1,7 +1,7 @@
 // Arguing with the reading: a hand-set score, taking one back, and the ledger that has to
 // survive both without ever quietly losing a day.
 // One of the island suite's files; `tests/island-roster.js` is what knows they all
-// exist. Run them together — a single file run is a partial answer.
+// exist. Run them together; a single file run is a partial answer.
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
@@ -27,7 +27,7 @@ precondition(FlowSense.resolve(auto: .inFlow, override: nil).verdict == .inFlow)
 precondition(FlowSense.resolve(auto: .notInFlow, override: nil).verdict == .notInFlow)
 precondition(FlowSense.resolve(auto: .inFlow, override: nil).override == nil)
 
-// ② A hand correction outranks the machine's verdict, and STANDS until new
+// ② A hand correction outranks the machine's verdict, and stands until new
 //    machine evidence arrives.
 //    If the next tick overwrites it, the control springs back under the finger.
 let saidOut = FlowSense.Override(said: .notInFlow, machineSaid: .inFlow)
@@ -50,8 +50,8 @@ precondition(FlowSense.resolve(auto: .inFlow, override: saidIn).verdict == .inFl
 precondition(FlowSense.resolve(auto: .inFlow, override: saidIn).override == nil)
 
 // ⑤ The island swings about and lands back on what it first said. The
-//    correction expired on the first swing and must NOT come back to life.
-//    This is the whole reason resolve hands the surviving correction BACK:
+//    correction expired on the first swing and must not come back to life.
+//    This is why resolve hands the surviving correction back:
 //    the caller keeps what it is given, exactly as the view model does.
 var standing: FlowSense.Override? = saidOut
 var kept: [FlowVerdict] = []
@@ -64,9 +64,9 @@ precondition(kept == [.notInFlow, .notInFlow, .inFlow, .inFlow, .notInFlow, .inF
              "an expired correction reappeared when the island swung back: \\(kept)")
 precondition(standing == nil, "a spent correction must stay spent")
 
-// Control: holding the ORIGINAL correction forever — the bug where one
-// forgotten flip quietly poisons every later reading — must answer
-// DIFFERENTLY at exactly that step, or ⑤ is proving nothing at all.
+// Control: holding the original correction forever (the bug where one
+// forgotten flip quietly poisons every later reading) must answer
+// differently at exactly that step, or ⑤ proves nothing at all.
 let poisoned = ([.inFlow, .notInFlow, .inFlow] as [FlowVerdict])
     .map { FlowSense.resolve(auto: $0, override: saidOut).verdict }
 precondition(poisoned[2] == .notInFlow, "control: a kept-forever correction is supposed to poison this step")
@@ -80,7 +80,7 @@ print("ok")
   compile(islandPath("FlowSense.swift"), binary);
   assert.equal(execFileSync(binary, { encoding: "utf8" }).trim(), "ok");
 
-  // Mutation. ⚠️ Prove the ammunition was loaded — a replacement string that
+  // Mutation. Prove the ammunition was loaded: a replacement string that
   // matches nothing mutates nothing, and the "red" never comes.
   let mutant = 0;
   const mutate = (from, to) => {
@@ -93,13 +93,13 @@ print("ok")
   };
   const mustDie = (source, why) => {
     const out = source.replace(/\.swift$/, "");
-    compile(source, out);          // it must still COMPILE, or nothing is proved
+    compile(source, out);          // it must still compile, or nothing is proved
     assert.throws(() => execFileSync(out, { stdio: "pipe" }), /Command failed/, why);
   };
   // ① The correction never expires: ③ and ⑤ both die.
   mustDie(mutate("guard auto == override.machineSaid else", "guard true else"),
     "a correction must not outlive the verdict it was filed against");
-  // ② The correction is spent on the spot: ② dies — the wave springs back.
+  // ② The correction is spent on the spot: ② dies, and the wave springs back.
   mustDie(mutate("return (override.said, override)", "return (auto, override)"),
     "a correction must survive the samples that follow it");
   // ③ A spent correction handed back instead of dropped: ⑤ dies, because it
@@ -108,14 +108,14 @@ print("ok")
                  "else { return (auto, override) }"),
     "a spent correction must be dropped, not handed back to be revived later");
 
-  // The view model is the caller that makes ⑤ true: it has to STORE what
+  // The view model is the caller that makes ⑤ true: it has to store what
   // resolve hands back. Keeping its own copy instead is the same forever-bug
   // wearing a pure function as a disguise.
   const vm = viewModelSource();
   assert.match(vm, /FlowSense\.resolve\(auto: auto, override: flowOverride\)[\s\S]{0,240}flowOverride = surviving/,
     "the view model must keep the correction resolve hands back, or a spent one lives forever");
-  // A correction is filed against WHAT THE ISLAND SAID, never against what the
-  // wave happened to be showing — without that pairing it can never expire.
+  // A correction is filed against what the island said, never against what the
+  // wave happened to be showing; without that pairing it can never expire.
   assert.match(vm, /FlowSense\.Override\(said: said, machineSaid: flowAuto\)/,
     "the correction must record the island's own verdict, not the corrected one");
   const correct = vm.match(/func correctFlow\(\)[\s\S]*?\n    \}/)?.[0] ?? "";
@@ -126,7 +126,7 @@ print("ok")
   assert.doesNotMatch(correct, /(if|guard)[^\n]*FlowCorrectionLog/,
     "a failed write must not decide whether the correction takes effect");
 
-  // The wave IS the button. Bars are 2.4pt wide with 3.6pt gaps, so without a
+  // The wave is the button. Bars are 2.4pt wide with 3.6pt gaps, so without a
   // hit shape most presses land in a gap and nothing happens.
   const view = islandViews();
   const strip = view.match(/struct AgentActivityStrip: View \{[\s\S]*?\n\}/)?.[0] ?? "";
@@ -141,7 +141,7 @@ print("ok")
   assert.match(strip, /FlowSense\.opacity\(for:/);
   assert.match(strip, /flow\.waveClock\(at: context\.date\) \* tempo/);
 
-  // Nothing a person reads on the island is in Chinese. Control group first —
+  // Nothing a person reads on the island is in Chinese. Control group first:
   // a scan that finds nothing proves nothing until it has been shown to find
   // something.
   // Escaped, not literal: two of the six range ends are an ideographic
@@ -183,15 +183,15 @@ precondition(!FileManager.default.fileExists(atPath: dir.path),
 precondition(FlowCorrectionLog.write(said: .notInFlow, machine: .inFlow, at: t0, into: dir))
 precondition(FileManager.default.fileExists(atPath: dir.path), "the corrections directory was not created")
 
-// ⑥ One correction, one line, appended — never rewriting what is already there.
+// ⑥ One correction, one line, appended, never rewriting what is already there.
 precondition(FlowCorrectionLog.write(said: .inFlow, machine: .inFlow, at: t0.addingTimeInterval(60), into: dir))
 precondition(body().split(separator: "\\n").count == 2,
              "two corrections must be two lines, got \\(body().split(separator: "\\n").count)")
 precondition(body().hasSuffix("\\n"),
              "a line left without its newline glues the next correction onto itself")
 
-// ⑧ A half-written line — a crash mid-append, a disk that filled up. It must
-//    damage itself and NOTHING BEFORE IT. Everything after it goes on landing.
+// ⑧ A half-written line (a crash mid-append, a disk that filled up). It must
+//    damage itself and nothing before it. Everything after it goes on landing.
 if let handle = try? FileHandle(forWritingTo: file) {
     _ = try? handle.seekToEnd()
     try? handle.write(contentsOf: Data(#"{"machineSaid":"in_flow","said":"not_i"#.utf8))
@@ -200,7 +200,7 @@ if let handle = try? FileHandle(forWritingTo: file) {
 precondition(FlowCorrectionLog.write(said: .inFlow, machine: .notInFlow, at: t0.addingTimeInterval(120), into: dir))
 precondition(FlowCorrectionLog.write(said: .notInFlow, machine: .notInFlow, at: t0.addingTimeInterval(180), into: dir))
 
-// ⑨ Nowhere to write it. ⚠️ The assertion is that this program REACHES the
+// ⑨ Nowhere to write it. The assertion is that this program reaches the
 //    line below: a correction the island cannot record must not throw, must
 //    not crash, and must not stop the island doing its actual job.
 let nowhere = URL(fileURLWithPath: "/dev/null/perch-flow-corrections")
@@ -245,14 +245,14 @@ print("still here")
   // answer sails through every line above.
   assert.ok(good.some((r) => r.said === "in_flow") && good.some((r) => r.said === "not_in_flow"),
     "control: the case list must contain both things you can say");
-  // The two that were on disk BEFORE the tear are intact and in order…
+  // The two that were on disk before the tear are intact and in order…
   assert.deepEqual([good[0].said, good[0].machineSaid], ["not_in_flow", "in_flow"]);
   assert.deepEqual([good[1].said, good[1].machineSaid], ["in_flow", "in_flow"]);
   assert.equal(Date.parse(good[1].t) - Date.parse(good[0].t), 60_000, "the timestamps are not the ones written");
-  // …and the append AFTER the tear lands clean on a line of its own.
+  // …and the append after the tear lands clean on a line of its own.
   assert.deepEqual([good[2].said, good[2].machineSaid], ["not_in_flow", "not_in_flow"]);
 
-  // ⚠️ The original verdict is never rewritten — tuning the three provisional
+  // The original verdict is never rewritten: tuning the three provisional
   // numbers means laying what the island said beside what it was told, and that
   // comparison dies the moment the two share a file.
   const flowLog = fs.readFileSync(islandPath("FlowCorrectionLog.swift"), "utf8");
@@ -261,10 +261,9 @@ print("still here")
   // naming them, and an assertion that reads prose goes red on its own
   // explanation. (Same shape as the UserDefaults.standard note next door.)
   const flowCode = flowLog.split("\n").filter((l) => !/^\s*\/\//.test(l)).join("\n");
-  // ⚠️ `TodaySummary` came off this list when the desktop widget went: it was
-  // that widget's summary writer and the third reader of the event log, and an
-  // alternative that can never match again is an assertion with no subject. The
-  // rule is unchanged: the corrections writer may not touch the observations.
+  // The list names only writers that exist: an alternative that can never match
+  // is an assertion with no subject. The rule: the corrections writer may not
+  // touch the observations.
   assert.doesNotMatch(flowCode, /agent-events|AgentEventLog/,
     "the corrections writer must not be able to touch the observations");
 
@@ -279,7 +278,7 @@ print("still here")
   };
   const mustDie = (source, why) => {
     const out = source.replace(/\.swift$/, "");
-    compile(source, out);          // it must still COMPILE, or nothing is proved
+    compile(source, out);          // it must still compile, or nothing is proved
     assert.throws(() => execFileSync(out, [path.join(tmp, `out-${path.basename(out)}`)], { stdio: "pipe" }),
       /Command failed/, why);
   };
@@ -297,28 +296,8 @@ print("still here")
     "a write that failed must not report success");
 });
 
-// One synthetic day, laid out so every shadow feature has something to be
-// wrong about. Seconds from 09:00.
-//   · lines A (claude) and B (codex) run in parallel on the SAME project
-//   · line C is a second project — the cross-project switch, and the one place
-//     where merging across projects and merging within one disagree
-//   · line C also holds the day's single `waiting`, and an interrupt whose
-//     turn gets truncated
-//   · line D is the 3-hour implausible turn: it must vanish from every derived
-//     number and appear only in the quality group
-
-// One synthetic day, laid out so every shadow feature has something to be
-// wrong about. Seconds from 09:00.
-//   · lines A (claude) and B (codex) run in parallel on the SAME project
-//   · line C is a second project — the cross-project switch, and the one place
-//     where merging across projects and merging within one disagree
-//   · line C also holds the day's single `waiting`, and an interrupt whose
-//     turn gets truncated
-//   · line D is the 3-hour implausible turn: it must vanish from every derived
-//     number and appear only in the quality group
-
 test("an unparsable ledger must throw, never wipe history as an empty ledger", () => {
-  // This one RUNS REAL CODE, no grepping: recording goes "load → append one →
+  // This one runs real code, no grepping: recording goes "load → append one →
   // write back whole", and "does an unreadable file get wiped?" only counts
   // when actually executed.
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "perch-ledger-corrupt-"));
@@ -343,7 +322,7 @@ _ = try! CareLedgerStore.append(r1, to: ledgerURL)
 let two = try! CareLedgerStore.append(r2, to: ledgerURL)
 precondition(two.records.count == 2)
 
-// 3. Corrupt the ledger — the whole point of this test
+// 3. Corrupt the ledger: the whole point of this test
 let corrupt = "{ this is not a ledger"
 try! Data(corrupt.utf8).write(to: ledgerURL)
 
@@ -367,9 +346,9 @@ precondition(after == corrupt, "the broken file must stay untouched — overwrit
 test("a correction discards the snapshot it argues with, not the week it does not", () => {
   // Two different reasons to throw a landing read away, and only one of them
   // makes its seven days stale:
-  //   · a newer read owns the week now — its days really are older, drop them;
-  //   · someone pressed a day while this read walked — its CORRECTIONS
-  //     snapshot predates the press, but no press changes a measurement.
+  //   - a newer read owns the week now: its days really are older, so drop them;
+  //   - someone pressed a day while this read walked: its corrections snapshot
+  //     predates the press, but no press changes a measurement.
   // Separate counters keep a correction from invalidating the seven measured days.
   const week = fs.readFileSync(islandPath("IslandViewModel+Week.swift"), "utf8");
   const vm = viewModelSource();
@@ -402,7 +381,7 @@ test("a correction discards the snapshot it argues with, not the week it does no
   assert.ok(iCorrGuard < iCorr,
     "the corrections publish unguarded — a snapshot older than the press wins");
 
-  // The read has to capture the corrections counter at START, or comparing it
+  // The read has to capture the corrections counter at the start, or comparing it
   // at landing time compares a value with itself.
   assert.match(week, /let correctionsAt = correctionGeneration/,
     "the corrections counter is not sampled when the read starts");
@@ -462,7 +441,7 @@ print(String(data: try! JSONSerialization.data(withJSONObject: out), encoding: .
   // would otherwise erase an answer nothing else in the world can supply.
   assert.deepEqual(r.nulledByHand, { rhythm: 4, progress: 3 },
     "an explicit null erased an answer the writer is forbidden to erase");
-  // Control: the field that IS allowed to be taken back still is, or the rule
+  // Control: the field that is allowed to be taken back still is, or the rule
   // above would pass by refusing everything.
   assert.equal(r.flowNulledByHand, null, "control: flow can no longer be taken back either");
 

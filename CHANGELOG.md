@@ -6,6 +6,8 @@ Notable changes to Perch, newest first. The format follows
 
 ## [Unreleased]
 
+## [2.2] — 2026-10-07
+
 ### Added
 
 - After an hour of steady work with your agents, the card opens once at your
@@ -121,7 +123,8 @@ Notable changes to Perch, newest first. The format follows
   The archive is packed deterministically: fixed timestamps, no extra fields,
   no comments, every byte accounted for.
 
-[Unreleased]: https://github.com/mossfinch/perch/compare/v2.1...HEAD
+[Unreleased]: https://github.com/mossfinch/perch/compare/v2.2...HEAD
+[2.2]: https://github.com/mossfinch/perch/compare/v2.1...v2.2
 [2.1]: https://github.com/mossfinch/perch/compare/v2.0...v2.1
 [2.0]: https://github.com/mossfinch/perch/compare/v1.0...v2.0
 [1.0]: https://github.com/mossfinch/perch/releases/tag/v1.0

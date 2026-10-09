@@ -581,7 +581,7 @@ test("the changelog knows about the version that ships", () => {
   }
 });
 
-// A split suite can hide a valid test file if no runner or manifest discovers it.
+// A split suite can hide a valid test file if no test command or manifest discovers it.
 //
 // The rule has one implementation, in tests/island-roster.js. The pre-commit hook
 // calls the same function. A second copy here would be free to drift from the copy that

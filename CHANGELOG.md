@@ -6,6 +6,29 @@ Notable changes to Perch, newest first. The format follows
 
 ## [Unreleased]
 
+## [2.3] — 2026-10-09
+
+### Added
+
+- Perch can now connect Claude Code and codex itself. The first time it opens,
+  or whenever it finds an agent it cannot hear yet, the card's second row
+  offers **Connect**. Nothing is written until you press it. It follows the
+  same rules as the Python hook installers and writes the same bytes: a backup
+  beside each file first, only Perch's own entries touched, an atomic swap at
+  the end. The download from the releases page works on its own now; Xcode is
+  only needed to build from source.
+- `Perch --demo` runs the island on made-up projects and a made-up week in a
+  scratch folder, for recording it without showing your own work. Your own
+  data is never opened.
+
+### Changed
+
+- The sandbox now lets the app write to `~/.claude`, `~/.codex` and `~/.perch`,
+  and to nothing else outside its own container. Connecting needs those three.
+- `~/.perch/bin/perch-hook` written by **Connect** is a link to the script
+  inside the app rather than a copy, so updating the app updates the hooks.
+  macOS refuses to run a script that a sandboxed app wrote itself.
+
 ## [2.2] — 2026-10-07
 
 ### Added
@@ -123,7 +146,8 @@ Notable changes to Perch, newest first. The format follows
   The archive is packed deterministically: fixed timestamps, no extra fields,
   no comments, every byte accounted for.
 
-[Unreleased]: https://github.com/mossfinch/perch/compare/v2.2...HEAD
+[Unreleased]: https://github.com/mossfinch/perch/compare/v2.3...HEAD
+[2.3]: https://github.com/mossfinch/perch/compare/v2.2...v2.3
 [2.2]: https://github.com/mossfinch/perch/compare/v2.1...v2.2
 [2.1]: https://github.com/mossfinch/perch/compare/v2.0...v2.1
 [2.0]: https://github.com/mossfinch/perch/compare/v1.0...v2.0

@@ -24,9 +24,11 @@ final class PerchAppDelegate: NSObject, NSApplicationDelegate {
             return
         }
         NSApp.setActivationPolicy(.accessory)
+        if AppGroup.isDemo { DemoMode.seed() }
         let controller = IslandWindowController()
         islandWindowController = controller
         controller.activate()
+        if AppGroup.isDemo { DemoMode.runScript() }
     }
 
     private static var anotherInstanceIsRunning: Bool {

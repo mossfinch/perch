@@ -7,6 +7,7 @@
 **和 coding agent 一起工作，守住专注，也顾上身体。**
 
 [![License: MIT](https://img.shields.io/badge/license-MIT-4C4238.svg)](LICENSE)
+[![Tests](https://github.com/mossfinch/perch/actions/workflows/test.yml/badge.svg)](https://github.com/mossfinch/perch/actions/workflows/test.yml)
 ![Platform](https://img.shields.io/badge/macOS-15%2B-C86B4A.svg)
 ![Swift 6](https://img.shields.io/badge/Swift-6-C86B4A.svg)
 ![No network code](https://img.shields.io/badge/network%20code-none-4C4238.svg)
@@ -14,6 +15,8 @@
 [English](README.md) · **简体中文** · [日本語](README.ja.md)
 
 [每个版本改了什么](CHANGELOG.md)
+
+<img src="perch-demo.gif" alt="Perch 提醒伸懒腰，动作跟着节拍走，横木上的某一天显示读数" width="720">
 
 </div>
 
@@ -154,6 +157,9 @@ Perch 不保存提示词或回复正文。它会保存：
 
 这些数据都留在本机。项目完整路径也属于隐私信息；如果不想保留，见下面的“卸载与删除数据”。
 
+app 运行在沙箱里。为了接入 agent，它只能写三个文件夹：`~/.claude`、`~/.codex` 和 `~/.perch`；
+在你点 **Connect** 之前，它不会往那里写任何东西。
+
 <details>
 <summary>历史重建为什么存在，以及它读取什么</summary>
 
@@ -172,17 +178,33 @@ app 安装脚本会安装 `~/.perch/bin/perch-reconcile`，由 LaunchAgent 在�
 
 ### Claude Code
 
-运行 `install-island-hooks.py` 后即可接入。
+Perch 第一次打开时，卡片上会出现 **Connect**，点一下即可接入。从源码安装时，
+`install-island-hooks.py` 做的是同一件事。
 
 ### codex
 
-完成状态通过 codex 的 notify 脚本接入；运行中和等待批准状态通过 `~/.codex/hooks.json` 接入。
-codex 只会执行你在 `/hooks` 面板中信任过的 hook。如果绿色数量会变化，但蓝色和黄色始终不动，
-通常是那次信任还没授权。
+运行中、等待批准和完成状态都通过 `~/.codex/hooks.json` 接入，**Connect**
+（或 `install-codex-island-hooks.py`）会把它填好；从源码安装时，完成状态还会额外经过
+codex 的 notify 脚本。codex 只会执行你在 `/hooks` 面板中信任过的 hook。如果小鸟对 codex
+毫无反应，或者只有绿色数量在变，通常是那次信任还没授权。
 
 ---
 
 ## 安装
+
+### 下载
+
+1. 从[最新发布页](https://github.com/mossfinch/perch/releases/latest)下载
+   `Perch-<版本号>.zip` 并解压。支持 macOS 15 及以上的 Apple 芯片和 Intel Mac。
+2. 把 **Perch** 拖进「应用程序」。它必须放在那里：hook 按这个位置找它。
+3. 打开它。第一次打开时，macOS 会要求放行一次：
+   **系统设置 → 隐私与安全性 → 仍要打开**。
+4. 卡片会自己弹开，出现 **Connect**。点一下，Perch 就会接入这台 Mac 上找到的 agent。
+   codex 还需要在它的 `/hooks` 面板里信任一次新的 hook。
+
+下载版不含上面提到的历史重建；需要的话，请从源码安装。
+
+### 从源码安装
 
 你需要：
 
@@ -206,9 +228,9 @@ app 安装脚本不会覆盖 `/Applications/Perch.app` 位置上的其他 app；
 确认 app 不只是进程存在，而是已经能够接收事件。
 
 <details>
-<summary>hook 安装脚本会改什么</summary>
+<summary>接入时会改什么</summary>
 
-hook 安装脚本会先在原配置旁留下带时间戳的 `.perch-backup-*` 备份，然后只追加属于 Perch 的条目。
+**Connect** 和 hook 安装脚本遵守同一套规则，写出的内容逐字节相同。它们会先在原配置旁留下带时间戳的 `.perch-backup-*` 备份，然后只追加属于 Perch 的条目。
 它不会重排、删除或改写其他 hook，即使别人的 hook 和 Perch 位于同一个分组里也一样。
 
 写入前，脚本会确认所有外部条目仍与读取时逐字节相同、位置也没有变化；
@@ -229,13 +251,14 @@ rm ~/Library/LaunchAgents/io.github.mossfinch.perch.plist
 launchctl bootout gui/$UID/io.github.mossfinch.perch.reconcile
 rm ~/Library/LaunchAgents/io.github.mossfinch.perch.reconcile.plist
 rm ~/.perch/bin/perch-reconcile
+rm -f ~/.perch/bin/perch-hook
 rm -rf ~/.perch/reconciliation
 rm -rf /Applications/Perch.app
 ```
 
 如果安装过 hook，还需要从下面的位置移除 Perch 条目：
 
-- `~/.claude/settings.json` 和 `~/.codex/hooks.json`：删除命令中包含 `bridge.sock` 的 Perch 条目，
+- `~/.claude/settings.json` 和 `~/.codex/hooks.json`：删除命令中包含 `.perch/bin/perch-hook`（旧版本写的是 `bridge.sock`）的 Perch 条目，
   或恢复旁边的 `.perch-backup-*` 备份；
 - `~/.codex/hooks/codex-notify-sound.sh`：删除以 `# --- Perch` 开头的完成提示音区块。
   这个文件也有自己的 `.perch-backup-*` 备份，所以这里同样可以直接恢复。
@@ -273,6 +296,16 @@ node --test tests/island-*.test.js                        # 运行测试
 ```
 
 `perch-package.json` 是公开包文件边界的唯一清单。测试中的隐私守卫会扫描清单覆盖的全部文件。
+
+如果想录制刘海而不露出自己的项目和这一周，先停掉正在运行的 Perch，再用 `--demo` 启动。
+它会用临时文件夹里的假项目和假的一周来演示，不碰你自己的数据。按 Ctrl-C 退出，
+最后一行会把你平时的 Perch 恢复回来。
+
+```bash
+launchctl bootout gui/$UID/io.github.mossfinch.perch
+/Applications/Perch.app/Contents/MacOS/Perch --demo
+launchctl bootstrap gui/$UID ~/Library/LaunchAgents/io.github.mossfinch.perch.plist
+```
 
 ---
 

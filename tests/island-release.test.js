@@ -330,7 +330,9 @@ test("island sources split into 5 duty groups, never flattened back into one lay
   // ①→②→③→④ is also the island's running order: receive events → compute the
   // notch position → draw → offer care while you wait.
   const WHERE = {
-    ".":            ["PerchApp.swift", "AppGroup.swift",
+    // DemoMode sits beside AppGroup because it works by answering the same question:
+    // where the container is.
+    ".":            ["PerchApp.swift", "AppGroup.swift", "DemoMode.swift",
                      "Info.plist", "Perch.entitlements"],
     // StalePolicy belongs here: it answers "how long before an agent event is
     // stale", which is event lifecycle, not interface.
@@ -350,7 +352,10 @@ test("island sources split into 5 duty groups, never flattened back into one lay
                      // and totals it: still a reader of the same log, one
                      // question further out. The branch under the bird only
                      // draws the level it is handed.
-                     "FlowSense.swift", "FlowCorrectionLog.swift", "DayFlow.swift"],
+                     "FlowSense.swift", "FlowCorrectionLog.swift", "DayFlow.swift",
+                     // HookSetup wires the agents' hooks, the source of every event read
+                     // here; OrderedJSON is how it reads and writes their config files.
+                     "HookSetup.swift", "OrderedJSON.swift"],
     "Notch":        ["IslandWindowController.swift", "IslandDisplayMetrics.swift",
                      "IslandHoverMonitor.swift", "IslandPresentationPhase.swift",
                      "IslandCapsuleShape.swift", "IslandCardShape.swift"],
@@ -360,7 +365,8 @@ test("island sources split into 5 duty groups, never flattened back into one lay
     // ProjectCaption draw nothing and supply the shared colour and wording.
     // Every type has 0 to 2 dependents apart from IslandPalette, which has 11.
     "Interface":    ["AgentStatus.swift", "IslandView.swift", "IslandViewModel.swift",
-                     "IslandViewModel+Week.swift", "IslandViewModel+Flow.swift", "CarouselClock.swift",
+                     "IslandViewModel+Week.swift", "IslandViewModel+Flow.swift", "IslandViewModel+Setup.swift",
+                     "CarouselClock.swift",
                      "IslandPalette.swift", "ProjectCaption.swift",
                      "GuidedCareCard.swift", "AgentActivityStrip.swift",
                      "TopWeekRow.swift", "WeekPerch.swift"],

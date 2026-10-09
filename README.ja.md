@@ -7,6 +7,7 @@
 **coding agent と働くときも、集中を守り、体をいたわる。**
 
 [![License: MIT](https://img.shields.io/badge/license-MIT-4C4238.svg)](LICENSE)
+[![Tests](https://github.com/mossfinch/perch/actions/workflows/test.yml/badge.svg)](https://github.com/mossfinch/perch/actions/workflows/test.yml)
 ![Platform](https://img.shields.io/badge/macOS-15%2B-C86B4A.svg)
 ![Swift 6](https://img.shields.io/badge/Swift-6-C86B4A.svg)
 ![No network code](https://img.shields.io/badge/network%20code-none-4C4238.svg)
@@ -14,6 +15,8 @@
 [English](README.md) · [简体中文](README.zh-CN.md) · **日本語**
 
 [各バージョンの変更点](CHANGELOG.md)
+
+<img src="perch-demo.gif" alt="Perch がストレッチを促し、エクササイズが拍に合わせて進み、枝の上の 1 日が記録を表示する" width="720">
 
 </div>
 
@@ -172,6 +175,9 @@ Perch はプロンプトや応答本文を保存しません。保存するの�
 これらのデータはすべてこの Mac の中に残ります。プロジェクトのフルパスもプライバシー情報です。
 残したくない場合は、下の「アンインストールとデータの削除」を見てください。
 
+app はサンドボックスの中で動きます。agent に接続するために書き込めるのは `~/.claude`、`~/.codex`、
+`~/.perch` の 3 つのフォルダだけで、**Connect** を押すまではそこに何も書き込みません。
+
 <details>
 <summary>履歴の再構築がなぜあるのか、そして何を読むのか</summary>
 
@@ -193,17 +199,37 @@ socket 経由でライフサイクルの行と検証済みの派生結果をや�
 
 ### Claude Code
 
-`install-island-hooks.py` を実行すれば接続できます。
+Perch を初めて開くと、カードに **Connect** が表示されます。押せば接続できます。ソースから
+インストールする場合は、`install-island-hooks.py` が同じことをします。
 
 ### codex
 
-完了の状態は codex の notify スクリプト経由、実行中と承認待ちの状態は `~/.codex/hooks.json` 経由で
-届きます。codex は `/hooks` パネルで信頼した hook しか実行しません。緑の件数は変わるのに青と黄色が
-まったく動かない場合、たいていはその信頼をまだ許可していません。
+実行中・承認待ち・完了の状態はすべて `~/.codex/hooks.json` 経由で届き、**Connect**
+（または `install-codex-island-hooks.py`）がそこを埋めます。ソースからインストールした場合は、
+完了の状態が codex の notify スクリプト経由でも届きます。codex は `/hooks` パネルで信頼した hook
+しか実行しません。小鳥が codex にまったく反応しない、または緑の件数しか変わらない場合、
+たいていはその信頼をまだ許可していません。
 
 ---
 
 ## インストール
+
+### ダウンロード
+
+1. [最新リリース](https://github.com/mossfinch/perch/releases/latest)から
+   `Perch-<バージョン>.zip` をダウンロードして展開します。macOS 15 以降の Apple シリコン Mac と
+   Intel Mac で動きます。
+2. **Perch** を「アプリケーション」フォルダへ移します。hook はこの場所で app を探すので、
+   ここに置く必要があります。
+3. 開きます。初回は macOS が 1 度だけ許可を求めます。
+   **システム設定 → プライバシーとセキュリティ → このまま開く**。
+4. カードが自動で開き、**Connect** が表示されます。押すと、この Mac で見つかった agent に Perch が
+   接続されます。codex では、`/hooks` パネルで新しい hook を一度だけ信頼してください。
+
+ダウンロード版には上で説明した履歴の再構築が含まれません。必要な場合はソースからインストール
+してください。
+
+### ソースからインストール
 
 必要なものは次のとおりです。
 
@@ -229,9 +255,10 @@ app のインストールスクリプトは、`/Applications/Perch.app` の場�
 確認します。
 
 <details>
-<summary>hook のインストールスクリプトが何を変えるのか</summary>
+<summary>接続で何が変わるのか</summary>
 
-hook のインストールスクリプトは、まず元の設定の隣にタイムスタンプ付きの `.perch-backup-*` バックアップ
+**Connect** と hook のインストールスクリプトは同じ規則に従い、書き出す内容もバイト単位で同じです。
+どちらもまず元の設定の隣にタイムスタンプ付きの `.perch-backup-*` バックアップ
 を残し、そのうえで Perch の項目だけを追加します。他の hook を並べ替えたり、削除したり、書き換えたり
 はしません。他人の hook が Perch と同じグループに入っていても同じです。
 
@@ -254,13 +281,14 @@ rm ~/Library/LaunchAgents/io.github.mossfinch.perch.plist
 launchctl bootout gui/$UID/io.github.mossfinch.perch.reconcile
 rm ~/Library/LaunchAgents/io.github.mossfinch.perch.reconcile.plist
 rm ~/.perch/bin/perch-reconcile
+rm -f ~/.perch/bin/perch-hook
 rm -rf ~/.perch/reconciliation
 rm -rf /Applications/Perch.app
 ```
 
 hook を入れている場合は、次の場所からも Perch の項目を消してください。
 
-- `~/.claude/settings.json` と `~/.codex/hooks.json`：コマンドに `bridge.sock` を含む Perch の項目を
+- `~/.claude/settings.json` と `~/.codex/hooks.json`：コマンドに `.perch/bin/perch-hook`（古い版では `bridge.sock`）を含む Perch の項目を
   削除するか、隣にある `.perch-backup-*` バックアップを戻します
 - `~/.codex/hooks/codex-notify-sound.sh`：`# --- Perch` で始まる完了サウンドのブロックを削除します。
   このファイルにも専用の `.perch-backup-*` バックアップがあるので、ここでも復元できます
@@ -302,6 +330,16 @@ node --test tests/island-*.test.js                        # テストを実行
 
 `perch-package.json` は、公開パッケージに含めるファイルの境界を定める唯一のマニフェストです。
 テストに含まれるプライバシーガードは、このマニフェストが対象とするファイルをすべてスキャンします。
+
+自分のプロジェクトや 1 週間を見せずにノッチを録画したいときは、動いている Perch を止めてから
+`--demo` 付きで起動します。一時フォルダの架空のプロジェクトと架空の 1 週間で動き、あなた自身の
+データには触れません。Ctrl-C で終了したら、最後の行でいつもの Perch に戻ります。
+
+```bash
+launchctl bootout gui/$UID/io.github.mossfinch.perch
+/Applications/Perch.app/Contents/MacOS/Perch --demo
+launchctl bootstrap gui/$UID ~/Library/LaunchAgents/io.github.mossfinch.perch.plist
+```
 
 ---
 

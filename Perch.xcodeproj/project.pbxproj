@@ -44,6 +44,11 @@
 00A1CE0000000000000000F2 /* DayFlow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00A1CE0000000000000000F1 /* DayFlow.swift */; };
 		00A1CE00000000000000006D /* FlowCorrectionLog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00A1CE00000000000000006E /* FlowCorrectionLog.swift */; };
 		00A1CE000000000000000070 /* SourceHealth.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00A1CE000000000000000071 /* SourceHealth.swift */; };
+		00A1CE000000000000000A10 /* OrderedJSON.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00A1CE000000000000000A11 /* OrderedJSON.swift */; };
+		00A1CE000000000000000A12 /* HookSetup.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00A1CE000000000000000A13 /* HookSetup.swift */; };
+		00A1CE000000000000000A14 /* IslandViewModel+Setup.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00A1CE000000000000000A15 /* IslandViewModel+Setup.swift */; };
+		00A1CE000000000000000A16 /* perch-hook.sh in Resources */ = {isa = PBXBuildFile; fileRef = 00A1CE000000000000000A17 /* perch-hook.sh */; };
+		00A1CE000000000000000A18 /* DemoMode.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00A1CE000000000000000A19 /* DemoMode.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -87,6 +92,11 @@
 00A1CE0000000000000000F1 /* DayFlow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DayFlow.swift; sourceTree = "<group>"; };
 		00A1CE00000000000000006E /* FlowCorrectionLog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FlowCorrectionLog.swift; sourceTree = "<group>"; };
 		00A1CE000000000000000071 /* SourceHealth.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SourceHealth.swift; sourceTree = "<group>"; };
+		00A1CE000000000000000A11 /* OrderedJSON.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OrderedJSON.swift; sourceTree = "<group>"; };
+		00A1CE000000000000000A13 /* HookSetup.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HookSetup.swift; sourceTree = "<group>"; };
+		00A1CE000000000000000A15 /* IslandViewModel+Setup.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "IslandViewModel+Setup.swift"; sourceTree = "<group>"; };
+		00A1CE000000000000000A17 /* perch-hook.sh */ = {isa = PBXFileReference; lastKnownFileType = text.script.sh; path = "perch-hook.sh"; sourceTree = SOURCE_ROOT; };
+		00A1CE000000000000000A19 /* DemoMode.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DemoMode.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -112,6 +122,8 @@
 				00A1CE0000000000000000F1 /* DayFlow.swift */,
 				00A1CE000000000000000071 /* SourceHealth.swift */,
 				00A1CE000000000000000005 /* StalePolicy.swift */,
+				00A1CE000000000000000A11 /* OrderedJSON.swift */,
+				00A1CE000000000000000A13 /* HookSetup.swift */,
 			);
 			path = AgentEvents;
 			sourceTree = "<group>";
@@ -142,6 +154,7 @@
 				00A1CE000000000000000011 /* IslandViewModel.swift */,
 				00A1CE000000000000000A01 /* IslandViewModel+Week.swift */,
 				00A1CE000000000000000A05 /* IslandViewModel+Flow.swift */,
+				00A1CE000000000000000A15 /* IslandViewModel+Setup.swift */,
 				00A1CE000000000000000A03 /* CarouselClock.swift */,
 			);
 			path = Interface;
@@ -166,6 +179,7 @@
 				00A1CE000000000000000023 /* Assets.xcassets */,
 				00A1CE000000000000000025 /* BeatTick.aiff */,
 				00A1CE000000000000000027 /* CompletionChime.aiff */,
+				00A1CE000000000000000A17 /* perch-hook.sh */,
 			);
 			path = Resources;
 			sourceTree = "<group>";
@@ -175,6 +189,7 @@
 			children = (
 				00A1CE00000000000000001F /* AppGroup.swift */,
 				00A1CE000000000000000021 /* PerchApp.swift */,
+				00A1CE000000000000000A19 /* DemoMode.swift */,
 				00A1CE00000000000000002F /* AgentEvents */,
 				00A1CE000000000000000030 /* Care */,
 				00A1CE000000000000000031 /* Interface */,
@@ -257,6 +272,7 @@
 				00A1CE000000000000000024 /* Assets.xcassets in Resources */,
 				00A1CE000000000000000026 /* BeatTick.aiff in Resources */,
 				00A1CE000000000000000028 /* CompletionChime.aiff in Resources */,
+				00A1CE000000000000000A16 /* perch-hook.sh in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -267,6 +283,10 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				00A1CE000000000000000A18 /* DemoMode.swift in Sources */,
+				00A1CE000000000000000A10 /* OrderedJSON.swift in Sources */,
+				00A1CE000000000000000A12 /* HookSetup.swift in Sources */,
+				00A1CE000000000000000A14 /* IslandViewModel+Setup.swift in Sources */,
 				00A1CE000000000000000002 /* AgentEventLog.swift in Sources */,
 				00A1CE000000000000000004 /* AgentEventMonitor.swift in Sources */,
 				00A1CE000000000000000020 /* AppGroup.swift in Sources */,

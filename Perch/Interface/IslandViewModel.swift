@@ -93,6 +93,8 @@ final class IslandViewModel: ObservableObject {
     static let flowTickInterval: TimeInterval = 15
 
     @Published var projects: [ProjectStatus] = []                  // one status dot per project
+    /// Whether the second row offers to connect the agents. See `IslandViewModel+Setup.swift`.
+    @Published var agentSetup: AgentSetup = .hidden
 
     /// Mirrors `stretch.asking` for the views. It is a separate published value so the
     /// 15-second refresh does not republish an unchanged answer.
@@ -170,6 +172,11 @@ final class IslandViewModel: ObservableObject {
         startAgentMonitoring()
         startPruneTimer()
         startFlowTimer()
+        // A fresh download has nothing wired, and a bird that never moves explains nothing:
+        // open once to show the offer. Delayed so the panel exists before it is asked to open.
+        if refreshAgentSetup() {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1) { [weak self] in self?.peekOpen() }
+        }
     }
 
     func hoverEntered() {
@@ -466,6 +473,7 @@ final class IslandViewModel: ObservableObject {
             // The week is made current here, in the one place the card becomes
             // visible. Hover is only one of four ways in.
             refreshWeek()
+            refreshAgentSetup()
             withAnimation(.spring(response: 0.42, dampingFraction: 0.86)) { presentationPhase = .opened }
         } else {
             withAnimation(.smooth(duration: 0.3)) { presentationPhase = .closed }

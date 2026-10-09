@@ -7,6 +7,7 @@
 **Work with coding agents. Keep your focus, and take care of your body too.**
 
 [![License: MIT](https://img.shields.io/badge/license-MIT-4C4238.svg)](LICENSE)
+[![Tests](https://github.com/mossfinch/perch/actions/workflows/test.yml/badge.svg)](https://github.com/mossfinch/perch/actions/workflows/test.yml)
 ![Platform](https://img.shields.io/badge/macOS-15%2B-C86B4A.svg)
 ![Swift 6](https://img.shields.io/badge/Swift-6-C86B4A.svg)
 ![No network code](https://img.shields.io/badge/network%20code-none-4C4238.svg)
@@ -14,6 +15,8 @@
 **English** · [简体中文](README.zh-CN.md) · [日本語](README.ja.md)
 
 [What changed in each version](CHANGELOG.md)
+
+<img src="perch-demo.gif" alt="Perch asks for a stretch, a move plays to its beat, and a day on the branch shows its reading" width="720">
 
 </div>
 
@@ -192,6 +195,10 @@ All of it stays on your machine. Full project paths are private information
 too; if you would rather not keep them, see [Uninstall and delete your
 data](#uninstall-and-delete-your-data) below.
 
+The app is sandboxed. To connect your agents it may write to three folders and
+no others: `~/.claude`, `~/.codex` and `~/.perch`, and it writes nothing there
+until you press **Connect**.
+
 <details>
 <summary>Why the history rebuild exists, and what it reads</summary>
 
@@ -215,18 +222,39 @@ and the sandboxed app never gains read access to your whole home directory.
 
 ### Claude Code
 
-Wired up as soon as you run `install-island-hooks.py`.
+The first time Perch opens, the card offers **Connect**; press it. Building
+from source, `install-island-hooks.py` does the same.
 
 ### codex
 
-The finished state arrives through codex's notify script; the running and
-waiting-for-approval states go through `~/.codex/hooks.json`. codex only runs
-hooks you have trusted in its `/hooks` panel. If the green count moves but blue
-and yellow never do, that trust usually hasn't been granted yet.
+Running, waiting for approval and finished all go through
+`~/.codex/hooks.json`, which **Connect** (or `install-codex-island-hooks.py`)
+fills in; a source install also rings the finished state through codex's notify
+script. codex only runs hooks you have trusted in its `/hooks` panel. If the
+bird never reacts to codex, or only the green count moves, that trust usually
+hasn't been granted yet.
 
 ---
 
 ## Install
+
+### Download
+
+1. Download `Perch-<version>.zip` from the
+   [latest release](https://github.com/mossfinch/perch/releases/latest) and
+   unzip it. It runs on Apple silicon and Intel Macs with macOS 15 or newer.
+2. Move **Perch** into **Applications**. It has to live there: the hooks find
+   it at that path.
+3. Open it. The first time, macOS asks you to allow it once:
+   **System Settings → Privacy & Security → Open Anyway**.
+4. The card opens by itself and offers **Connect**. Press it, and Perch wires up
+   the agents it finds on this Mac. For codex, trust the new hooks once in its
+   `/hooks` panel.
+
+The download leaves out the history rebuild described above; to get it, build
+from source.
+
+### Build from source
 
 You need:
 
@@ -253,9 +281,10 @@ socket for real, confirming that the app is not just running as a process but
 is actually able to receive events.
 
 <details>
-<summary>What the hook installers change</summary>
+<summary>What connecting changes</summary>
 
-The hook installers first leave a timestamped `.perch-backup-*` copy beside
+**Connect** and the hook installers follow the same rules and write the same
+bytes. They first leave a timestamped `.perch-backup-*` copy beside
 your existing config, then append only the entries that belong to Perch. They
 never reorder, remove or rewrite anyone else's hooks, including hooks that
 happen to sit in the same group as Perch's.
@@ -279,6 +308,7 @@ rm ~/Library/LaunchAgents/io.github.mossfinch.perch.plist
 launchctl bootout gui/$UID/io.github.mossfinch.perch.reconcile
 rm ~/Library/LaunchAgents/io.github.mossfinch.perch.reconcile.plist
 rm ~/.perch/bin/perch-reconcile
+rm -f ~/.perch/bin/perch-hook
 rm -rf ~/.perch/reconciliation
 rm -rf /Applications/Perch.app
 ```
@@ -286,7 +316,8 @@ rm -rf /Applications/Perch.app
 If you installed the hooks, you also need to remove Perch's entries from:
 
 - `~/.claude/settings.json` and `~/.codex/hooks.json`: delete the Perch entries
-  whose command mentions `bridge.sock`, or restore the `.perch-backup-*` copy
+  whose command mentions `.perch/bin/perch-hook` (older versions wrote
+  `bridge.sock`), or restore the `.perch-backup-*` copy
   sitting beside each file;
 - `~/.codex/hooks/codex-notify-sound.sh`: delete the completion-sound block
   headed `# --- Perch`. This file gets a `.perch-backup-*` copy of its own, so
@@ -330,6 +361,17 @@ node --test tests/island-*.test.js                        # run the tests
 `perch-package.json` is the single manifest of the public package's file
 boundary. A privacy guard in the test suite scans every file the manifest
 covers.
+
+To record the island without showing your own projects or week, stop the
+running Perch and start it with `--demo`. It shows made-up projects and a
+made-up week from a scratch folder and leaves your own data alone. Quit it with
+Ctrl-C, and the last line brings your Perch back.
+
+```bash
+launchctl bootout gui/$UID/io.github.mossfinch.perch
+/Applications/Perch.app/Contents/MacOS/Perch --demo
+launchctl bootstrap gui/$UID ~/Library/LaunchAgents/io.github.mossfinch.perch.plist
+```
 
 ---
 

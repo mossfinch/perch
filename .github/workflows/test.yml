@@ -1,0 +1,23 @@
+name: tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    # The suite compiles Swift with swiftc and reads macOS tools, so it runs on a Mac.
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: JavaScript suite
+        run: node --test tests/island-*.test.js
+      - name: Python suite
+        run: python3 -B -m unittest discover -s tests -p '*_test.py'

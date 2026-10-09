@@ -34,6 +34,19 @@ enum AppGroup {
         return value
     }()
 
+    /// Started with `--demo` to record the island in public (see `DemoMode`). Every read and
+    /// write asks `containerURL` where to go, so answering with a scratch directory is enough
+    /// to keep a recording away from the real projects and the real week, and to keep demo
+    /// events out of the real readings.
+    static let isDemo = CommandLine.arguments.contains("--demo")
+
+    /// Short on purpose: a Unix socket path inside it must stay under 104 bytes.
+    private static let demoContainer: URL = {
+        let url = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("pd-\(getpid())")
+        try? FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
+        return url
+    }()
+
     /// Crashes when the container is unavailable instead of falling back. In a
     /// sandboxed app, a computed fallback path would quietly put the socket and
     /// the ledger in a directory nothing else can read.
@@ -43,6 +56,7 @@ enum AppGroup {
     /// only a backstop. Misconfiguration is caught by the format check above
     /// and by the installer's check of the signed entitlements.
     static let containerURL: URL = {
+        if isDemo { return demoContainer }
         guard let url = FileManager.default
             .containerURL(forSecurityApplicationGroupIdentifier: id) else {
             fatalError("Cannot get the App Group container (id=\"\(id)\"). Check that "

@@ -58,9 +58,15 @@ struct GuidedCareCard: View {
                 TopWeekRow(viewModel: viewModel)
                     .frame(height: GuidedCareLayout.topRowHeight)
 
-                AgentActivityStrip(projects: viewModel.projects, flow: viewModel.flow,
-                                   onTap: { viewModel.correctFlow() })
-                    .frame(height: GuidedCareLayout.activityHeight, alignment: .leading)
+                Group {
+                    if viewModel.agentSetup == .hidden {
+                        AgentActivityStrip(projects: viewModel.projects, flow: viewModel.flow,
+                                           onTap: { viewModel.correctFlow() })
+                    } else {
+                        agentSetupRow
+                    }
+                }
+                .frame(height: GuidedCareLayout.activityHeight, alignment: .leading)
             }
             .padding(.top, GuidedCareLayout.activityTopPadding)
             .padding(.horizontal, GuidedCareLayout.contentHorizontalInset)
@@ -79,8 +85,9 @@ struct GuidedCareCard: View {
     }
 
     /// The island's one switch, in the one place that is empty in every state.
-    /// The three rows above are instruments and carry readings, never
-    /// controls; the figures sit centred, so the corner under them is never
+    /// The three rows above are instruments and carry readings, not controls
+    /// (the Connect offer borrows the second row only until the agents are
+    /// wired); the figures sit centred, so the corner under them is never
     /// used. An overlay, so it adds no height and moves nothing.
     ///
     /// Muted is drawn brighter than sounding: a switch you turned off has to
@@ -104,6 +111,45 @@ struct GuidedCareCard: View {
         .padding(.trailing, IslandCardShape(topEdge: .notch).topCornerRadius + 16)
         .padding(.bottom, 8)
         .accessibilityLabel(viewModel.chimeMuted ? "Completion chime off" : "Completion chime on")
+    }
+
+    /// Takes the second row while the agents are not wired: until they are, the wave and the
+    /// dots have nothing to show, and this row is where they would appear. Same height, so
+    /// nothing else on the card moves.
+    private var agentSetupRow: some View {
+        let line: String
+        switch viewModel.agentSetup {
+        case .hidden, .needsConnect: line = "Perch can't hear Claude Code or codex yet"
+        case .notInApplications: line = "Move Perch to Applications to connect your agents"
+        case .failed(let reason): line = "Couldn't connect: \(reason)"
+        case .connected(let trust):
+            line = trust ? "Connected. In codex, trust Perch's hooks once under /hooks"
+                         : "Connected. Your agents will show up here"
+        }
+        return HStack(spacing: 10) {
+            Circle()
+                .fill(IslandPalette.cue)
+                .frame(width: 6, height: 6)
+            Text(line)
+                .font(ProjectCaption.font)
+                .foregroundStyle(IslandPalette.paper.opacity(0.78))
+                .lineLimit(1)
+                .truncationMode(.middle)
+                .help(line)
+            Spacer(minLength: 8)
+            if viewModel.agentSetup == .needsConnect {
+                // Solid accent, the card's one call-to-action style (see `recommendationControls`).
+                Button { viewModel.connectAgents() } label: {
+                    Text("Connect")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(IslandPalette.paper)
+                        .padding(.horizontal, 14)
+                        .frame(height: 24)
+                        .background(IslandPalette.accent, in: Capsule())
+                }
+                .buttonStyle(.plain)
+            }
+        }
     }
 
     // Title row (title left, controls right) / the frame strip centered full-width, taking the whole bottom

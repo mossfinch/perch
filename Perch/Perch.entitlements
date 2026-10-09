@@ -8,5 +8,11 @@
     <array>
         <string>group.io.github.mossfinch.perch</string>
     </array>
+    <key>com.apple.security.temporary-exception.files.home-relative-path.read-write</key>
+    <array>
+        <string>/.claude/</string>
+        <string>/.codex/</string>
+        <string>/.perch/</string>
+    </array>
 </dict>
 </plist>

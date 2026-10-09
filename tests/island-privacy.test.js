@@ -733,3 +733,38 @@ test("nothing that ships names an internal work order", () => {
   assert.equal(commentKindFor("perch-hook.sh"), "shell");
   assert.equal(commentKindFor("logo.png"), null, "control: binaries are being read as text");
 });
+
+test("a demo recording never opens the real container", () => {
+  // `--demo` is for recording the island in public. It shows made-up projects and a made-up
+  // week only because every read and write asks `AppGroup.containerURL` where to go, and that
+  // answers with a scratch directory. One lookup that went around it would put a real week
+  // on screen, or demo events into the real readings.
+  const sources = islandTree().filter((p) => p.endsWith(".swift"))
+    .map((p) => [path.basename(p), fs.readFileSync(islandPath(path.basename(p)), "utf8")]);
+  const lookups = sources.filter(([, src]) => /containerURL\(forSecurityApplicationGroupIdentifier/.test(src))
+    .map(([name]) => name);
+  assert.deepEqual(lookups, ["AppGroup.swift"], "the container is looked up somewhere other than AppGroup");
+  const appGroup = fs.readFileSync(islandPath("AppGroup.swift"), "utf8");
+  assert.ok(appGroup.indexOf("if isDemo") < appGroup.indexOf(".containerURL(forSecurityApplicationGroupIdentifier: id)"),
+    "the demo switch must come before the real lookup");
+  // Control: the scan reads real files, so an empty list would not mean "clean".
+  assert.ok(sources.filter(([, src]) => /AppGroup\.containerURL/.test(src)).length >= 5,
+    "control: too few container users seen");
+
+  // Run it: the container is scratch, and the week seeded into it is made up and in the past.
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "perch-demo-"));
+  const main = path.join(tmp, "main.swift");
+  fs.writeFileSync(main, "DemoMode.seed()\nprint(AppGroup.containerURL.path)\n");
+  const binary = path.join(tmp, "demo");
+  execFileSync("swiftc", ["AppGroup.swift", "DemoMode.swift", "AgentEventLog.swift", "AgentEventMonitor.swift",
+    "FlowMath.swift"].map(islandPath).concat([main, "-o", binary]), { stdio: "pipe" });
+  const container = execFileSync(binary, ["--demo"], { encoding: "utf8" }).trim();
+  assert.doesNotMatch(container, /Group Containers/);
+  const now = Date.now();
+  const lines = fs.readdirSync(path.join(container, "agent-events"))
+    .flatMap((f) => fs.readFileSync(path.join(container, "agent-events", f), "utf8").trim().split("\n"))
+    .map((l) => JSON.parse(l));
+  assert.ok(lines.length > 20, "control: no demo week was seeded");
+  assert.deepEqual([...new Set(lines.map((l) => path.dirname(l.project)))], ["/demo"], "a demo event names a real place");
+  assert.ok(lines.every((l) => Date.parse(l.t) <= now), "the demo week reaches into the future");
+});

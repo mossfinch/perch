@@ -4,15 +4,15 @@
 <dict>
     <key>com.apple.security.app-sandbox</key>
     <true/>
-    <key>com.apple.security.application-groups</key>
-    <array>
-        <string>group.io.github.mossfinch.perch</string>
-    </array>
     <key>com.apple.security.temporary-exception.files.home-relative-path.read-write</key>
     <array>
         <string>/.claude/</string>
         <string>/.codex/</string>
         <string>/.perch/</string>
+    </array>
+    <key>com.apple.security.temporary-exception.sbpl</key>
+    <array>
+        <string>(allow network-bind (local unix-socket (subpath (string-append (param "_HOME") "/.perch/island"))))</string>
     </array>
 </dict>
 </plist>

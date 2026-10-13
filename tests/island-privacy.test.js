@@ -186,29 +186,25 @@ test("no Team ID anywhere in the island's files — it links to the registrant's
     assert.match(ignore, /^Config\.xcconfig$/m, "the real-value file must be gitignored");
   }
 
-  // Info.plist and the entitlements are two declarations of one fact and must
-  // name the same group: diverge and the island can't reach its container
-  // while the UI looks perfectly fine
+  // No App Group, in either of the two places that used to declare one: an ad-hoc app's
+  // group container made macOS ask on every launch, and "Don't Allow" cost every event.
   const ent = fs.readFileSync(islandPath("Perch.entitlements"), "utf8");
   const plist = fs.readFileSync(islandPath("Info.plist"), "utf8");
-  const group = plist.match(/<key>AppGroupID<\/key>\s*<string>([^<]+)<\/string>/)?.[1];
-  assert.ok(group && group.startsWith("group."), `Info.plist's AppGroupID should look like group.xxx, got ${group}`);
-  assert.ok(ent.includes(`<string>${group}</string>`), "entitlements and Info.plist disagree on the App Group");
+  assert.doesNotMatch(ent, /application-groups/);
+  assert.doesNotMatch(plist, /AppGroupID/);
 
-  // Swift reads Info.plist and crashes on misconfiguration: an island
-  // without its App Group is a silent husk, with no socket, no events, and a UI
-  // looking fine. Better to crash than to pretend.
-  const mon = fs.readFileSync(islandPath("AppGroup.swift"), "utf8");
-  assert.match(mon, /Bundle\.main\.object\(forInfoDictionaryKey: "AppGroupID"\)/);
-  assert.match(mon, /fatalError/);
+  // An island that cannot open its socket is a silent husk: no events, a UI looking fine.
+  // It must say so on the card instead of pretending.
+  const mon = fs.readFileSync(islandPath("AgentEventMonitor.swift"), "utf8");
+  assert.match(mon, /guard bound == 0 else \{[\s\S]{0,80}reportFailure\("bind"/);
+  assert.match(viewModelSource(), /onListenFailed = \{[\s\S]{0,240}\.cannotListen\(reason\)/);
+  assert.match(fs.readFileSync(islandPath("GuidedCareCard.swift"), "utf8"), /case \.cannotListen\(let reason\)/);
 
-  // The installer must check before installing; an app without the
-  // entitlement must never be installed with a success report. What gets
-  // checked is what the signature carries: "the container path resolves"
-  // proves nothing, because that API returns a path even for made-up ids.
+  // The installer must check before installing, and what it checks is what the signature
+  // carries, not what the repo file says.
   const inst = fs.readFileSync(pkgPath("install-island-app.py"), "utf8");
   assert.match(inst, /codesign", "-d", "--entitlements"/, "must check the signed entitlements before install");
-  assert.match(inst, /com\.apple\.security\.application-groups" not in out/);
+  assert.match(inst, /def check_entitlements/);
   assert.match(inst, /raise SystemExit/);
 
   // No project-generator recipes: one xcodegen run rebuilds the project from
@@ -217,57 +213,23 @@ test("no Team ID anywhere in the island's files — it links to the registrant's
     assert.ok(!fs.existsSync(pkgPath(f)), `${f} must not exist`);
   }
 
-  // Group validation comes in two families: at build time only `group.x` is
-  // accepted, at run time both `group.x` and `<TeamID>.group.x` are.
-  // A Team-signed build's container carries the signing Team prefix, so the
-  // run-time readers must accept that shape.
-  // The Team prefix is only ever read at run time, from the installed plist or
-  // Config.xcconfig, and may never be written into source.
-  // install-island-app.py reads the built product before the prefix is
-  // injected, so it must use the strict rule.
-  // The hook installers and the day report read the installed app, so they
-  // must use the rule that tolerates both shapes.
-  {
-    const s = fs.readFileSync(pkgPath("install-island-app.py"), "utf8");
-    assert.match(s, /not out\.startswith\("group\."\) or not out\.removeprefix\("group\."\)/,
-      "install-island-app.py: validation not strict enough");
+  // No reader resolves an App Group any more, so there is no group spelling to validate
+  // and no Team prefix to tolerate: every reader names the one folder the island writes.
+  for (const f of ["install-island-app.py", "install-island-hooks.py",
+                   "install-codex-island-hooks.py", "island-day-report.py", "perch-hook.sh"]) {
+    const src = fs.readFileSync(pkgPath(f), "utf8");
+    assert.doesNotMatch(src, /Print :AppGroupID/, `${f} still reads an App Group from the installed app`);
+    assert.match(src, /\.perch\/island|"\.perch" \/ "island"/, `${f} does not name ~/.perch/island`);
   }
-  // The tolerant rule must still validate the `group.x` core and refuse a bad
-  // value on the spot.
-  {
-    const s = fs.readFileSync(pkgPath("island-day-report.py"), "utf8");
-    assert.match(s, /not core\.startswith\("group\."\) or not core\.removeprefix\("group\."\)/,
-      "island-day-report.py: no longer validates the group core (group.xxx)");
-    assert.match(s, /raise SystemExit\(f"Bad App Group in the installed island/,
-      "island-day-report.py: a bad group must error on the spot, never pass silently");
-    assert.doesNotMatch(s, /\b[0-9A-Z]{10}\.group\./,
-      "island-day-report.py: a Team ID leaked into the group validator");
-  }
-  for (const f of ["install-island-hooks.py", "install-codex-island-hooks.py"]) {
-    const s = fs.readFileSync(pkgPath(f), "utf8");
-    assert.match(s, /not core\.startswith\("group\."\) or not core\.removeprefix\("group\."\)/,
-      `${f}: no longer validates the group core (group.xxx)`);
-    assert.match(s, /raise SystemExit\(f"Bad App Group in the installed app/,
-      `${f}: a bad group must error on the spot, never pass silently`);
-    assert.doesNotMatch(s, /\b[0-9A-Z]{10}\.group\./,
-      `${f}: a Team ID leaked into the group validator`);
-  }
-  // Same check on the Swift side, which accepts two shapes. The prefix-free
-  // container is not always reachable on macOS (TCC protects group containers;
-  // see AppGroup.swift), so AppGroup.swift also accepts the locally injected
-  // <TeamID>.group.xxx. The plain shape is still validated, and a second clause
-  // validates the Team-prefixed shape's core. Neither writes a Team ID literal;
-  // the guard names only the two shapes.
-  assert.match(mon, /value\.hasPrefix\("group\."\) && value\.count > "group\."\.count/,
-    "the plain group.xxx shape must still be validated");
-  assert.match(mon, /rest\.hasPrefix\("group\."\) && rest\.count > "group\."\.count/,
-    "the Team-prefixed <TeamID>.group.xxx shape must be accepted, its core validated");
-  assert.match(mon, /guard isPlain \|\| isTeamPrefixed else/,
-    "exactly those two shapes pass the guard, nothing else");
-  // The Team prefix must not come back into the repo: committed Info.plist and
-  // entitlements stay prefix-free ($(DEVELOPMENT_TEAM) would stamp it into the
-  // shipped binary and name a folder after it on every user's machine). The
-  // prefix is injected into the built product at install time, never here.
+  assert.doesNotMatch(fs.readFileSync(islandPath("DataHome.swift"), "utf8"), /AppGroupID|forSecurityApplicationGroupIdentifier/);
+  // Owner-only, like ~/.claude and the container it replaced: ~/.perch itself is world-readable.
+  assert.match(fs.readFileSync(islandPath("DataHome.swift"), "utf8"), /setAttributes\(\[\.posixPermissions: 0o700\]/);
+  // And it is checked, not hoped for: until the folder is private the socket stays shut.
+  assert.match(fs.readFileSync(islandPath("AgentEventMonitor.swift"), "utf8"),
+    /if let problem = DataHome\.privacyProblem \{ return reportFailure\(problem, nil\) \}\s*\n\s*let url = Self\.socketURL/);
+
+  // No Team ID may come back through the build settings either: $(DEVELOPMENT_TEAM) in
+  // either file would stamp it into the shipped binary.
   assert.doesNotMatch(ent, /\$\(DEVELOPMENT_TEAM\)/, "no Team prefix in the entitlements");
   assert.doesNotMatch(plist, /\$\(DEVELOPMENT_TEAM\)/, "no Team prefix in Info.plist");
 });
@@ -734,32 +696,31 @@ test("nothing that ships names an internal work order", () => {
   assert.equal(commentKindFor("logo.png"), null, "control: binaries are being read as text");
 });
 
-test("a demo recording never opens the real container", () => {
+test("a demo recording never opens the real ~/.perch/island", () => {
   // `--demo` is for recording the island in public. It shows made-up projects and a made-up
-  // week only because every read and write asks `AppGroup.containerURL` where to go, and that
+  // week only because every read and write asks `DataHome.url` where to go, and that
   // answers with a scratch directory. One lookup that went around it would put a real week
   // on screen, or demo events into the real readings.
   const sources = islandTree().filter((p) => p.endsWith(".swift"))
     .map((p) => [path.basename(p), fs.readFileSync(islandPath(path.basename(p)), "utf8")]);
-  const lookups = sources.filter(([, src]) => /containerURL\(forSecurityApplicationGroupIdentifier/.test(src))
-    .map(([name]) => name);
-  assert.deepEqual(lookups, ["AppGroup.swift"], "the container is looked up somewhere other than AppGroup");
-  const appGroup = fs.readFileSync(islandPath("AppGroup.swift"), "utf8");
-  assert.ok(appGroup.indexOf("if isDemo") < appGroup.indexOf(".containerURL(forSecurityApplicationGroupIdentifier: id)"),
-    "the demo switch must come before the real lookup");
+  const lookups = sources.filter(([, src]) => /"\.perch\/island"/.test(src)).map(([name]) => name);
+  assert.deepEqual(lookups, ["DataHome.swift"], "~/.perch/island is named somewhere other than DataHome");
+  const home = fs.readFileSync(islandPath("DataHome.swift"), "utf8");
+  assert.ok(home.indexOf("if isDemo") >= 0 && home.indexOf("if isDemo") < home.indexOf('".perch/island"'),
+    "the demo switch must come before the real folder");
   // Control: the scan reads real files, so an empty list would not mean "clean".
-  assert.ok(sources.filter(([, src]) => /AppGroup\.containerURL/.test(src)).length >= 5,
-    "control: too few container users seen");
+  assert.ok(sources.filter(([, src]) => /DataHome\.url/.test(src)).length >= 5,
+    "control: too few users of DataHome.url seen");
 
   // Run it: the container is scratch, and the week seeded into it is made up and in the past.
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "perch-demo-"));
   const main = path.join(tmp, "main.swift");
-  fs.writeFileSync(main, "DemoMode.seed()\nprint(AppGroup.containerURL.path)\n");
+  fs.writeFileSync(main, "DemoMode.seed()\nprint(DataHome.url.path)\n");
   const binary = path.join(tmp, "demo");
-  execFileSync("swiftc", ["AppGroup.swift", "DemoMode.swift", "AgentEventLog.swift", "AgentEventMonitor.swift",
+  execFileSync("swiftc", ["DataHome.swift", "DemoMode.swift", "AgentEventLog.swift", "AgentEventMonitor.swift",
     "FlowMath.swift"].map(islandPath).concat([main, "-o", binary]), { stdio: "pipe" });
   const container = execFileSync(binary, ["--demo"], { encoding: "utf8" }).trim();
-  assert.doesNotMatch(container, /Group Containers/);
+  assert.doesNotMatch(container, /\.perch/);
   const now = Date.now();
   const lines = fs.readdirSync(path.join(container, "agent-events"))
     .flatMap((f) => fs.readFileSync(path.join(container, "agent-events", f), "utf8").trim().split("\n"))
@@ -767,4 +728,34 @@ test("a demo recording never opens the real container", () => {
   assert.ok(lines.length > 20, "control: no demo week was seeded");
   assert.deepEqual([...new Set(lines.map((l) => path.dirname(l.project)))], ["/demo"], "a demo event names a real place");
   assert.ok(lines.every((l) => Date.parse(l.t) <= now), "the demo week reaches into the future");
+});
+
+test("~/.perch/island is trusted with private data only when it really is private", () => {
+  // Run the real check against folders made to look each way. Owner-only must pass, or a
+  // check that refuses everything would look just as careful.
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "perch-private-"));
+  const mk = (name, mode) => { const p = path.join(tmp, name); fs.mkdirSync(p); fs.chmodSync(p, mode); return p; };
+  const cases = {
+    private: mk("private", 0o700),
+    readable: mk("readable", 0o755),
+    groupWritable: mk("group-writable", 0o770),
+    missing: path.join(tmp, "missing"),
+  };
+  cases.link = path.join(tmp, "link");
+  fs.symlinkSync(cases.private, cases.link);
+  const main = path.join(tmp, "main.swift");
+  fs.writeFileSync(main, `
+import Foundation
+for p in CommandLine.arguments.dropFirst() { print(DataHome.privacyProblem(at: p) ?? "ok") }
+`);
+  const binary = path.join(tmp, "check");
+  execFileSync("swiftc", [islandPath("DataHome.swift"), main, "-o", binary], { stdio: "pipe" });
+  const names = Object.keys(cases);
+  const said = execFileSync(binary, names.map((k) => cases[k]), { encoding: "utf8" }).trim().split("\n");
+  const verdict = Object.fromEntries(names.map((k, i) => [k, said[i]]));
+  assert.equal(verdict.private, "ok");
+  assert.match(verdict.readable, /read by other accounts/);
+  assert.match(verdict.groupWritable, /read by other accounts/);
+  assert.match(verdict.link, /link to somewhere else/);
+  assert.match(verdict.missing, /cannot be opened/);
 });

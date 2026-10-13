@@ -176,7 +176,7 @@ precondition(CareMovePool.next(after: all[all.count - 1].id) == all[0], "wrap")
 precondition(CareMovePool.next(after: "no-such-move") == all[0], "unknown id")
 print("ok")
 `);
-  execFileSync("swiftc", [CARE_MOVE_POOL_SWIFT, islandPath("CareLedger.swift"), islandPath("AppGroup.swift"), main,
+  execFileSync("swiftc", [CARE_MOVE_POOL_SWIFT, islandPath("CareLedger.swift"), islandPath("DataHome.swift"), main,
                           "-o", binary], { stdio: "pipe" });
   assert.equal(execFileSync(binary, { encoding: "utf8" }).trim(), "ok");
 });

@@ -43,10 +43,12 @@ test("perch target is wired as an LSUIElement notch app", () => {
   assert.match(plist, /<key>LSUIElement<\/key>\s*<true\/>/);
 
   const ent = fs.readFileSync(islandPath("Perch.entitlements"), "utf8");
-  // No literal id asserted: a Team ID links to a developer account's real
-  // name. The invariant stands: the entitlements must declare an App Group.
-  assert.match(ent, /<key>com\.apple\.security\.application-groups<\/key>/);
-  assert.match(ent, /<string>group\.[^<]+<\/string>/);
+  // The invariant turned around: no App Group. A download is ad-hoc signed, and macOS
+  // treats an ad-hoc app's group container as another app's data: a prompt on every
+  // launch, and after "Don't Allow" no event ever arrives. Everything lives in
+  // ~/.perch/island instead (DataHome.swift).
+  assert.doesNotMatch(ent, /application-groups/);
+  assert.doesNotMatch(plist, /AppGroupID/);
 
   const controller = fs.readFileSync(islandPath("IslandWindowController.swift"), "utf8");
   assert.match(controller, /NSPanel\(/);
@@ -75,18 +77,63 @@ test("island is single-instance and installable as a real app", () => {
   assert.match(installer, /Path\("\/Applications"\) \/ APP_NAME/);   // installed into /Applications, double-clickable
   assert.match(installer, /LaunchAgents/);                            // starts at login
   assert.match(installer, /"RunAtLoad": True/);
-  // KeepAlive must be false: stacked on the single-instance guard it becomes a start→suicide→restart flap
-  assert.match(installer, /"KeepAlive": False/);
-  // Entitlement missing = sandbox denies the container = every hook event lost; must be caught at install.
-  // What gets checked is that the signature really carries the app-group
-  // entitlement: with no Team prefix in the group name, "TeamIdentifier ==
-  // group prefix" checks are meaningless and miss the real failure anyway.
-  assert.match(installer, /def check_entitlement/);
-  assert.match(installer, /def app_group_of/);
-  // Read from the product, never compare against a hard-coded constant: the
-  // constant eventually drifts from the real config, after which it can only
-  // ever report "check passed"
-  assert.match(installer, /Print :AppGroupID/);
+  // Restart after an unclean exit only: a plain KeepAlive stacked on the single-instance guard
+  // (which exits cleanly) becomes a start→exit→restart flap, and no KeepAlive at all leaves the
+  // notch empty after macOS kills the app itself
+  assert.match(installer, /"KeepAlive": \{"SuccessfulExit": False\}/);
+  // Every build is ad-hoc, the installed one as much as a download: no second signing path.
+  assert.doesNotMatch(installer, /DEVELOPMENT_TEAM|signing_identity|inject_team_prefix/);
+  assert.match(installer, /sign_adhoc\(built\)\n\s*check_entitlements\(built\)/);
+});
+
+test("the installer reads the signature itself, and refuses each wrong shape", () => {
+  // Signed for real, then checked: what a signature carries is the only thing that decides
+  // what the sandbox allows. Each wrong shape fails silently at run time, so each must be
+  // refused here, and the right one must pass, or a check that refuses everything would
+  // look just as strict.
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "perch-ent-"));
+  const py = `
+import importlib.util, plistlib, shutil, subprocess, sys, pathlib
+spec = importlib.util.spec_from_file_location("inst", sys.argv[1])
+m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
+tmp = pathlib.Path(sys.argv[2]); repo = plistlib.loads(pathlib.Path(sys.argv[3]).read_bytes())
+def signed(name, ent):
+    app = tmp / name / "Probe.app"; (app / "Contents/MacOS").mkdir(parents=True)
+    shutil.copy("/usr/bin/true", app / "Contents/MacOS/Probe")
+    (app / "Contents/Info.plist").write_bytes(plistlib.dumps({"CFBundleExecutable": "Probe", "CFBundleIdentifier": "io.example.probe"}))
+    (tmp / (name + ".ent")).write_bytes(plistlib.dumps(ent))
+    subprocess.run(["codesign", "--force", "-s", "-", "--entitlements", str(tmp / (name + ".ent")), str(app)], check=True, capture_output=True)
+    return app
+import contextlib
+def verdict(app):
+    try:
+        with contextlib.redirect_stdout(sys.stderr):
+            m.check_entitlements(app)
+        return "pass"
+    except SystemExit as e: return str(e)
+out = {"repo": verdict(signed("repo", repo))}
+out["group"] = verdict(signed("group", {**repo, "com.apple.security.application-groups": ["group.io.example"]}))
+out["norule"] = verdict(signed("norule", {k: v for k, v in repo.items() if not k.endswith(".sbpl")}))
+out["network"] = verdict(signed("network", {**repo, "com.apple.security.network.client": True}))
+out["nosandbox"] = verdict(signed("nosandbox", {k: v for k, v in repo.items() if k != "com.apple.security.app-sandbox"}))
+sbpl = "com.apple.security.temporary-exception.sbpl"
+out["extrarule"] = verdict(signed("extrarule", {**repo, sbpl: repo[sbpl] + ["(allow network*)"]}))
+rw = "com.apple.security.temporary-exception.files.home-relative-path.read-write"
+out["extrafolder"] = verdict(signed("extrafolder", {**repo, rw: repo[rw] + ["/Documents/"]}))
+out["extrakey"] = verdict(signed("extrakey", {**repo, "com.apple.security.files.user-selected.read-write": True}))
+import json; print(json.dumps(out))
+`;
+  const out = JSON.parse(execFileSync("python3", ["-B", "-c", py, pkgPath("install-island-app.py"), tmp,
+    islandPath("Perch.entitlements")], { encoding: "utf8" }));
+  assert.equal(out.repo, "pass", "the repo's own entitlements do not pass the installer's check");
+  assert.match(out.group, /App Group/);
+  assert.match(out.norule, /socket bind/);
+  // Present is not enough; the set must be exact, or one added rule undoes the sandbox.
+  assert.match(out.extrarule, /not exactly the one/);
+  assert.match(out.extrafolder, /not exactly ~\/\.claude/);
+  assert.match(out.extrakey, /nothing here expects: com\.apple\.security\.files\.user-selected\.read-write/);
+  assert.match(out.network, /network access: com\.apple\.security\.network\.client/);
+  assert.match(out.nosandbox, /sandbox is off/);
 });
 
 test("the app installer keeps the scanner outside the sandbox and publishes through Perch", () => {
@@ -95,7 +142,7 @@ test("the app installer keeps the scanner outside the sandbox and publishes thro
     "sys.path.insert(0, 'tests')",
     "from installer_marker import load_functions",
     `ns = load_functions(${JSON.stringify(pkgPath("install-island-app.py"))}, ['reconciler_launch_agent_spec'], {'Path': pathlib.Path})`,
-    "spec = ns['reconciler_launch_agent_spec']('TEAM.group.io.github.mossfinch.perch', pathlib.Path('/tmp/perch-owner'))",
+    "spec = ns['reconciler_launch_agent_spec'](pathlib.Path('/tmp/perch-owner'))",
     "assert spec['Label'] == 'io.github.mossfinch.perch.reconcile'",
     "assert spec['RunAtLoad'] is True",
     "assert spec['StartInterval'] == 1800",
@@ -105,9 +152,9 @@ test("the app installer keeps the scanner outside the sandbox and publishes thro
     "assert args[1] == '-B'",
     "assert '/tmp/perch-owner/.perch/bin/perch-reconcile' in args",
     "assert args[args.index('--lookback-days') + 1] == '7'",
-    "assert '--hook-ledger' not in args, 'plain launchd cannot read a Team App Group ledger'",
+    "assert '--hook-ledger' not in args, 'the hook ledger comes over the bridge, from the island that owns it'",
     "assert args[args.index('--out-dir') + 1] == '/tmp/perch-owner/.perch/reconciliation'",
-    "assert args[args.index('--bridge-socket') + 1].endswith('/TEAM.group.io.github.mossfinch.perch/bridge.sock')",
+    "assert args[args.index('--bridge-socket') + 1] == '/tmp/perch-owner/.perch/island/bridge.sock'",
     "assert all('perch-hook' not in value for value in args), 'reconciler must not rewrite or depend on the trusted hook launcher'",
     "print('ok')",
   ].join("\n");
@@ -130,7 +177,7 @@ test("the island's own launchd job has somewhere to put what it says", () => {
     "assert spec['StandardErrorPath'] == logs + '/perch-error.log', spec.get('StandardErrorPath')",
     "assert spec['StandardOutPath'] != spec['StandardErrorPath'], 'one file cannot say which stream said it'",
     "assert spec['RunAtLoad'] is True",
-    "assert spec['KeepAlive'] is False, 'KeepAlive turns the single-instance guard into a start/exit flap'",
+    "assert spec['KeepAlive'] == {'SuccessfulExit': False}, 'restart after a kill; a clean exit (quit, the single-instance guard) must stay down or the guard flaps'",
     "assert spec['ProcessType'] == 'Interactive'",
     "assert spec['ProgramArguments'] == ['/tmp/Perch.app/Contents/MacOS/Perch'], spec['ProgramArguments']",
     "assert spec['Label'] == 'io.github.mossfinch.perch'",
@@ -172,11 +219,11 @@ test("the installer's socket check waits for a real connection, never for the fi
     "def nap(seconds): naps.append(seconds)",
     // ① Refused twice (the leftover), then the fresh island binds -> must pass
     "answers = iter([1, 1, 0])",
-    "verify('group.x', pathlib.Path('/nonexistent/bridge.sock'), lambda: next(answers), nap)",
+    "verify(pathlib.Path('/nonexistent/bridge.sock'), lambda: next(answers), nap)",
     "assert len(naps) == 2, 'it stopped retrying the connect; waited only %d time(s)' % len(naps)",
     "def refuses(sock, why):",
     "    try:",
-    "        verify('group.x', sock, lambda: 1, nap)",
+    "        verify(sock, lambda: 1, nap)",
     "        raise AssertionError('did not fail: ' + why)",
     "    except SystemExit as e:",
     "        return str(e)",
@@ -363,123 +410,143 @@ test("hook installers recognize their own entries: no amnesia on container chang
   }
 });
 
-test("ledger migration after a container change: source named by a human, four dangers all refused", () => {
-  // Changing the App Group changes the folder. Without the move the island
-  // starts from an empty ledger, and the first session writes a new one with
-  // one record, which looks like dozens of history entries vanishing. So
-  // migration must be a procedure, not a one-off manual copy.
+test("moving out of the old container: source named by a human, every danger refused, all or nothing", () => {
+  // The island used to keep its history in an App Group container and now keeps it in
+  // ~/.perch/island. Without the move it starts from an empty folder, which looks
+  // exactly like the history vanishing. So the move is a procedure, not a manual copy.
   //
-  // The source must be named by a person (--migrate-from), never scanned for:
-  // with no Team prefix (a Team ID is real-name information; this package
-  // carries none), a prefix scan matches every app's shared container on the
-  // machine. Everything below runs the real migration function, no grepping.
+  // The source is named by a person (--migrate-from). A machine can hold two old
+  // containers with data (a team-signed one and a bare one from an ad-hoc run) and only
+  // the person knows which is theirs. Everything below runs the real functions.
   const py = [
     "import sys, tempfile, pathlib, json, shutil, os, inspect",
     "sys.path.insert(0, 'tests')",
     "from installer_marker import load_functions",
-    "def fresh(shutil_impl=shutil):",
+    "def fresh(shutil_impl=shutil, os_impl=os):",
     `    ns = load_functions(${JSON.stringify(pkgPath("install-island-app.py"))},`,
-    "                        ['ledger_records', 'migrate_ledger'],",
-    "                        {'Path': pathlib.Path, 'shutil': shutil_impl, 'json': json, 'os': os,",
-    "                         'LEDGER_NAME': 'care-ledger.json'})",
-    "    return ns['migrate_ledger']",
-    "mig = fresh()",
-    "NEW, OLD = 'group.new', 'group.old'",
-    // Migration fixtures must satisfy the real ledger contract, or the test
-    // only proves that invalid input is refused.
+    "                        ['ledger_records', 'migrate_island_data', 'old_containers'],",
+    "                        {'Path': pathlib.Path, 'shutil': shutil_impl, 'json': json, 'os': os_impl,",
+    "                         'OLD_GROUP': 'group.io.github.mossfinch.perch',",
+    "                         'MIGRATED': ('care-ledger.json', 'day-scores.jsonl', 'agent-events', 'flow-corrections')})",
+    "    return ns",
+    "ns = fresh(); mig = ns['migrate_island_data']",
+    // Fixtures satisfy the real ledger contract, or the test only proves that invalid input is refused.
     "def record(i):",
     "    return {'date': '2026-07-30', 'moveId': 'chin-tuck', 'category': 'neck',",
     "            'sets': 1, 'seconds': 34, 'source': 'island',",
     "            'at': '2026-07-30T09:00:00+00:00'}",
-    "def setup(files):",
-    "    r = pathlib.Path(tempfile.mkdtemp())",
-    "    for g, n in files.items():",
-    "        (r/g).mkdir(parents=True)",
-    "        (r/g/'care-ledger.json').write_text(json.dumps({'version':1,'records':[record(i) for i in range(n)]}))",
-    "    return r",
-    "def count(r, g):",
-    "    f = r/g/'care-ledger.json'",
-    "    return len(json.loads(f.read_text())['records']) if f.exists() else None",
+    "def old(n=39):",
+    "    r = pathlib.Path(tempfile.mkdtemp()); src = r/'TEAM.group.io.github.mossfinch.perch'",
+    "    (src/'agent-events').mkdir(parents=True); (src/'flow-corrections').mkdir()",
+    "    (src/'care-ledger.json').write_text(json.dumps({'version':1,'records':[record(i) for i in range(n)]}))",
+    "    (src/'day-scores.jsonl').write_text('{}\\n')",
+    "    (src/'agent-events'/'2026-10-12.jsonl').write_text('a\\n'); (src/'agent-events'/'2026-10-13.jsonl').write_text('b\\n')",
+    "    (src/'flow-corrections'/'x.jsonl').write_text('c\\n')",
+    "    (src/'bridge.sock').write_text(''); (src/'reconciliation').mkdir()",
+    "    return r, src, r/'island'",
     "def refuses(fn, why):",
     "    try:",
     "        fn(); raise AssertionError('did not refuse: ' + why)",
     "    except SystemExit as e:",
     "        return str(e)",
-    // ① The normal move: copy only, never delete
-    "r = setup({OLD: 39}); mig(OLD, NEW, r)",
-    "assert count(r, NEW) == 39, 'the old ledger should have been moved over'",
-    "assert count(r, OLD) == 39, 'copy only — the source must stay untouched'",
-    // ② Target already has data -> refuse, and the error must give both counts so a human can judge
-    "r = setup({OLD: 39, NEW: 1})",
-    "msg = refuses(lambda: mig(OLD, NEW, r), 'target already has a ledger')",
-    "assert count(r, NEW) == 1, 'overwrote a target that already had a ledger — that is data loss'",
-    "assert '1 records' in msg and '39 records' in msg, 'the refusal must state both counts: ' + msg",
-    // ③ Target is a symlink -> refuse, and the linked-to file must keep every byte
-    "r = setup({OLD: 39}); (r/NEW).mkdir()",
-    "victim = r/'someone-elses.json'; victim.write_text('untouched')",
-    "(r/NEW/'care-ledger.json').symlink_to(victim)",
-    "refuses(lambda: mig(OLD, NEW, r), 'target is a symlink')",
-    "assert victim.read_text() == 'untouched', 'data was written through the symlink to somewhere else'",
-    // ④ Source is a symlink -> refuse the same way
-    "r = setup({OLD: 39}); (r/'group.link').mkdir()",
-    "(r/'group.link'/'care-ledger.json').symlink_to(r/OLD/'care-ledger.json')",
-    "refuses(lambda: mig('group.link', NEW, r), 'source is a symlink')",
-    // ⑤ Source does not parse -> refuse (moved over, the island could not read it either: the reader side's standing invariant)
-    "r = setup({OLD: 39}); (r/OLD/'care-ledger.json').write_text('{broken')",
-    "refuses(lambda: mig(OLD, NEW, r), 'source is broken JSON')",
-    "assert count(r, NEW) is None, 'a broken ledger was moved over'",
-    // ⑤b JSON-legal but the wrong shape -> refuse. A count-only check waves
-    //     this through, and then the island throws on its next launch: the
-    //     failure would have been relocated, not avoided.
-    "r = setup({OLD: 39})",
-    "(r/OLD/'care-ledger.json').write_text(json.dumps({'version': 1, 'records': [{'date': '2026-07-30'}]}))",
-    "msg = refuses(lambda: mig(OLD, NEW, r), 'records are missing their fields')",
-    "assert 'missing' in msg, 'the refusal should say what is missing: ' + msg",
-    "assert count(r, NEW) is None, 'a schema-invalid ledger was moved over'",
-    "(r/OLD/'care-ledger.json').write_text(json.dumps({'version': 1, 'records': [dict(record(0), sets=True)]}))",
-    "refuses(lambda: mig(OLD, NEW, r), 'sets is a boolean, not a count')",
-    "(r/OLD/'care-ledger.json').write_text(json.dumps({'records': [record(0)]}))",
-    "refuses(lambda: mig(OLD, NEW, r), 'no version at the top level')",
-    // ⑥ Source missing / source equals target -> refuse, never pass silently
-    "r = setup({})",
-    "refuses(lambda: mig(OLD, NEW, r), 'source does not exist at all')",
-    "refuses(lambda: mig(NEW, NEW, r), 'source and target are the same')",
-    // ⑦ Atomicity: dying halfway must leave no target at all; a half-file would block every retry forever
-    "class HalfWay:",
-    "    def __init__(self):",
-    "        self.dst = None",
-    "    def copy2(self, src, dst):",
-    "        self.dst = str(dst)",
-    "        pathlib.Path(dst).write_text('{\"version\":1,\"reco')",
-    "        raise OSError('disk full')",
-    "r = setup({OLD: 39}); impl = HalfWay(); half = fresh(impl)",
+    "def landed(island):",
+    "    return sorted(p.name for p in island.iterdir()) if island.exists() else []",
+    // ① The normal move: the four history items, copied, the source untouched; the socket
+    //    and the regenerable reconciliation cache stay behind.
+    "r, src, island = old(); msg = mig(src, island)",
+    "assert landed(island) == ['agent-events', 'care-ledger.json', 'day-scores.jsonl', 'flow-corrections'], landed(island)",
+    "assert sorted(p.name for p in (island/'agent-events').iterdir()) == ['2026-10-12.jsonl', '2026-10-13.jsonl']",
+    "assert len(json.loads((island/'care-ledger.json').read_text())['records']) == 39",
+    "assert (src/'care-ledger.json').exists() and (src/'agent-events'/'2026-10-12.jsonl').exists(), 'copy only: the source must stay'",
+    "assert '39 records' in msg, msg",
+    "assert oct(island.stat().st_mode & 0o777) == '0o700', 'the moved history is readable by other accounts: ' + oct(island.stat().st_mode & 0o777)",
+    // ② Anything already at the target -> refuse, and copy nothing, not even the other items
+    "r, src, island = old(); island.mkdir(); (island/'day-scores.jsonl').write_text('mine\\n')",
+    "refuses(lambda: mig(src, island), 'target already has day scores')",
+    "assert landed(island) == ['day-scores.jsonl'] and (island/'day-scores.jsonl').read_text() == 'mine\\n', landed(island)",
+    // ③ A target item that is a symlink -> refuse; the linked-to file keeps every byte
+    "r, src, island = old(); island.mkdir(); victim = r/'someone-elses.json'; victim.write_text('untouched')",
+    "(island/'care-ledger.json').symlink_to(victim)",
+    "refuses(lambda: mig(src, island), 'target is a symlink')",
+    "assert victim.read_text() == 'untouched', 'data was written through the symlink'",
+    // ④ A source item that is a symlink -> refuse
+    "r, src, island = old(); (src/'day-scores.jsonl').unlink(); (src/'day-scores.jsonl').symlink_to(r/'elsewhere')",
+    "refuses(lambda: mig(src, island), 'source item is a symlink')",
+    "assert landed(island) == [], landed(island)",
+    // ④b A link inside a folder: copied as-is it keeps pointing at the old place, or dangles
+    "r, src, island = old(); (src/'agent-events'/'2026-10-14.jsonl').symlink_to(src/'agent-events'/'2026-10-13.jsonl')",
+    "assert 'symbolic link' in refuses(lambda: mig(src, island), 'a link inside agent-events'); assert landed(island) == []",
+    // ④c The target folder itself is a link: nothing may be written through it
+    "r, src, island = old(); elsewhere = r/'elsewhere'; elsewhere.mkdir(); island.symlink_to(elsewhere)",
+    "refuses(lambda: mig(src, island), 'target folder is a symlink'); assert list(elsewhere.iterdir()) == []",
+    // ⑤ The ledger does not parse, or has the wrong shape -> refuse, nothing copied
+    "r, src, island = old(); (src/'care-ledger.json').write_text('{broken')",
+    "refuses(lambda: mig(src, island), 'ledger is broken JSON'); assert landed(island) == []",
+    "(src/'care-ledger.json').write_text(json.dumps({'version': 1, 'records': [{'date': '2026-07-30'}]}))",
+    "assert 'missing' in refuses(lambda: mig(src, island), 'records lack fields'); assert landed(island) == []",
+    "(src/'care-ledger.json').write_text(json.dumps({'version': 1, 'records': [dict(record(0), sets=True)]}))",
+    "refuses(lambda: mig(src, island), 'sets is a boolean'); assert landed(island) == []",
+    // ⑥ Nothing to move / not a directory -> refuse, never pass silently
+    "empty = pathlib.Path(tempfile.mkdtemp())",
+    "refuses(lambda: mig(empty, empty/'island'), 'source holds nothing')",
+    "refuses(lambda: mig(empty/'missing', empty/'island'), 'source does not exist')",
+    // ⑦ All or nothing: the copy dies on the third item -> no item at the target, no staging left
+    "class DiesLate:",
+    "    calls = 0",
+    "    def copy2(self, a, b):",
+    "        DiesLate.calls += 1",
+    "        if DiesLate.calls == 2: pathlib.Path(b).write_text('{\"version\":1,\"reco'); raise OSError('disk full')",
+    "        shutil.copy2(a, b)",
+    "    def copytree(self, a, b, symlinks=False): shutil.copytree(a, b, symlinks=symlinks)",
+    "    def rmtree(self, p, ignore_errors=False): shutil.rmtree(p, ignore_errors=ignore_errors)",
+    "r, src, island = old(); half = fresh(DiesLate())['migrate_island_data']",
     "try:",
-    "    half(OLD, NEW, r); raise AssertionError('the fake copy2 was never called; this case tested nothing')",
+    "    half(src, island); raise AssertionError('the fake copy never failed; this case tested nothing')",
     "except OSError:",
     "    pass",
-    "assert impl.dst and impl.dst.endswith('.migrating'), 'the copy went straight at the real ledger path'",
-    "assert count(r, NEW) is None, 'a truncated care-ledger.json was left at the target; once it exists the move can never run again'",
-    "assert not list((r/NEW).glob('*.migrating')), 'the failed staging file was left behind — it would block every retry'",
-    // ⑧ The source must have no default: the machine never guesses, only the caller names it
+    "assert DiesLate.calls == 2, DiesLate.calls",
+    "assert landed(island) == [], 'a partial move was left behind; the rerun would refuse it: %s' % landed(island)",
+    // ⑦b The second rename fails: what already landed is taken back, nothing is left behind,
+    //     and a rerun goes through
+    "class FlakyOS:",
+    "    calls = 0",
+    "    def __getattr__(self, name): return getattr(os, name)",
+    "    def replace(self, a, b):",
+    "        FlakyOS.calls += 1",
+    "        if FlakyOS.calls == 2: raise OSError('rename failed')",
+    "        os.replace(a, b)",
+    "r, src, island = old(); flaky = fresh(os_impl=FlakyOS())['migrate_island_data']",
+    "try:",
+    "    flaky(src, island); raise AssertionError('the fake rename never failed; this case tested nothing')",
+    "except OSError:",
+    "    pass",
+    "assert landed(island) == [], 'a partial set was left after a failed rename: %s' % landed(island)",
+    "mig(src, island); assert len(landed(island)) == 4, 'the rerun after a failed rename did not go through'",
+    // ⑧ The source has no default: the machine never guesses
     "p = inspect.signature(mig).parameters",
-    "assert list(p)[:2] == ['source_group','target_group'], 'the first two parameters should be source and target'",
-    "assert p['source_group'].default is inspect.Parameter.empty, 'the source must have no default; the machine must not guess'",
+    "assert list(p)[0] == 'source' and p['source'].default is inspect.Parameter.empty",
+    // ⑨ The hint lists only this island's old containers that hold data, bare or prefixed
+    "root = pathlib.Path(tempfile.mkdtemp())",
+    "for name, data in [('group.io.github.mossfinch.perch', True), ('ABCDE12345.group.io.github.mossfinch.perch', True),",
+    "                   ('XYZ.group.io.github.mossfinch.perch', False), ('group.io.github.mossfinch.perchling', True),",
+    "                   ('ABCDE12345.group.com.example.other', True)]:",
+    "    (root/name).mkdir()",
+    "    if data: (root/name/'care-ledger.json').write_text('{}')",
+    "assert [c.name for c in ns['old_containers'](root)] == ['ABCDE12345.group.io.github.mossfinch.perch', 'group.io.github.mossfinch.perch']",
     "print('ok')",
   ].join("\n");
   assert.equal(execFileSync("python3", ["-B", "-c", py], { encoding: "utf8", cwd: ROOT }).trim(), "ok");
 
   const inst = fs.readFileSync(pkgPath("install-island-app.py"), "utf8");
-  // Migration must run before the island starts: a running island may record
-  // at any moment, and once the target file exists the move can never run again.
-  // Capture to the trailing `if __name__`, never treat a blank line as the
-  // function's end: blank lines inside main would make this falsely red
+  // Migration runs before the island starts: a running island may write at any moment,
+  // and once a target exists the move refuses.
   const main = inst.match(/def main\(\)[\s\S]*?\nif __name__/)?.[0] ?? "";
-  assert.ok(main.indexOf("migrate_ledger(") > 0 &&
-            main.indexOf("migrate_ledger(") < main.indexOf("install_launch_agent()"),
+  assert.ok(main.indexOf("migrate_island_data(") > 0 &&
+            main.indexOf("migrate_island_data(") < main.indexOf("install_launch_agent()"),
     "migration must come before install_launch_agent()");
-  // The container scan that misfires on other apps must not come back
-  assert.doesNotMatch(inst, /glob\(\s*f?["'][^"']*care-ledger/,
-    "no guessing which ledger is old by scanning containers");
+  // Without the flag the installer only points at old data; it never moves it on a guess.
+  assert.equal((main.match(/migrate_island_data\(/g) ?? []).length, 1);
+  assert.match(main, /if opts\.migrate_from:\s*\n[^\n]*\n[^\n]*\n[^\n]*migrate_island_data\(opts\.migrate_from\)/);
 });
 
 test("after a rename, the completion bell installed under the old name must still be recognized, or every turn pushes twice", () => {
@@ -554,7 +621,7 @@ const CONTAINER_WRITERS = {
   "bridge.sock": "the island, for as long as it runs",
   "claude-hook.lastrun": "the Claude hook, on every run",
   "codex-hook.lastrun": "the Codex hook, on every run",
-  "Library": "macOS",
+  "codex-notify.lastrun": "the Codex completion bell, on every finished turn",
 };
 
 // What a retired feature used to write. Still being here is residue, not health.
@@ -580,27 +647,21 @@ test("the container manifest separates a live entry, residue, and a stranger", (
     "nothing in this manifest claims to write it");
 });
 
-test("nothing sits in the container that nothing writes", (t) => {
-  const plist = fs.readFileSync(islandPath("Info.plist"), "utf8");
-  const group = plist.match(/<key>AppGroupID<\/key>\s*<string>([^<]+)<\/string>/)?.[1];
-  assert.ok(group, "Info.plist declares no AppGroupID to look the container up by");
-  const base = path.join(os.homedir(), "Library", "Group Containers");
-  // A signed install prefixes the container with a Team ID and an ad-hoc one
-  // does not; matching the suffix covers both without naming a team here.
-  const dirs = !fs.existsSync(base) ? []
-    : fs.readdirSync(base).filter((n) => n === group || n.endsWith("." + group));
-  if (dirs.length === 0) {
+test("nothing sits in ~/.perch/island that nothing writes", (t) => {
+  // The folder DataHome.swift names; it replaced the App Group container.
+  assert.match(fs.readFileSync(islandPath("DataHome.swift"), "utf8"), /"\.perch\/island"/,
+    "DataHome.swift moved; this sweep would be looking at the wrong folder");
+  const dir = path.join(os.homedir(), ".perch", "island");
+  if (!fs.existsSync(dir)) {
     // Announced, never a silent pass: a sweep that quietly finds nothing to
     // sweep reads exactly like a sweep that found everything in order.
-    t.skip("no Perch container on this machine; nothing to sweep");
+    t.skip("no ~/.perch/island on this machine; nothing to sweep");
     return;
   }
-  for (const dir of dirs) {
-    for (const entry of fs.readdirSync(path.join(base, dir)).filter((n) => !n.startsWith("."))) {
-      const fault = containerEntryFault(entry);
-      assert.equal(fault, null,
-        `${entry} is in the container but ${fault}. Either add it here with what writes it, ` +
-        `or move it out of the container — a file whose writer is gone still reads like live data.`);
-    }
+  for (const entry of fs.readdirSync(dir).filter((n) => !n.startsWith("."))) {
+    const fault = containerEntryFault(entry);
+    assert.equal(fault, null,
+      `${entry} is in ~/.perch/island but ${fault}. Either add it here with what writes it, ` +
+      `or move it out — a file whose writer is gone still reads like live data.`);
   }
 });

@@ -7,7 +7,7 @@ hooks. Existing hooks, other tools' included, are left intact.
 Transport: each hook runs the launcher (`perch-hook.sh`, installed as
 ~/.perch/bin/perch-hook), which pushes one tab-delimited line
 "<event>\t<projectDir>\t<nonce>\t<source>" to the island's Unix domain socket
-in the App Group container with `nc -U`. projectDir = ${CLAUDE_PROJECT_DIR:-$PWD}
+in `~/.perch/island` with `nc -U`. projectDir = ${CLAUDE_PROJECT_DIR:-$PWD}
 so the island can track each project on its own status dot.
 UserPromptSubmit→working (blue), PermissionRequest→waiting (yellow, waiting
 for your choice or approval), PostToolUse→working (blue: you approved it or no
@@ -36,57 +36,29 @@ import json
 import re
 import os
 import shutil
-import subprocess
 import time
 
 SETTINGS = os.path.expanduser("~/.claude/settings.json")
 
 
-def app_group_id() -> str:
-    """Read the App Group from the installed app's own Info.plist. Never
-    hard-coded: a Team ID links to the registrant's real name.
+ISLAND_DIR = os.path.expanduser("~/.perch/island")   # the island's DataHome.swift
 
-    The installed app, not the source or config: the hooks push to the island
-    that is actually running, and only its Info.plist is authoritative. With no
-    island installed this errors out, because hooks pointing at a nonexistent
-    container fail silently (fail-open), which is nearly impossible to debug
-    after the fact.
-    """
+
+def require_island() -> None:
+    """Stop before touching anything when no island is installed: hooks that
+    push at a socket nobody will ever open fail silently (fail-open), which is
+    nearly impossible to debug after the fact."""
     plist = "/Applications/Perch.app/Contents/Info.plist"
     if not os.path.exists(plist):
         raise SystemExit(
             f"{plist} not found. First run python3 install-island-app.py (same directory) "
-            "to install the island, then install the hooks — the hook's socket path is "
-            "read from the installed app."
+            "to install the island, then install the hooks."
         )
-    out = subprocess.run(["/usr/libexec/PlistBuddy", "-c", "Print :AppGroupID", plist],
-                         capture_output=True, text=True).stdout.strip()
-    # Two shapes are accepted, as in AppGroup.swift:
-    #   group.<suffix>            the repo default, prefix-free
-    #   <TeamID>.group.<suffix>   install-island-app.py stamped a signing Team ID
-    #                             into this machine's build (containermanagerd's
-    #                             TCC rule on macOS 15 and later; see AppGroup.swift)
-    # The socket lives in whichever container the installed app uses, so the
-    # full value, prefix included, is what we return. A Team ID never appears
-    # here as a literal; it comes from the installed plist.
-    # Strip an optional "<TeamID>." prefix, then the core must be group.<suffix>.
-    core = out[out.index("group."):] if ".group." in out and not out.startswith("group.") else out
-    if not core.startswith("group.") or not core.removeprefix("group."):
-        raise SystemExit(f"Bad App Group in the installed app (got {out!r}); rebuild and reinstall.")
-    return out
 
 
 def socket_path() -> str:
-    """Where the island listens.
-
-    Resolved lazily, not at import time: the tests import this module to
-    exercise the real matcher functions, and reading the installed app during
-    import would make them depend on whether this machine happens to have
-    Perch installed.
-    """
-    return os.path.expanduser(
-        f"~/Library/Group Containers/{app_group_id()}/bridge.sock"
-    )
+    """Where the island listens."""
+    return os.path.join(ISLAND_DIR, "bridge.sock")
 
 
 # Ownership is recognized by shape, not by the current App Group.
@@ -99,10 +71,12 @@ def socket_path() -> str:
 #
 # The island's own artifact names are stable across container changes, and
 # other tools' commands never touch them (their bridge scripts live in their
-# own home directories and never enter Group Containers).
+# own home directories and never enter Group Containers). Two homes are
+# recognized: the App Group containers older versions used, and
+# `~/.perch/island`, where the island lives now.
 OWN_ARTIFACTS = ("bridge.sock", "agent-event.txt")
 ARTIFACT_PATTERN = re.compile(
-    r"Group Containers/[^\"'\s]*/(?:" + "|".join(re.escape(a) for a in OWN_ARTIFACTS) + ")"
+    r"(?:Group Containers/[^\"'\s]*|\.perch/island)/(?:" + "|".join(re.escape(a) for a in OWN_ARTIFACTS) + ")"
 )
 # The path alone is not enough. `bridge.sock` is as ordinary as file names get:
 # another tool could use the same name inside its own App Group, and
@@ -245,7 +219,8 @@ def write_atomic(path: str, text: str) -> None:
 
 
 def main() -> None:
-    socket = socket_path()   # resolve once, up front: no island installed = stop before touching anything
+    require_island()   # up front: no island installed = stop before touching anything
+    socket = socket_path()
     launcher = install_launcher()   # before the hooks reference it, never after
     settings = load_settings()
     backup = backup_settings()
@@ -260,7 +235,7 @@ def main() -> None:
     write_atomic(SETTINGS, json.dumps(settings, indent=2) + "\n")
 
     print("installed hooks ->", launcher)
-    print("  it resolves the socket itself; right now that is", socket)
+    print("  it pushes to", socket)
 
 
 if __name__ == "__main__":

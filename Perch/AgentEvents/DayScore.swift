@@ -67,7 +67,7 @@ enum DayScore {
     }
 
     static var fileURL: URL {
-        AppGroup.containerURL.appendingPathComponent("day-scores.jsonl")
+        DataHome.url.appendingPathComponent("day-scores.jsonl")
     }
 
     /// Which day a line is about, `yyyy-MM-dd`, in local time on purpose: "how

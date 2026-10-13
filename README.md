@@ -30,7 +30,7 @@
 - [Supported agents](#supported-agents)
 - [Install](#install)
 - [Uninstall and delete your data](#uninstall-and-delete-your-data)
-- [If you change the App Group name](#if-you-change-the-app-group-name)
+- [Upgrading from 2.3 or earlier](#upgrading-from-23-or-earlier)
 - [Development](#development)
 - [Contributing](#contributing)
 - [License](#license)
@@ -195,9 +195,10 @@ All of it stays on your machine. Full project paths are private information
 too; if you would rather not keep them, see [Uninstall and delete your
 data](#uninstall-and-delete-your-data) below.
 
-The app is sandboxed. To connect your agents it may write to three folders and
-no others: `~/.claude`, `~/.codex` and `~/.perch`, and it writes nothing there
-until you press **Connect**.
+The app is sandboxed and may write to three folders and no others: `~/.claude`,
+`~/.codex` and `~/.perch`. It keeps its own data in `~/.perch/island`, and it
+writes nothing into `~/.claude` or `~/.codex` until you press **Connect**. It
+asks for no network access, and the sandbox holds it to that.
 
 <details>
 <summary>Why the history rebuild exists, and what it reads</summary>
@@ -208,11 +209,11 @@ rollouts and Claude transcripts to fill back in the start and end events the
 hooks occasionally miss.
 
 The working cache those scans produce lives in `~/.perch/reconciliation` and
-can be deleted at any time. A plain LaunchAgent cannot write directly into a
-Team-prefixed App Group, so the Perch app exchanges lifecycle rows and
-validated derived results over the existing local socket, then writes them into
-the container atomically. Neither direction carries prompt or response text,
-and the sandboxed app never gains read access to your whole home directory.
+can be deleted at any time. The tool hands lifecycle rows and validated derived
+results to the Perch app over its local socket, and the app writes them into
+`~/.perch/island` atomically, so the app stays the only writer of its folder.
+Neither direction carries prompt or response text, and the sandboxed app never
+gains read access to your whole home directory.
 
 </details>
 
@@ -326,28 +327,36 @@ If you installed the hooks, you also need to remove Perch's entries from:
 Delete every piece of local data Perch stored:
 
 ```bash
-rm -rf ~/Library/Group\ Containers/group.io.github.mossfinch.perch
+rm -rf ~/.perch/island
 ```
 
 That folder holds the move log `care-ledger.json`, the raw agent events
 `agent-events/*.jsonl`, and the rebuildable derived history and health state
-under `reconciliation/`. The raw history Codex and Claude keep for themselves
+under `reconciliation/`. Versions up to 2.3 kept the same files in
+`~/Library/Group Containers/group.io.github.mossfinch.perch`; if that folder is
+there, delete it too. The raw history Codex and Claude keep for themselves
 stays in their own directories and is not deleted by this command.
 
 ---
 
-## If you change the App Group name
+## Upgrading from 2.3 or earlier
 
-The container path follows the App Group name, so your old move log will not
-show up in the new container by itself. Migrate it explicitly:
+Up to 2.3, Perch kept its data in an App Group container. On a download, macOS
+then asked "Perch would like to access data from other apps" every time Perch
+started, and if you chose Don't Allow, Perch heard nothing from your agents.
+Perch now keeps everything in `~/.perch/island` and asks nothing.
+
+A downloaded Perch starts the new folder empty. Built from source, the
+installer tells you when an old container still holds history; bring it over
+with the path it prints:
 
 ```bash
-python3 install-island-app.py --migrate-from <old-app-group-id>
+python3 install-island-app.py --migrate-from <old container path>
 ```
 
-The installer only copies, never deletes; it refuses to overwrite an existing
-log, refuses symlinks and unreadable ledgers, and writes into the new container
-atomically.
+It only copies, never deletes. It refuses if `~/.perch/island` already holds
+any of it, refuses symlinks and unreadable ledgers, and copies everything
+before putting anything in place, so a failure leaves nothing half moved.
 
 ---
 

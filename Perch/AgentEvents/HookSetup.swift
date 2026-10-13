@@ -30,8 +30,9 @@ enum HookSetup {
         ("Stop", "complete"),
     ]
 
-    /// Where the hook launcher looks for the app. `perch-hook.sh` reads the App Group from
-    /// this exact path, so an app running from anywhere else would wire hooks to nothing.
+    /// Where the hook launcher looks for the app. The launcher link points at the
+    /// `perch-hook.sh` inside this exact path, so an app running from anywhere else would
+    /// wire hooks to nothing.
     static let installedApp = "/Applications/Perch.app"
 
     enum Status: Equatable {
@@ -327,9 +328,9 @@ enum HookSetup {
     // owns the two `lastrun` files its older commands wrote.
     private static let launcherPattern = try! NSRegularExpression(pattern: #"\.perch/bin/perch-hook"#)
     private static let claudeArtifacts = try! NSRegularExpression(
-        pattern: #"Group Containers/[^"'\s]*/(?:bridge\.sock|agent-event\.txt)"#)
+        pattern: #"(?:Group Containers/[^"'\s]*|\.perch/island)/(?:bridge\.sock|agent-event\.txt)"#)
     private static let codexArtifacts = try! NSRegularExpression(
-        pattern: #"Group Containers/[^"'\s]*/(?:bridge\.sock|agent-event\.txt|codex-hook\.lastrun|codex-notify\.lastrun)"#)
+        pattern: #"(?:Group Containers/[^"'\s]*|\.perch/island)/(?:bridge\.sock|agent-event\.txt|codex-hook\.lastrun|codex-notify\.lastrun)"#)
     private static let wirePattern = try! NSRegularExpression(pattern: #"-\$\$(?:\\t|\t)(?:claude|codex)"#)
 
     static func isPerchCommand(_ command: String, codex: Bool) -> Bool {

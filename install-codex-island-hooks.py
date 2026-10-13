@@ -37,63 +37,32 @@ import json
 import re
 import os
 import shutil
-import subprocess
 import time
 
 HOOKS = os.path.expanduser("~/.codex/hooks.json")
 
 
-def app_group_id() -> str:
-    """Read the App Group from the installed app's own Info.plist. Never
-    hard-coded: a Team ID links to the registrant's real name.
+ISLAND_DIR = os.path.expanduser("~/.perch/island")   # the island's DataHome.swift
 
-    The installed app, not the source or config: the hooks push to the island
-    that is actually running, and only its Info.plist is authoritative. With no
-    island installed this errors out, because hooks pointing at a nonexistent
-    container fail silently (fail-open), which is nearly impossible to debug
-    after the fact.
-    """
+
+def require_island() -> None:
+    """Stop before touching anything when no island is installed: hooks that
+    push at a socket nobody will ever open fail silently (fail-open), which is
+    nearly impossible to debug after the fact."""
     plist = "/Applications/Perch.app/Contents/Info.plist"
     if not os.path.exists(plist):
         raise SystemExit(
             f"{plist} not found. First run python3 install-island-app.py (same directory) "
-            "to install the island, then install the hooks — the hook's socket path is "
-            "read from the installed app."
+            "to install the island, then install the hooks."
         )
-    out = subprocess.run(["/usr/libexec/PlistBuddy", "-c", "Print :AppGroupID", plist],
-                         capture_output=True, text=True).stdout.strip()
-    # Two shapes are accepted, as in AppGroup.swift:
-    #   group.<suffix>            the repo default, prefix-free
-    #   <TeamID>.group.<suffix>   install-island-app.py stamped a signing Team ID
-    #                             into this machine's build (containermanagerd's
-    #                             TCC rule on macOS 15 and later; see AppGroup.swift)
-    # The socket lives in whichever container the installed app uses, so the
-    # full value, prefix included, is what we return. A Team ID never appears
-    # here as a literal; it comes from the installed plist.
-    # Strip an optional "<TeamID>." prefix, then the core must be group.<suffix>.
-    core = out[out.index("group."):] if ".group." in out and not out.startswith("group.") else out
-    if not core.startswith("group.") or not core.removeprefix("group."):
-        raise SystemExit(f"Bad App Group in the installed app (got {out!r}); rebuild and reinstall.")
-    return out
 
 
-def container(group: str | None = None) -> str:
-    """The App Group container directory.
-
-    Resolved lazily, not at import time: the tests import this module to
-    exercise the real matcher and upsert functions, and reading the installed
-    app during import would make them depend on whether this machine happens
-    to have Perch installed.
-    """
-    return os.path.expanduser(f"~/Library/Group Containers/{group or app_group_id()}")
+def socket_path() -> str:
+    return os.path.join(ISLAND_DIR, "bridge.sock")
 
 
-def socket_path(group: str | None = None) -> str:
-    return os.path.join(container(group), "bridge.sock")
-
-
-def lastrun_path(group: str | None = None) -> str:
-    return os.path.join(container(group), "codex-hook.lastrun")
+def lastrun_path() -> str:
+    return os.path.join(ISLAND_DIR, "codex-hook.lastrun")
 
 
 # Ownership is recognized by shape, not by the current App Group.
@@ -106,10 +75,12 @@ def lastrun_path(group: str | None = None) -> str:
 #
 # The island's own artifact names are stable across container changes, and
 # other tools' commands never touch them (their bridge scripts live in their
-# own home directories and never enter Group Containers).
+# own home directories and never enter Group Containers). Two homes are
+# recognized: the App Group containers older versions used, and
+# `~/.perch/island`, where the island lives now.
 OWN_ARTIFACTS = ("bridge.sock", "agent-event.txt", "codex-hook.lastrun", "codex-notify.lastrun")
 ARTIFACT_PATTERN = re.compile(
-    r"Group Containers/[^\"'\s]*/(?:" + "|".join(re.escape(a) for a in OWN_ARTIFACTS) + ")"
+    r"(?:Group Containers/[^\"'\s]*|\.perch/island)/(?:" + "|".join(re.escape(a) for a in OWN_ARTIFACTS) + ")"
 )
 # The path alone is not enough. `bridge.sock` is as ordinary as file names get:
 # another tool could use the same name inside its own App Group, and
@@ -324,13 +295,8 @@ def upsert(hooks_root: dict, event_name: str, command: str) -> tuple[str, bool]:
     return f"appended at the end (group {len(groups) - 1}), new", True
 
 
-def notify_tail(group: str | None = None) -> str:
-    """The completion-bell block, rendered for one App Group.
-
-    A function rather than a module constant so importing this file needs no
-    installed app (see `container`).
-    """
-    group = group or app_group_id()
+def notify_tail() -> str:
+    """The completion-bell block."""
     return f'''
 # --- {NOTIFY_MARK} (completion bell) ----------------------------------------
 # codex finishes a turn -> push one line to the island's socket; that
@@ -349,8 +315,8 @@ def notify_tail(group: str | None = None) -> str:
 # chain reach here" is the only way to tell "never triggered" from
 # "triggered but the push failed".
 # One file, overwritten each time, so it never grows.
-perch_sock="$HOME/Library/Group Containers/{group}/bridge.sock"
-perch_lastrun="$HOME/Library/Group Containers/{group}/codex-notify.lastrun"
+perch_sock="$HOME/.perch/island/bridge.sock"
+perch_lastrun="$HOME/.perch/island/codex-notify.lastrun"
 perch_dir=$(/usr/bin/python3 -c 'import json,sys,os; d=json.loads(sys.argv[1] or "{{}}"); print(d.get("cwd") or os.getcwd())' "$payload" 2>/dev/null) || perch_dir="$PWD"
 [[ -z "$perch_dir" ]] && perch_dir="$PWD"
 perch_pushed=skipped
@@ -403,7 +369,7 @@ def our_tail_span(text: str) -> tuple[int, int] | None:
     return None
 
 
-def install_notify_tail(group: str | None = None) -> str:
+def install_notify_tail() -> str:
     """Install the completion bell into the script at the end of the notify
     chain.
 
@@ -417,7 +383,7 @@ def install_notify_tail(group: str | None = None) -> str:
         return f"skipped: {NOTIFY_SCRIPT} does not exist (the notify chain may have changed shape; re-check)"
     text = open(NOTIFY_SCRIPT, encoding="utf-8").read()
     backup_to(NOTIFY_SCRIPT)
-    body = notify_tail(group)
+    body = notify_tail()
     span = our_tail_span(text)
     if span is None:
         write_atomic(NOTIFY_SCRIPT, text.rstrip("\n") + "\n" + body)
@@ -448,8 +414,8 @@ def foreign_hooks(hooks: dict) -> dict:
 
 
 def main() -> None:
-    group = app_group_id()   # resolve once, up front: no island installed = stop before touching anything
-    socket, lastrun = socket_path(group), lastrun_path(group)
+    require_island()   # up front: no island installed = stop before touching anything
+    socket, lastrun = socket_path(), lastrun_path()
     launcher = install_launcher()   # before the hooks reference it, never after
     root = load_hooks()
     hooks_before = json.dumps(root.get("hooks", {}), sort_keys=True)
@@ -487,9 +453,9 @@ def main() -> None:
 
     write_atomic(HOOKS, json.dumps(root, indent=2, ensure_ascii=False, sort_keys=True) + "\n")
 
-    print("\nCompletion bell (notify chain, no trust needed):", install_notify_tail(group))
+    print("\nCompletion bell (notify chain, no trust needed):", install_notify_tail())
     print("\nWired up ->", launcher)
-    print("  it resolves the socket itself; right now that is", socket)
+    print("  it pushes to", socket)
     print("  ⚠️ This is the LAST time these commands change. They no longer carry the")
     print("     container path, so renaming it will never ask for trust again.")
     if needs_trust:

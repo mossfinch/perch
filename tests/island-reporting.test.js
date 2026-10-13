@@ -409,7 +409,7 @@ test("the day score came off the card, and its ledger did not move", () => {
   const main = path.join(tmp, "main.swift");
   fs.writeFileSync(stub, `
 import Foundation
-enum AppGroup { static var containerURL: URL { URL(fileURLWithPath: NSTemporaryDirectory()) } }
+enum DataHome { static var url: URL { URL(fileURLWithPath: NSTemporaryDirectory()) } }
 `);
   fs.writeFileSync(main, `
 import Foundation

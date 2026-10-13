@@ -9,7 +9,7 @@ const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
 const { execFileSync } = require("node:child_process");
-const { viewModelSource, APP_GROUP_SWIFT, islandPath, pkgPath } = require("./island-paths");
+const { viewModelSource, DATA_HOME_SWIFT, islandPath, pkgPath } = require("./island-paths");
 
 test("event log: record without judging, and time must match the human's clock", () => {
   const log = fs.readFileSync(islandPath("AgentEventLog.swift"), "utf8");
@@ -121,7 +121,7 @@ print(String(data: try! JSONSerialization.data(withJSONObject: ["rows": rows, "f
              encoding: .utf8)!)
 `);
   execFileSync("swiftc", [islandPath("AgentEventLog.swift"), islandPath("FlowMath.swift"),
-                          APP_GROUP_SWIFT, main, "-o", binary], { stdio: "pipe" });
+                          DATA_HOME_SWIFT, main, "-o", binary], { stdio: "pipe" });
   const got = JSON.parse(execFileSync(binary, [tmp], { encoding: "utf8" }));
 
   // Control: the writer really wrote, or every assertion below is about nothing.

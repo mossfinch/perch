@@ -15,6 +15,8 @@ extension IslandViewModel {
         case notInApplications
         case failed(String)
         case connected(codexNeedsTrust: Bool)
+        /// The socket in `~/.perch/island` could not be opened, so nothing can arrive.
+        case cannotListen(String)
     }
 
     /// Reads only. Runs at launch and each time the card opens, so an agent installed while
@@ -23,7 +25,11 @@ extension IslandViewModel {
     @discardableResult
     func refreshAgentSetup() -> Bool {
         // A recording shows the island at work, not the offer.
-        guard !AppGroup.isDemo else { return false }
+        guard !DataHome.isDemo else { return false }
+        if let reason = listenFailure {
+            agentSetup = .cannotListen(reason)
+            return false
+        }
         switch HookSetup.status(.forThisMac(), appPath: Bundle.main.bundlePath) {
         case .ready: agentSetup = .hidden
         case .needsConnect: agentSetup = .needsConnect

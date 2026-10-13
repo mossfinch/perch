@@ -7,21 +7,16 @@ reboot, startable only by running xcodebuild in a terminal and `open`ing the
 product. Without an installed form, the island does not exist after a restart.
 
 Three things happen here:
-  1. Release build, signing, and a check that the app-group entitlement really
-     made it into the signature. Signing takes one of two paths: with a
-     DEVELOPMENT_TEAM in the gitignored Config.xcconfig the build is stamped
-     with the Team-prefixed App Group and signed by that team's certificate;
-     without one it is ad-hoc and prefix-free. The two paths name different
-     containers, which is why the choice matters here. The Team ID lives only
-     in Config.xcconfig, never in this script.
+  1. Release build, ad-hoc signing (the same as a download), and a check of
+     what the signature really carries.
   2. Install into /Applications/Perch.app (admin-writable, no sudo)
   3. Write a LaunchAgent under ~/Library/LaunchAgents, start one now, and
      verify the island actually bound its socket
 
-Why the signature check: without the entitlement in the signature the app
-still runs, but the sandbox denies it the container. Every event the hooks
-push into the socket is lost, and the island sits there alive but never
-changing colour. That silent failure must be caught at install time.
+Why the signature check: without the socket rule in the signature the app
+still runs, but the sandbox refuses the bind. Every event the hooks push is
+lost. The card says so, but only to someone looking at it, so it is caught
+here at install time.
 
 Uninstall (three commands, no script needed):
   launchctl bootout gui/$UID/io.github.mossfinch.perch
@@ -52,32 +47,16 @@ HERE = Path(__file__).resolve().parent
 # next to it; they are not this script's business.
 PROJECT = HERE / "Perch.xcodeproj"
 SCHEME = "Perch"
-# The one file that may hold a signing Team ID; .gitignore blocks it. The
-# Team ID never appears in this script: it is read from here at run time and
-# used only to stamp a local build. Absent (or the template placeholder) means
-# "public user, no Apple account", and the build stays ad-hoc and prefix-free.
-CONFIG = HERE / "Config.xcconfig"
-def app_group_of(app: Path) -> str:
-    """Read the App Group from the built product's own Info.plist.
-
-    Read the product, not the source: the value in the product is the one that
-    got built and code-signed, the same one the app will use at run time.
-    Reading the source only proves "what I intended to use".
-    """
-    out = subprocess.run(
-        ["/usr/libexec/PlistBuddy", "-c", "Print :AppGroupID",
-         str(app / "Contents" / "Info.plist")],
-        capture_output=True, text=True,
-    ).stdout.strip()
-    # Must look like group.<something>, with no Team ID prefix: the Team ID
-    # gets stamped into the shipped binary via the entitlement, and creates a
-    # folder named after it on every user's machine.
-    if not out.startswith("group.") or not out.removeprefix("group."):
-        raise SystemExit(
-            f"Bad App Group in the built product (got {out!r}).\n"
-            "It should look like group.xxx; see AppGroupID in Perch/Info.plist."
-        )
-    return out
+# Everything the island keeps: socket, event log, care ledger, day scores.
+# Perch/DataHome.swift names the same folder; perch-hook.sh and
+# island-day-report.py hard-code it too. It replaced an App Group container,
+# which a download (ad-hoc signed) could only open after macOS asked "would
+# like to access data from other apps" on every launch.
+ISLAND_DIR = Path.home() / ".perch" / "island"
+SOCKET = ISLAND_DIR / "bridge.sock"
+# The App Group the island used to live in, `<TeamID>.` prefixed on a machine
+# that signed with a team. Only the migration below still looks for it.
+OLD_GROUP = "group.io.github.mossfinch.perch"
 BUILD_DIR = Path("/tmp/perch-release")
 APP_NAME = "Perch.app"
 EXEC_SUBPATH = "Contents/MacOS/Perch"
@@ -126,9 +105,6 @@ def stale_agents() -> list[tuple[str, Path]]:
     return out
 
 
-LEDGER_NAME = "care-ledger.json"
-
-
 def ledger_records(path: Path) -> list:
     """Parse a ledger the way the island's decoder will, and return its records.
 
@@ -165,90 +141,123 @@ def ledger_records(path: Path) -> list:
     return records
 
 
-def migrate_ledger(source_group: str, target_group: str, root: Path | None = None) -> str:
-    """Move the care ledger from an old App Group container into the new one.
-    A person names the source; the machine guesses nothing.
+MIGRATED = ("care-ledger.json", "day-scores.jsonl", "agent-events", "flow-corrections")
 
-    Changing the App Group changes the folder. Without the move the island
-    starts from an empty ledger, and the first session writes a new ledger
-    with one record, which looks exactly like dozens of history entries
-    vanishing. So this needs a procedure, not a one-off manual copy.
 
-    No auto-discovery: without a Team prefix the common prefix is just
-    `group`, so a prefix scan matches every app's shared container on the
-    machine, and scanning precisely would need a hard-coded list of old
-    container names, which must not live in the source. With explicit naming
-    there is no candidate to pick: only someone who changed the App Group name
-    needs a migration, and that person knows what they changed it to.
+def old_containers(root: Path | None = None) -> list[Path]:
+    """The App Group containers this island used to live in that still hold data.
 
-    Four rules:
-      1. The target already has a ledger: refuse. Even one record is real
-         data and not ours to overwrite. The error reports both sides' record
-         counts so a person can judge.
-      2. The source or target is a symlink: refuse. A dangling symlink's
-         `exists()` lies, and `copy2` follows the link, so data lands where
-         nobody expects it.
-      3. The source does not parse: refuse. Moving a broken ledger just moves
-         the failure into the new home: the island's `load` throws on the next
-         launch (the reader side's standing invariant).
-      4. Write to a temp file, then rename. A copy that dies halfway would
-         leave a truncated care-ledger.json that exists and blocks every
-         retry. A dead temp file is just litter; the target still does not
-         exist, so a rerun finishes the job.
-
-    The root parameter exists only for tests; normal calls don't pass it.
+    Matched on the island's own group id, bare or with any `<TeamID>.` in
+    front, so no Team ID is written here and no other app's container matches.
     """
     root = root or (Path.home() / "Library" / "Group Containers")
-    # A group id names a container, not a path: anything with a separator in it
-    # would resolve somewhere else entirely.
-    for name, role in ((source_group, "source"), (target_group, "target")):
-        if not name or "/" in name or name in (".", ".."):
-            raise SystemExit(f"Invalid {role} App Group name ({name!r}): that is a path, not a container name.")
-    source = root / source_group / LEDGER_NAME
-    target = root / target_group / LEDGER_NAME
+    if not root.is_dir():
+        return []
+    found = []
+    for entry in sorted(root.iterdir()):
+        if entry.is_symlink() or not entry.is_dir():
+            continue
+        if entry.name != OLD_GROUP and not entry.name.endswith("." + OLD_GROUP):
+            continue
+        if any((entry / name).exists() for name in MIGRATED):
+            found.append(entry)
+    return found
 
-    if source_group == target_group:
-        raise SystemExit(f"Source and target are the same container ({target_group}); nothing to move.")
-    if source.is_symlink() or target.is_symlink():
-        raise SystemExit(
-            "A ledger path is a symbolic link; refusing — following a link "
-            "writes data where you don't expect it:\n"
-            f"   source {source}{'   <- is a symlink' if source.is_symlink() else ''}\n"
-            f"   target {target}{'   <- is a symlink' if target.is_symlink() else ''}"
-        )
-    if not source.is_file():
-        raise SystemExit(f"No ledger in the source container: {source}")
-    try:
-        incoming = len(ledger_records(source))
-    except Exception as exc:
-        raise SystemExit(
-            f"Source ledger does not parse; refusing to move it (the island could not read it either):\n"
-            f"   {source}\n   {exc}"
-        )
-    if target.exists():
+
+def migrate_island_data(source: Path, island: Path | None = None) -> str:
+    """Copy the island's history out of an old App Group container into
+    `~/.perch/island`. A person names the source; the machine guesses nothing,
+    because two old containers can both hold data (a team-signed one and a
+    bare one from an ad-hoc run) and only the person knows which is theirs.
+
+    Rules, kept from the ledger-only migration this replaces:
+      1. Anything already at the target: refuse, and copy nothing. Even one
+         record there is real data and not ours to overwrite.
+      2. A symlink anywhere: the target folder itself, an item, or anything
+         inside the two folders. Following one writes data where nobody
+         expects it, and a copied link still points at the old place.
+      3. A ledger that does not parse: refuse. The island refuses to treat an
+         unreadable ledger as empty, so moving one moves the failure.
+      4. Copy every item to `<name>.migrating` first, then rename them all,
+         and undo the renames if one fails. A failure at either step leaves
+         nothing at the target, never a half file the island would read or a
+         partial set a rerun would refuse.
+
+    Copies; the source stays where it was. `island` is for tests only.
+    """
+    island = island or ISLAND_DIR
+    if source.is_symlink() or not source.is_dir():
+        raise SystemExit(f"Not a container directory: {source}")
+    if island.is_symlink():
+        raise SystemExit(f"{island} is a symbolic link; refusing to write through it.")
+    # is_symlink too: a dangling link's exists() is False, and skipping it
+    # quietly would hide exactly the case rule 2 refuses.
+    items = [name for name in MIGRATED if (source / name).exists() or (source / name).is_symlink()]
+    if not items:
+        raise SystemExit(f"Nothing to migrate in {source}")
+    for name in items:
+        # Inside the two folders too: a copied link points wherever it pointed,
+        # so the "copy" would keep writing into the old place, or dangle.
+        for path in [source / name, *((source / name).rglob("*") if (source / name).is_dir() else [])]:
+            if path.is_symlink():
+                raise SystemExit(f"{path} is a symbolic link; refusing to follow it.")
+        target = island / name
+        if target.is_symlink() or target.exists():
+            raise SystemExit(
+                f"{target} already exists; not overwriting, and nothing was copied.\n"
+                "   Move it aside first if the old container's copy is the one to keep, then rerun.")
+        staging = island / (name + ".migrating")
+        if staging.is_symlink() or staging.exists():
+            raise SystemExit(f"Something is already in the way at {staging}. Remove it and rerun.")
+    ledger = source / "care-ledger.json"
+    records = None
+    if ledger.exists():
         try:
-            have = f"{len(ledger_records(target))} records"
-        except Exception:
-            have = "unreadable"
-        raise SystemExit(
-            "Target container already has a ledger; not overwriting.\n"
-            f"   target {target} ({have})\n"
-            f"   source {source} ({incoming} records)\n"
-            "   To use the source ledger, move the target one aside first, then rerun."
-        )
-    target.parent.mkdir(parents=True, exist_ok=True)
-    staging = target.with_name(target.name + ".migrating")
-    # A leftover (or planted) staging entry must not be written through: a
-    # symlink here would send the copy somewhere nobody expects.
-    if staging.is_symlink() or staging.exists():
-        raise SystemExit(f"Something is already in the way at {staging}. Remove it and rerun.")
+            records = len(ledger_records(ledger))
+        except Exception as exc:
+            raise SystemExit(
+                f"Old ledger does not parse; refusing to move it (the island could not read it either):\n"
+                f"   {ledger}\n   {exc}")
+    island.mkdir(parents=True, exist_ok=True)
+    os.chmod(island, 0o700)   # owner-only, as the island itself keeps it (DataHome.swift)
+    # Everything is copied before anything is put in place: a failure halfway
+    # through must leave no item at the target, or the rerun would refuse
+    # on the items that did land.
+    staged = []
     try:
-        shutil.copy2(source, staging)
+        for name in items:
+            staging = island / (name + ".migrating")
+            staged.append(staging)
+            if (source / name).is_dir():
+                shutil.copytree(source / name, staging, symlinks=True)
+            else:
+                shutil.copy2(source / name, staging)
     except BaseException:
-        staging.unlink(missing_ok=True)   # half a copy is litter, and leaving it would block every retry
+        for staging in staged:
+            if staging.is_dir() and not staging.is_symlink():
+                shutil.rmtree(staging, ignore_errors=True)
+            else:
+                staging.unlink(missing_ok=True)
         raise
-    os.replace(staging, target)
-    return f"Ledger moved (copy only, source kept; {incoming} records):\n   {source}\n-> {target}"
+    # Then put them in place, and take back whatever landed if one rename
+    # fails, so a rerun finds nothing in its way.
+    placed = []
+    try:
+        for name in items:
+            os.replace(island / (name + ".migrating"), island / name)
+            placed.append(name)
+    except BaseException:
+        for name in placed:
+            os.replace(island / name, island / (name + ".migrating"))
+        for name in items:
+            staging = island / (name + ".migrating")
+            if staging.is_dir() and not staging.is_symlink():
+                shutil.rmtree(staging, ignore_errors=True)
+            else:
+                staging.unlink(missing_ok=True)
+        raise
+    ledger_note = f", ledger {records} records" if records is not None else ""
+    return f"Copied {', '.join(items)} (source kept{ledger_note}):\n   {source}\n-> {island}"
 
 
 def run(cmd: list[str], **kwargs) -> subprocess.CompletedProcess:
@@ -337,17 +346,14 @@ ENTITLEMENTS = HERE / "Perch" / "Perch.entitlements"
 def sign_adhoc(app: Path) -> None:
     """Ad-hoc sign the built product, carrying the entitlements.
 
-    Signing happens here and not in Xcode because, as soon as a target declares
-    the app-group entitlement, Xcode demands a provisioning profile to build at
-    all, and no build setting bypasses it. With a group name that carries no
-    Team prefix, that profile cannot be registered in the developer portal in
-    the first place.
+    Every build is signed this way, the one installed here as much as the one
+    that ships, so what runs on the builder's Mac is what a download runs.
+    (Local builds used to be team-signed so that the App Group container could
+    carry the Team prefix; with the container gone there is no reason left,
+    and a second signing path is a second thing to drift.)
 
-    So Xcode only compiles and the installer signs, and anyone who wants to
-    hack on the code needs no Apple account configured. An ad-hoc signature
-    still carries entitlements: sandbox and app-group container I/O work, and a
-    signature without the app-group entitlement is denied by the sandbox on the
-    spot.
+    Xcode only compiles (`CODE_SIGNING_ALLOWED = NO`) and this signs, so
+    anyone who wants to hack on the code needs no Apple account configured.
 
     One signature, because the bundle is one program. An embedded extension
     would have to be signed first, since signing the app seals everything under
@@ -355,95 +361,6 @@ def sign_adhoc(app: Path) -> None:
     """
     run(["codesign", "--force", "--sign", "-",
          "--entitlements", str(ENTITLEMENTS), str(app)], check=True)
-
-
-def development_team() -> str | None:
-    """The signing Team ID for this machine, or None.
-
-    Read from the gitignored Config.xcconfig at run time. The Team ID is never
-    written into this script, because it links to a real developer account and
-    this file ships. Returns None when the file is absent or still holds the
-    template placeholder: that is the public-user case, and the build stays
-    ad-hoc and prefix-free.
-    """
-    if not CONFIG.is_file():
-        return None
-    for raw in CONFIG.read_text().splitlines():
-        line = raw.split("//", 1)[0].strip()   # xcconfig comments are //
-        if line.startswith("DEVELOPMENT_TEAM"):
-            _, _, value = line.partition("=")
-            value = value.strip()
-            if value and value != "YOUR_TEAM_ID":
-                return value
-    return None
-
-
-def _certificate_team(pem: str) -> str | None:
-    """The Organizational Unit of one PEM certificate: the field codesign
-    stamps into the binary as its TeamIdentifier."""
-    subject = subprocess.run(["openssl", "x509", "-noout", "-subject"],
-                             input=pem, capture_output=True, text=True).stdout
-    ou = re.search(r"OU\s*=\s*([A-Z0-9]{10})", subject)
-    return ou.group(1) if ou else None
-
-
-def signing_identity(team: str) -> str:
-    """The SHA-1 of a codesigning identity whose certificate belongs to `team`.
-
-    Matched on the certificate's Organizational Unit, the field codesign turns
-    into the binary's TeamIdentifier (which decides the App Group container's
-    prefix), not on the identity's display name. The name's parenthetical can
-    be a different id (an enrolment or agent team); matching it would sign with
-    the wrong team, and the container would come out under the wrong prefix, a
-    fresh, empty folder beside the real one. The Team ID arrives from
-    Config.xcconfig; no developer name or certificate hash is written here.
-    """
-    valid = set(re.findall(r"\b[0-9A-F]{40}\b", subprocess.run(
-        ["security", "find-identity", "-v", "-p", "codesigning"],
-        capture_output=True, text=True).stdout))
-    dump = subprocess.run(
-        ["security", "find-certificate", "-a", "-Z", "-p", "-c", "Apple Development"],
-        capture_output=True, text=True).stdout
-    sha = None
-    for block in re.split(r"(?m)^SHA-1 hash:\s*", dump):
-        head = re.match(r"([0-9A-F]{40})", block)
-        if not head:
-            continue
-        sha = head.group(1)
-        cert = re.search(r"-----BEGIN CERTIFICATE-----.*?-----END CERTIFICATE-----",
-                         block, re.S)
-        if sha in valid and cert and _certificate_team(cert.group(0)) == team:
-            return sha
-    raise SystemExit(
-        f"Config.xcconfig names DEVELOPMENT_TEAM {team}, but no valid codesigning "
-        "certificate for that team is in the keychain.\n"
-        "Install the Apple Development certificate for that team, or clear "
-        "DEVELOPMENT_TEAM to build ad-hoc — which moves the container to the "
-        "prefix-free name (see --migrate-from)."
-    )
-
-
-def set_app_group(bundle_plist: Path, group: str) -> None:
-    run(["/usr/libexec/PlistBuddy", "-c", f"Set :AppGroupID {group}",
-         str(bundle_plist)], check=True)
-
-
-def inject_team_prefix(app: Path, group: str) -> None:
-    """Stamp the Team-prefixed App Group into the built product's Info.plist.
-
-    Done to the product and never committed, because the prefixed id names a
-    real developer account. The committed plists stay prefix-free and the same
-    for everyone; only this local build carries the prefix, just as the
-    debug-strip step only touches the product.
-
-    Why prefix at all, when nothing here reads an App Group from outside the
-    app any more: a Team-signed build's container is `<TeamID>.group.…`, and
-    that is where this machine's ledger, event log and day scores already sit.
-    Point Info.plist at the bare name instead and the island opens a different,
-    empty folder; moving between the two shapes is what `--migrate-from` is
-    for.
-    """
-    set_app_group(app / "Contents" / "Info.plist", group)
 
 
 def _build_number(plist: Path) -> int:
@@ -489,8 +406,7 @@ def bump_build_version(app: Path) -> str:
     descriptor per version: with the version frozen at 1, a widget gallery
     served the previous build's name and sizes.
 
-    Local-only, like the Team-prefixed App Group: the committed plist keeps
-    `1`. The number is a plain counter, with no timestamp and nothing that says
+    Local-only: the committed plist keeps `1`. The number is a plain counter, with no timestamp and nothing that says
     anything about this machine.
     """
     version = max(_build_number(INSTALLED / "Contents" / "Info.plist"),
@@ -540,79 +456,56 @@ def prune_stale_registrations(app: Path) -> None:
         print(f"Unregistered an older copy: {path}")
 
 
-def _prefixed_entitlements(committed: Path, group: str, into: Path) -> Path:
-    """A local copy of `committed`'s entitlements with the app-group set to
-    `group`, written into a temp dir, never the repo.
+SOCKET_RULE = '(allow network-bind (local unix-socket (subpath (string-append (param "_HOME") "/.perch/island"))))'
+# The whole of what the signature may carry. Exact, not "contains": one extra
+# sandbox rule such as `(allow network*)` would pass a presence check and quietly
+# undo the sandbox.
+EXPECTED_ENTITLEMENTS = {
+    "com.apple.security.app-sandbox": True,
+    "com.apple.security.temporary-exception.files.home-relative-path.read-write":
+        ["/.claude/", "/.codex/", "/.perch/"],
+    "com.apple.security.temporary-exception.sbpl": [SOCKET_RULE],
+}
 
-    Like `inject_team_prefix` for Info.plist: the Team-prefixed group names a
-    real developer account, so the prefix touches only this local build, and
-    the committed entitlement files stay prefix-free and the same for everyone.
 
-    The entitlement needs the prefix because the sandbox grants container
-    access by the app-group entitlement value, not by the TeamIdentifier. Sign
-    with a prefix-free entitlement while Info.plist resolves the prefixed
-    container and the two name different places: the sandbox admits the app to
-    `group.x` while the app tries to open `<TeamID>.group.x`, so the socket bind
-    and every write are denied, silently, swallowed by `try?`, with the island
-    glowing as if fine. Measured: prefix-free entitlement, and the island
-    cannot bind its socket; prefixed entitlement, and it binds on the spot.
+def check_entitlements(app: Path) -> None:
+    """What the signature actually carries, not what the repo file says.
+
+    Three ways this goes wrong, each silent at run time:
+      · no socket rule: the sandbox refuses the bind, and no hook event
+        arrives (the card says so, but only after install);
+      · an App Group: the macOS prompt on every launch is back;
+      · any network entitlement, or any extra sandbox rule or key: Perch
+        promises it never goes online, and the sandbox is what keeps that
+        promise. So the whole set is compared, not just the parts we want.
     """
-    ent = plistlib.loads(committed.read_bytes())
-    ent["com.apple.security.application-groups"] = [group]
-    out = into / committed.name
-    out.write_bytes(plistlib.dumps(ent))
-    return out
-
-
-def sign_with_identity(app: Path, identity: str, group: str) -> None:
-    """Sign with a real signing identity, carrying entitlements whose app-group
-    is `group`, the Team-prefixed container the build actually runs against.
-
-    The entitlement must name the prefixed container (see
-    `_prefixed_entitlements`). The committed files stay prefix-free for
-    anonymity, so the prefixed copies are generated into a temp dir here and
-    never committed. Info.plist (via `inject_team_prefix`) and this entitlement
-    must name the same prefixed container, or the app resolves one place and is
-    sandboxed into another.
-    """
-    with tempfile.TemporaryDirectory() as tmp:
-        app_ent = _prefixed_entitlements(ENTITLEMENTS, group, Path(tmp))
-        run(["codesign", "--force", "--sign", identity,
-             "--entitlements", str(app_ent), str(app)], check=True)
-
-
-def check_entitlement(app: Path, group: str) -> None:
-    """The code signature must actually carry the app-group entitlement for
-    `group`, the id the build will run against (the Team-prefixed one on a
-    machine that signs, the prefix-free base otherwise).
-
-    This gate blocks a silent failure: with the entitlement missing, or
-    different from `group`, the sandbox denies the island its container. The
-    socket bind fails silently in `AgentEventMonitor` and the event log's errors
-    are swallowed by `try?`, so the island glows as if everything were fine
-    while every hook event is lost. That must be stopped at install time.
-
-    "The container path resolves" proves nothing: macOS's
-    `containerURL(forSecurityApplicationGroupIdentifier:)` does not check
-    membership and returns a path even for a made-up id. The only thing worth
-    checking is what the signature actually carries.
-    """
-    # codesign prints the entitlements to stdout with a binary plist header
-    # in the middle; grabbing the text is enough
-    out = subprocess.run(["codesign", "-d", "--entitlements", "-", str(app)],
-                         capture_output=True, text=True, errors="replace").stdout
-    if "com.apple.security.application-groups" not in out:
-        raise SystemExit(
-            f"No app-group entitlement in {app.name}'s signature; installed like this it "
-            "cannot reach its container, and everything that goes through it is lost:\n"
-            f"{out[:800]}"
-        )
-    if group not in out:
-        raise SystemExit(
-            f"The App Group in {app.name}'s signature is not the one the build runs against.\n"
-            f"   expected: {group}\n   signature says:\n{out[:800]}"
-        )
-    print(f"Entitlement check passed for {app.name}, AppGroup={group}")
+    out = subprocess.run(["codesign", "-d", "--entitlements", "-", "--xml", str(app)],
+                         capture_output=True)
+    try:
+        ent = plistlib.loads(out.stdout)
+    except Exception:
+        raise SystemExit(f"Could not read the entitlements in {app.name}'s signature:\n"
+                         f"{out.stdout[:400]!r}\n{out.stderr[:400]!r}")
+    problems = []
+    if ent.get("com.apple.security.app-sandbox") is not True:
+        problems.append("the sandbox is off")
+    if ent.get("com.apple.security.temporary-exception.sbpl") != [SOCKET_RULE]:
+        problems.append("the sandbox rules are not exactly the one that lets the socket bind in ~/.perch/island")
+    if "com.apple.security.application-groups" in ent:
+        problems.append("it still declares an App Group")
+    network = [key for key in ent if key.startswith("com.apple.security.network.")]
+    if network:
+        problems.append("it asks for network access: " + ", ".join(network))
+    folders = ent.get("com.apple.security.temporary-exception.files.home-relative-path.read-write")
+    if folders != EXPECTED_ENTITLEMENTS["com.apple.security.temporary-exception.files.home-relative-path.read-write"]:
+        problems.append(f"the folders it may write are not exactly ~/.claude, ~/.codex and ~/.perch: {folders}")
+    extra = sorted(set(ent) - set(EXPECTED_ENTITLEMENTS) - {"com.apple.security.application-groups"}
+                   - {key for key in ent if key.startswith("com.apple.security.network.")})
+    if extra:
+        problems.append("it carries entitlements nothing here expects: " + ", ".join(extra))
+    if problems:
+        raise SystemExit(f"{app.name}'s signature is wrong: " + "; ".join(problems) + ".")
+    print(f"Entitlement check passed for {app.name}")
 
 
 def stop_running() -> None:
@@ -698,11 +591,13 @@ def island_launch_agent_spec(app: Path, owner: Path = Path.home()) -> dict:
         "Label": "io.github.mossfinch.perch",
         "ProgramArguments": [str(app / "Contents/MacOS/Perch")],
         "RunAtLoad": True,
-        # KeepAlive must be False. A manually quit island should stay quit;
-        # and the single-instance guard makes a launchd-spawned copy kill
-        # itself whenever an instance already runs, and KeepAlive would turn
-        # that into a start→exit→start flap until someone stops it.
-        "KeepAlive": False,
+        # Restart only after an unclean exit. macOS kills apps on its own (to
+        # purge their caches when the disk runs low, for one), and with no
+        # restart the notch stays empty until someone notices. A clean exit
+        # is left alone: a manual quit should stay quit, and the
+        # single-instance guard exits cleanly when another copy already runs,
+        # so a plain KeepAlive would turn it into a start→exit→start flap.
+        "KeepAlive": {"SuccessfulExit": False},
         "ProcessType": "Interactive",
         "StandardOutPath": str(log_dir / "perch.log"),
         "StandardErrorPath": str(log_dir / "perch-error.log"),
@@ -726,10 +621,9 @@ def install_launch_agent() -> None:
     run(["launchctl", "bootstrap", DOMAIN, str(PLIST)], check=True)   # RunAtLoad starts one right away
 
 
-def reconciler_launch_agent_spec(group: str, owner: Path = Path.home()) -> dict:
+def reconciler_launch_agent_spec(owner: Path = Path.home()) -> dict:
     """The independent history job. Pure so tests inspect the real contract."""
     helper = owner / ".perch" / "bin" / "perch-reconcile"
-    container = owner / "Library" / "Group Containers" / group
     output = owner / ".perch" / "reconciliation"
     log_dir = owner / "Library" / "Logs" / "Perch"
     return {
@@ -743,7 +637,7 @@ def reconciler_launch_agent_spec(group: str, owner: Path = Path.home()) -> dict:
             "--out-dir",
             str(output),
             "--bridge-socket",
-            str(container / "bridge.sock"),
+            str(owner / ".perch" / "island" / "bridge.sock"),
             "--lookback-days",
             "7",
         ],
@@ -775,7 +669,7 @@ def _atomic_install_file(source: Path, target: Path, mode: int) -> None:
         raise
 
 
-def install_reconciler(group: str) -> float:
+def install_reconciler() -> float:
     """Install and start the non-sandbox provider-history reader.
 
     This owns only `perch-reconcile` and its separate launchd label. The trusted
@@ -787,7 +681,7 @@ def install_reconciler(group: str) -> float:
         raise SystemExit("/usr/bin/python3 is unavailable; cannot schedule Perch history recovery")
 
     _atomic_install_file(RECONCILER_SOURCE, RECONCILER_BINARY, 0o755)
-    spec = reconciler_launch_agent_spec(group)
+    spec = reconciler_launch_agent_spec()
     log_dir = Path(spec["StandardOutPath"]).parent
     log_dir.mkdir(parents=True, exist_ok=True)
     RECONCILER_PLIST.parent.mkdir(parents=True, exist_ok=True)
@@ -815,9 +709,9 @@ def install_reconciler(group: str) -> float:
     return started_at
 
 
-def verify_reconciler(group: str, started_at: float, sleep=time.sleep) -> None:
+def verify_reconciler(started_at: float, sleep=time.sleep) -> None:
     """Prove launchd produced a fresh, internally consistent formal cache."""
-    output = Path.home() / "Library" / "Group Containers" / group / "reconciliation"
+    output = ISLAND_DIR / "reconciliation"
     health_path = output / "source-health.json"
     turns_path = output / "canonical-turns.jsonl"
     last_error = "output files did not appear"
@@ -864,14 +758,13 @@ def verify() -> None:
     print(f"Running: pid={pids[0]} {exe}")
 
 
-def verify_socket(group: str, sock: Path | None = None, probe=None, sleep=time.sleep) -> None:
+def verify_socket(sock: Path | None = None, probe=None, sleep=time.sleep) -> None:
     """Prove the event path works end to end.
 
-    "A process is running" is not enough. Creating the container directory,
-    binding and listening all fail silently inside the island (a failed bind is
-    a bare return), and then every hook push is lost while the island sits
-    there glowing as if all were well. That is exactly the failure this
-    installer exists to catch, so connect for real.
+    "A process is running" is not enough. If the bind fails, every hook push
+    is lost; the card says so, but only to someone looking at it. This
+    installer is the one place that can stop and say it at install time, so
+    connect for real.
 
     Retry the connect, never wait on the file. A socket file may be the
     leftover of the instance we just killed (`pkill` gives it no chance to
@@ -882,12 +775,12 @@ def verify_socket(group: str, sock: Path | None = None, probe=None, sleep=time.s
 
     The probe sends an event name the island does not know. Unknown events are
     ignored by the receiver, so this exercises the whole path (container
-    reachable, socket bound, message delivered) without lighting up a status
+    created, socket bound, message delivered) without lighting up a status
     dot or writing a line to the event log.
 
     `sock` and `probe` are injectable for tests; normal calls pass neither.
     """
-    sock = sock or (Path.home() / "Library" / "Group Containers" / group / "bridge.sock")
+    sock = sock or SOCKET
     probe = probe or (lambda: subprocess.run(
         ["/usr/bin/nc", "-U", "-w", "2", str(sock)],
         input="perch-installer-probe\t/\t0-0\tinstaller",
@@ -905,8 +798,8 @@ def verify_socket(group: str, sock: Path | None = None, probe=None, sleep=time.s
     if not sock.is_socket():
         raise SystemExit(
             f"The island is running but never bound its socket:\n   {sock}\n"
-            "So it cannot reach its App Group container, and every hook event would be lost "
-            "silently. Check the entitlement in the signature and the container's permissions."
+            "Every hook event would be lost. The card should say why; "
+            "check the socket rule in the signature (check_entitlements) and ~/.perch/island's permissions."
         )
     raise SystemExit(
         f"The socket file is there but nothing accepts connections:\n   {sock}\n"
@@ -918,10 +811,10 @@ def verify_socket(group: str, sock: Path | None = None, probe=None, sleep=time.s
 def main() -> None:
     parser = argparse.ArgumentParser(description="Build the notch island, install into /Applications, set up launch-at-login.")
     parser.add_argument(
-        "--migrate-from", metavar="OLD_APP_GROUP",
-        help="Move the care ledger from this old App Group container into the new one. "
-             "Only needed after changing the App Group name, and only once "
-             "(refuses if the target already has a ledger; never overwrites).",
+        "--migrate-from", metavar="OLD_CONTAINER", type=Path,
+        help="Copy the island's history (ledger, event log, day scores, corrections) out of this "
+             "old App Group container into ~/.perch/island. Only needed once, after upgrading "
+             "from a version that kept it there; refuses if ~/.perch/island already has any of it.",
     )
     opts = parser.parse_args()
 
@@ -929,60 +822,29 @@ def main() -> None:
     strip_debug_symbols(built)  # before signing: stripping the executable invalidates the signature
     # Before signing too: the signature seals Info.plist, and this edits it.
     version = bump_build_version(built)
-
-    # `base`: the repo's prefix-free group, read from the product before any
-    # prefix injection (app_group_of still enforces the prefix-free shape). This
-    # is the value the entitlement (and thus the signature) carries.
-    base = app_group_of(built)
-    team = development_team()
-    # `container`: the folder the build will actually read and write. On a
-    # signing machine the App Group container is `<TeamID>.<base>`. That
-    # prefixed name has to appear in both places that decide where the app looks
-    # and what the sandbox permits: Info.plist (so AppGroup.swift resolves it)
-    # and the entitlement (so the sandbox admits the app to it). Without a team
-    # the container is just `base`. The prefix never appears in the repo, only
-    # in this local product's Info.plist and in the temp entitlement used to
-    # sign it.
-    container = f"{team}.{base}" if team else base
-
-    if team:
-        # Sign with the team's certificate and point both Info.plist and the
-        # entitlement at the prefixed container. Info.plist decides where
-        # AppGroup.swift looks and the entitlement decides where the sandbox
-        # lets it in; name different containers and the island resolves one
-        # place but is denied it, so the socket never binds and every write is
-        # lost.
-        identity = signing_identity(team)
-        inject_team_prefix(built, container)   # patch the product's Info.plist
-        sign_with_identity(built, identity, container)   # and the (temp, uncommitted) entitlement
-        print(f"Signed for team {team}; container {container}.")
-    else:
-        print(
-            "\n⚠️  No DEVELOPMENT_TEAM in Config.xcconfig: building ad-hoc, prefix-free.\n"
-            "    The menu-bar island works. ⚠️ But its container is then the bare\n"
-            f"    {base} rather than <TeamID>.{base} — a DIFFERENT folder,\n"
-            "    so a machine that has been running signed builds would start from an\n"
-            "    empty ledger. See --migrate-from before switching modes.\n")
-        sign_adhoc(built)
-
-    # The signature carries the entitlement for `container`: prefixed on a
-    # signing machine, plain `base` ad-hoc (there container == base). Checking
-    # `container` is checking that the signature really names the same place
-    # Info.plist points at; a mismatch here is precisely the silent-write bug.
-    check_entitlement(built, container)   # must re-check after signing: entitlement missing = island glows but receives nothing
+    sign_adhoc(built)
+    check_entitlements(built)   # what the signature carries, not what the repo file says
     verify_shipped_bytes(built)   # no other guard scans the bundle, and the bundle is what ships
     stop_running()
     install_app(built)
     if opts.migrate_from:
         # Must run before the island starts: a running island may write a
-        # record at any moment, and once the target file exists the migration
-        # can never run again
-        print(migrate_ledger(opts.migrate_from, container))
+        # record at any moment, and once a target exists the migration refuses
+        print(migrate_island_data(opts.migrate_from))
+    else:
+        # Never guessed (see migrate_island_data), but never silent either:
+        # an island starting on an empty folder looks like history vanishing.
+        left = [c for c in old_containers() if not any((ISLAND_DIR / n).exists() for n in MIGRATED)]
+        if left:
+            print("\n⚠️  History from an older version is still in:")
+            for c in left:
+                print("   ", c)
+            print("   To bring it over: python3 install-island-app.py --migrate-from <that path>\n")
     install_launch_agent()
     verify()
-    verify_socket(container)      # the process being up proves nothing; the socket does
-    reconciler_started_at = install_reconciler(container)
-    verify_reconciler(container, reconciler_started_at)
+    verify_socket()      # the process being up proves nothing; the socket does
+    reconciler_started_at = install_reconciler()
+    verify_reconciler(reconciler_started_at)
     prune_stale_registrations(INSTALLED)     # ...and every build directory this app ever lived in is still on the books
     print(f"Installed build {version}.")
     print("\nDone. From now on: starts at login; to open manually, double-click Perch in /Applications.")

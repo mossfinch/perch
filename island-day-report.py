@@ -81,68 +81,34 @@ with different bridge thresholds, and the two do not agree. Anything that acts o
 number takes `--reading`: a day with no log prints no line there, so a caller
 can tell "nothing recorded" from "measured zero".
 
-`--via-bridge` is for schedulers. The log lives in the island's App Group
-container, and macOS treats a program reading another app's container as
-"accessing data from other apps": it stops the read and asks the person at the
-screen. A launchd job has nobody at the screen, and a command-line tool gets
-asked again on every launch, so a scheduled `--reading` hangs until it times
-out. Asking the island over its own socket sidesteps that: connecting to a
-socket is not a read of the container, and the reply is the day files' own
-bytes, so the readings are the same. It needs the island running, and reaches
-back 31 days; for anything older, read the directory.
+`--via-bridge` asks the running island over its socket instead of reading the
+log directory. The readings are the same: the reply is the day files' own bytes.
+It needs the island running, and reaches back 31 days; for anything older, read
+the directory. (It was needed while the log lived in an App Group container,
+which macOS guards against other programs; the log now sits in
+`~/.perch/island`, which any program of this user can read.)
 """
 from __future__ import annotations   # so `X | None` annotations parse on macOS's stock python 3.9
 
 import json
 import math
 import os
-import subprocess
 import sys
 import time
 from collections import defaultdict
 from datetime import datetime, timedelta
 
-def group_core(group: str) -> str:
-    """The `group.x` core from either spelling the OS uses: `group.x` bare,
-    or `<TeamID>.group.x` once the installer stamps a signing Team into the
-    entitlement (macOS names the on-disk container with the prefix then).
-    Returns "" when it is neither. Same rule as both hook installers; the
-    full value, prefix and all, is what names the container directory."""
-    core = group[group.index("group."):] if ".group." in group and not group.startswith("group.") else group
-    if not core.startswith("group.") or not core.removeprefix("group."):
-        return ""
-    return core
-
-
-def _app_group() -> str:
-    """Read the App Group from the installed island; never hard-coded: a
-    Team ID links to the Apple developer account's registrant name."""
-    plist = "/Applications/Perch.app/Contents/Info.plist"
-    if not os.path.exists(plist):
-        raise SystemExit(f"{plist} not found. Install the island first: python3 install-island-app.py (same directory)")
-    out = subprocess.run(["/usr/libexec/PlistBuddy", "-c", "Print :AppGroupID", plist],
-                         capture_output=True, text=True).stdout.strip()
-    if not group_core(out):
-        raise SystemExit(f"Bad App Group in the installed island (got {out!r})")
-    return out
+ISLAND_DIR = os.path.expanduser("~/.perch/island")   # the island's DataHome.swift
 
 
 def events_dir() -> str:
-    """Where the island writes its event log.
-
-    Resolved lazily, not at import time: the tests import this module to drive
-    the real turn-cutting function, and reading the installed app during
-    import would make them depend on whether this machine happens to have
-    Perch installed.
-    """
-    return os.path.expanduser(f"~/Library/Group Containers/{_app_group()}/agent-events")
+    """Where the island writes its event log."""
+    return os.path.join(ISLAND_DIR, "agent-events")
 
 
 def bridge_socket() -> str:
-    """Where the island listens. The socket sits inside the container too, but
-    connecting to it is not reading the container, and that is the whole point
-    of `--via-bridge` (see the module docstring)."""
-    return os.path.expanduser(f"~/Library/Group Containers/{_app_group()}/bridge.sock")
+    """Where the island listens."""
+    return os.path.join(ISLAND_DIR, "bridge.sock")
 
 
 BRIDGE_MAX_BYTES = 8 * 1024 * 1024   # the island's cap on one ledger reply
@@ -848,8 +814,8 @@ def report(day, events):
 def main():
     args = [a for a in sys.argv[1:]]
     if "--via-bridge" in args:
-        # Decided before `events_dir()` is even looked at: listing that
-        # directory is the read the flag exists to avoid.
+        # Decided before `events_dir()` is even looked at: with the flag,
+        # nothing is read from that directory.
         if "--reading" not in args:
             raise SystemExit("--via-bridge goes with --reading only; the other views read the directory")
         rest = [a for a in args if a not in ("--reading", "--via-bridge")]

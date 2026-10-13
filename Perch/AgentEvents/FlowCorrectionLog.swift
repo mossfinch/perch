@@ -20,7 +20,7 @@ import Foundation
 /// swallowed, and its only trace is a `false` return no caller should act on.
 enum FlowCorrectionLog {
     private static var directory: URL {
-        AppGroup.containerURL.appendingPathComponent("flow-corrections")
+        DataHome.url.appendingPathComponent("flow-corrections")
     }
 
     /// The tap arrives on the main thread, and writing must not hold it.

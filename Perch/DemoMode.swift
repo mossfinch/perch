@@ -1,16 +1,16 @@
 import Foundation
 
 /// `Perch --demo`: the island with made-up projects and a made-up week, for recording what it
-/// looks like. `AppGroup` swaps the container for a scratch directory; this fills it.
+/// looks like. `DataHome` swaps `~/.perch/island` for a scratch directory; this fills it.
 ///
 /// The scratch directory is seeded with a week of events before the island reads anything,
 /// and a short script then pushes events into the demo socket the way the hooks do, so what
 /// the recording shows comes out of the same code a real day goes through. Real agents cannot
-/// reach this island: their hooks push to the socket in the real container.
+/// reach this island: their hooks push to the socket in the real `~/.perch/island`.
 enum DemoMode {
     /// Before the island is built: it reads the week as it starts.
     static func seed() {
-        seedWeek(into: AppGroup.containerURL.appendingPathComponent("agent-events"), now: Date())
+        seedWeek(into: DataHome.url.appendingPathComponent("agent-events"), now: Date())
     }
 
     /// Hours of quick hand-offs on each past day of this week, chosen to land on different
@@ -71,7 +71,7 @@ enum DemoMode {
     }
 
     private static func push(_ line: String) {
-        let path = AppGroup.containerURL.appendingPathComponent(AgentEventMonitor.socketFileName).path
+        let path = DataHome.url.appendingPathComponent(AgentEventMonitor.socketFileName).path
         let fd = socket(AF_UNIX, SOCK_STREAM, 0)
         guard fd >= 0 else { return }
         defer { close(fd) }

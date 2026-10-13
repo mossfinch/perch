@@ -42,15 +42,15 @@ default:
   return execFileSync(harness, args, { encoding: "utf8" }).trim();
 }
 
-// The reference: both Python installers run for real against a fixture home. Only the App
-// Group lookup is replaced, because it reads the app installed on this machine.
+// The reference: both Python installers run for real against a fixture home. Only the
+// installed-app check is replaced, because it reads the app installed on this machine.
 function python(home) {
   const run = (script) => execFileSync("python3", ["-B", "-c", `
 import importlib.util, io, contextlib
 spec = importlib.util.spec_from_file_location("installer", ${JSON.stringify(pkgPath(script))})
 m = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(m)
-m.app_group_id = lambda: "group.example.perch"
+m.require_island = lambda: None
 with contextlib.redirect_stdout(io.StringIO()):
     m.main()
 `], { env: { ...process.env, HOME: home }, stdio: "pipe" });
@@ -226,14 +226,22 @@ test("the sandbox opens exactly the three folders connecting needs, and nothing 
   const ent = fs.readFileSync(islandPath("Perch.entitlements"), "utf8");
   assert.match(ent, /<key>com\.apple\.security\.app-sandbox<\/key>\s*<true\/>/, "the sandbox was switched off");
   const keys = [...ent.matchAll(/<key>([^<]+)<\/key>/g)].map((m) => m[1]).sort();
+  // No App Group (an ad-hoc app's container made macOS ask on every launch, and "Don't
+  // Allow" cost every event) and no network key of any kind.
   assert.deepEqual(keys, [
     "com.apple.security.app-sandbox",
-    "com.apple.security.application-groups",
     "com.apple.security.temporary-exception.files.home-relative-path.read-write",
+    "com.apple.security.temporary-exception.sbpl",
   ]);
   const block = ent.split("home-relative-path.read-write</key>")[1].split("</array>")[0];
   const folders = [...block.matchAll(/<string>([^<]+)<\/string>/g)].map((m) => m[1]).sort();
   assert.deepEqual(folders, ["/.claude/", "/.codex/", "/.perch/"]);
+  // The one sandbox rule: a local socket may be bound in ~/.perch/island, nowhere else.
+  const rules = [...ent.split("temporary-exception.sbpl</key>")[1].split("</array>")[0]
+    .matchAll(/<string>([^<]+)<\/string>/g)].map((m) => m[1].replace(/&quot;/g, '"'));
+  assert.deepEqual(rules, [
+    '(allow network-bind (local unix-socket (subpath (string-append (param "_HOME") "/.perch/island"))))',
+  ]);
 
   // The launcher link points into the app, so the script has to be in it, and runnable:
   // Xcode copies the file with the mode it has here.

@@ -89,8 +89,8 @@ const viewModelSource = () => {
 };
 const SOURCE_HEALTH_SWIFT = islandPath("SourceHealth.swift");
 // The ledger needs the container location; the container id is read from
-// Info.plist (AppGroup.swift). Compiling the ledger requires it.
-const APP_GROUP_SWIFT = islandPath("AppGroup.swift");
+// Info.plist (DataHome.swift). Compiling the ledger requires it.
+const DATA_HOME_SWIFT = islandPath("DataHome.swift");
 const CARE_MOVE_POOL_SWIFT = islandPath("CareMovePool.swift");
 const CARE_SESSION_CLOCK_SWIFT = islandPath("CareSessionClock.swift");
 const CARE_SESSION_RECORDER_SWIFT = islandPath("CareSessionRecorder.swift");
@@ -98,6 +98,6 @@ const CARE_SESSION_RECORDER_SWIFT = islandPath("CareSessionRecorder.swift");
 module.exports = {
   ISLAND_DIR, PKG, WORKING, pkgPath, islandTree, islandPath,
   ISLAND_CARE_LEDGER_SWIFT, ISLAND_CATALOG, ISLAND_VIEW_FILES, islandViews, ISLAND_VIEW_SWIFT,
-  viewModelFiles, viewModelSource, SOURCE_HEALTH_SWIFT, APP_GROUP_SWIFT,
+  viewModelFiles, viewModelSource, SOURCE_HEALTH_SWIFT, DATA_HOME_SWIFT,
   CARE_MOVE_POOL_SWIFT, CARE_SESSION_CLOCK_SWIFT, CARE_SESSION_RECORDER_SWIFT,
 };

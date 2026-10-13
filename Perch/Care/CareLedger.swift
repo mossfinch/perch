@@ -6,7 +6,7 @@ import Foundation
 // read and write it. The island writes a record whenever a guided move finishes, and other
 // programs read it as JSON.
 //
-// The ledger lives at `care-ledger.json` in the App Group container. The root object is:
+// The ledger lives at `~/.perch/island/care-ledger.json`. The root object is:
 //
 //     { "version": 1, "records": [ ...each one as below... ] }
 //
@@ -70,12 +70,12 @@ struct CareLedger: Codable, Equatable {
 
 /// Reads and replace-writes `care-ledger.json`.
 ///
-/// Every method works on the real ledger in the App Group by default; `url` can point at a
+/// Every method works on the real ledger in `~/.perch/island` by default; `url` can point at a
 /// temporary or migration file instead, with the same parsing and writing. This type does
 /// not coordinate writers, so callers must keep to the single-writer rule at the top of
 /// this file.
 enum CareLedgerStore {
-    static var ledgerURL: URL { AppGroup.containerURL.appendingPathComponent("care-ledger.json") }
+    static var ledgerURL: URL { DataHome.url.appendingPathComponent("care-ledger.json") }
 
     /// A missing file means no records yet and yields an empty v1 ledger; a file that
     /// exists but cannot be read or decoded throws.

@@ -1,15 +1,16 @@
 import Foundation
 import Darwin
 
-/// Receives agent lifecycle events on a Unix domain socket in the App Group
-/// container and hands them to the island as soon as a hook connects.
+/// Receives agent lifecycle events on a Unix domain socket in `~/.perch/island`
+/// and hands them to the island as soon as a hook connects.
 ///
 /// A socket rather than a polled file: each hook sends one small message per
 /// event, and a stream socket delivers it at once, with no timer wakeups and no
-/// file re-arm races. The socket sits in the App Group container so the
-/// sandboxed island may bind it (AF_UNIX access follows the file permissions on
-/// the socket path, not the network entitlements), and the unsandboxed shell
-/// hook connects to the same absolute path with `nc -U`.
+/// file re-arm races. The sandbox refuses a socket bind outside the app's own
+/// container unless a rule allows it; `Perch.entitlements` carries one rule
+/// that allows it in `~/.perch/island` and nowhere else, and grants no network
+/// access. The unsandboxed shell hook connects to the same absolute path with
+/// `nc -U`.
 ///
 /// Fail-open: when the island is not running nothing binds the socket, the
 /// hook's `nc -U` fails to connect, and the agent carries on unaffected.
@@ -19,12 +20,10 @@ import Darwin
 /// `start()` and only read afterwards. Safety rests on those two conventions,
 /// not on the type system, like the `nonisolated(unsafe)` in `AgentEventLog`.
 final class AgentEventMonitor: @unchecked Sendable {
-    static var appGroupID: String { AppGroup.id }
-
     static let socketFileName = "bridge.sock"
 
     static var socketURL: URL {
-        AppGroup.containerURL.appendingPathComponent(socketFileName)
+        DataHome.url.appendingPathComponent(socketFileName)
     }
 
     // Callback parameters: (project directory, source agent).
@@ -35,6 +34,10 @@ final class AgentEventMonitor: @unchecked Sendable {
     var onWaiting: (@MainActor (String, String) -> Void)?
     var onComplete: (@MainActor (String, String) -> Void)?
     var onReconciliation: ((Data, Data) -> Void)?
+    /// The socket could not be set up, with the reason. Without it no hook can
+    /// reach the island, and an island that looks fine while hearing nothing is
+    /// the failure this exists to prevent: the card says so instead.
+    var onListenFailed: (@MainActor (String) -> Void)?
 
     private static let maxReconciliationBytes = 4 * 1024 * 1024
     private static let maxHookLedgerBytes = 8 * 1024 * 1024
@@ -56,6 +59,7 @@ final class AgentEventMonitor: @unchecked Sendable {
     private func bindAndListen() {
         guard listenFD < 0 else { return }   // already listening; idempotent
 
+        if let problem = DataHome.privacyProblem { return reportFailure(problem, nil) }
         let url = Self.socketURL
         let path = url.path
         try? FileManager.default.createDirectory(
@@ -63,12 +67,15 @@ final class AgentEventMonitor: @unchecked Sendable {
         unlink(path)   // remove last run's leftover socket file, or bind hits EADDRINUSE
 
         let fd = socket(AF_UNIX, SOCK_STREAM, 0)
-        guard fd >= 0 else { return }
+        guard fd >= 0 else { return reportFailure("socket", errno) }
 
         var addr = sockaddr_un()
         addr.sun_family = sa_family_t(AF_UNIX)
         let capacity = MemoryLayout.size(ofValue: addr.sun_path)   // 104
-        guard path.utf8.count < capacity else { close(fd); return }   // overlong path: better not to start than to bind a truncated mess
+        guard path.utf8.count < capacity else {   // overlong path: better not to start than to bind a truncated mess
+            close(fd)
+            return reportFailure("path too long", nil)
+        }
         withUnsafeMutablePointer(to: &addr.sun_path) { tuplePtr in
             tuplePtr.withMemoryRebound(to: CChar.self, capacity: capacity) { dst in
                 _ = path.withCString { strncpy(dst, $0, capacity - 1) }
@@ -79,8 +86,16 @@ final class AgentEventMonitor: @unchecked Sendable {
         let bound = withUnsafePointer(to: &addr) { raw in
             raw.withMemoryRebound(to: sockaddr.self, capacity: 1) { bind(fd, $0, size) }
         }
-        guard bound == 0 else { close(fd); return }
-        guard listen(fd, 4) == 0 else { close(fd); unlink(path); return }
+        guard bound == 0 else {
+            let code = errno
+            close(fd)
+            return reportFailure("bind", code)
+        }
+        guard listen(fd, 4) == 0 else {
+            let code = errno
+            close(fd); unlink(path)
+            return reportFailure("listen", code)
+        }
 
         listenFD = fd
         let source = DispatchSource.makeReadSource(fileDescriptor: fd, queue: queue)
@@ -88,6 +103,12 @@ final class AgentEventMonitor: @unchecked Sendable {
         source.setCancelHandler { close(fd); unlink(path) }   // the one place that closes the fd and removes the file
         acceptSource = source
         source.resume()
+    }
+
+    private func reportFailure(_ step: String, _ code: Int32?) {
+        let reason = code.map { "\(step): \(String(cString: strerror($0)))" } ?? step
+        let callback = onListenFailed
+        Task { @MainActor in callback?(reason) }
     }
 
     private func acceptOne() {
@@ -134,7 +155,7 @@ final class AgentEventMonitor: @unchecked Sendable {
     }
 
     private func respondWithHookLedger(to client: Int32, lookbackDays: Int) {
-        let directory = AppGroup.containerURL.appendingPathComponent("agent-events")
+        let directory = DataHome.url.appendingPathComponent("agent-events")
         let keys: Set<URLResourceKey> = [.contentModificationDateKey, .isRegularFileKey]
         let cutoff = Date().addingTimeInterval(-TimeInterval(lookbackDays + 1) * 86_400)
         do {

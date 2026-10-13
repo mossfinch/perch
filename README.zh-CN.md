@@ -30,7 +30,7 @@
 - [支持的 agent](#支持的-agent)
 - [安装](#安装)
 - [卸载与删除数据](#卸载与删除数据)
-- [如果修改 App Group 名称](#如果修改-app-group-名称)
+- [从 2.3 或更早版本升级](#从-23-或更早版本升级)
 - [开发](#开发)
 - [参与](#参与)
 - [许可证](#许可证)
@@ -157,8 +157,9 @@ Perch 不保存提示词或回复正文。它会保存：
 
 这些数据都留在本机。项目完整路径也属于隐私信息；如果不想保留，见下面的“卸载与删除数据”。
 
-app 运行在沙箱里。为了接入 agent，它只能写三个文件夹：`~/.claude`、`~/.codex` 和 `~/.perch`；
-在你点 **Connect** 之前，它不会往那里写任何东西。
+app 运行在沙箱里，只能写三个文件夹：`~/.claude`、`~/.codex` 和 `~/.perch`。它自己的数据放在
+`~/.perch/island`；在你点 **Connect** 之前，它不会往 `~/.claude` 或 `~/.codex` 写任何东西。
+它不申请任何联网权限，沙箱也不让它联网。
 
 <details>
 <summary>历史重建为什么存在，以及它读取什么</summary>
@@ -166,9 +167,9 @@ app 运行在沙箱里。为了接入 agent，它只能写三个文件夹：`~/.
 app 安装脚本会安装 `~/.perch/bin/perch-reconcile`，由 LaunchAgent 在登录时和每 30 分钟运行一次。
 它读取 Codex rollout 和 Claude 会话记录中的生命周期元数据，用来补回 hook 偶尔漏掉的开始与结束事件。
 
-扫描得到的工作缓存位于 `~/.perch/reconciliation`，可以随时删除。普通 LaunchAgent 不能直接写入
-带 Team 的 App Group，所以 Perch app 通过现有的本地 socket 交换生命周期行和经过校验的派生结果，
-再原子写入容器。两个方向都不携带提示词或回复正文，沙箱内的 app 也不会获得整个家目录的读取权限。
+扫描得到的工作缓存位于 `~/.perch/reconciliation`，可以随时删除。这个工具通过本地 socket 把生命周期行
+和经过校验的派生结果交给 Perch app，由 app 原子写入 `~/.perch/island`，所以那个文件夹只有 app 一个写入者。
+两个方向都不携带提示词或回复正文，沙箱内的 app 也不会获得整个家目录的读取权限。
 
 </details>
 
@@ -266,25 +267,32 @@ rm -rf /Applications/Perch.app
 删除 Perch 保存的全部本地数据：
 
 ```bash
-rm -rf ~/Library/Group\ Containers/group.io.github.mossfinch.perch
+rm -rf ~/.perch/island
 ```
 
 这个目录包括动作记录 `care-ledger.json`、原始 agent 事件 `agent-events/*.jsonl`，
-以及 `reconciliation/` 下可以重建的派生历史和健康状态。Codex 和 Claude 自己保存的原始历史
+以及 `reconciliation/` 下可以重建的派生历史和健康状态。2.3 及更早的版本把同样的文件放在
+`~/Library/Group Containers/group.io.github.mossfinch.perch`；如果那个目录还在，也一并删掉。
+Codex 和 Claude 自己保存的原始历史
 仍然留在各自的目录中，不会被这条命令删除。
 
 ---
 
-## 如果修改 App Group 名称
+## 从 2.3 或更早版本升级
 
-容器路径跟随 App Group 名称变化，旧动作记录不会自动出现在新容器中。请显式迁移：
+2.3 及更早的版本把数据放在 App Group 容器里。下载版因此每次启动都会被 macOS 问一次
+“Perch 想要访问其他 App 的数据”；如果选了“不允许”，Perch 就收不到任何 agent 的消息。
+现在 Perch 把所有东西放在 `~/.perch/island`，不再弹出这个询问。
+
+下载版会从一个空的新文件夹开始。从源码安装时，如果旧容器里还有历史，安装脚本会提示；
+用它打印出的路径搬过来：
 
 ```bash
-python3 install-island-app.py --migrate-from <旧的-app-group-id>
+python3 install-island-app.py --migrate-from <旧容器路径>
 ```
 
-安装脚本只复制、不删除；它拒绝覆盖已经存在的记录，也拒绝软链接和无法读取的账本，
-并以原子方式写入新容器。
+它只复制、不删除；`~/.perch/island` 里已经有任何一项时拒绝执行，也拒绝软链接和无法读取的账本；
+它先把所有东西复制好，再一起放到位，所以中途失败不会留下搬了一半的数据。
 
 ---
 

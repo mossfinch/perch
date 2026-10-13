@@ -6,6 +6,23 @@ Notable changes to Perch, newest first. The format follows
 
 ## [Unreleased]
 
+## [2.4] — 2026-10-13
+
+### Fixed
+
+- A downloaded Perch no longer asks "Perch would like to access data from other
+  apps" every time it starts. Choosing Don't Allow there used to leave Perch
+  deaf: the bird sat in the notch and heard nothing from your agents, with no
+  word as to why. Perch now keeps its data in `~/.perch/island` instead of an
+  App Group container, and asks nothing. A download starts that folder empty;
+  built from source, the installer offers to bring the old history over
+  (`--migrate-from`).
+- If Perch ever cannot open the socket your agents talk to, the card now says
+  so instead of sitting still.
+- Built from source, Perch now comes back by itself when macOS closes it (it
+  does that to apps when it frees disk space). Quitting it yourself still
+  keeps it closed.
+
 ### Changed
 
 - The island now grows out of the notch. Opening stretches the closed capsule
@@ -153,7 +170,8 @@ Notable changes to Perch, newest first. The format follows
   The archive is packed deterministically: fixed timestamps, no extra fields,
   no comments, every byte accounted for.
 
-[Unreleased]: https://github.com/mossfinch/perch/compare/v2.3...HEAD
+[Unreleased]: https://github.com/mossfinch/perch/compare/v2.4...HEAD
+[2.4]: https://github.com/mossfinch/perch/compare/v2.3...v2.4
 [2.3]: https://github.com/mossfinch/perch/compare/v2.2...v2.3
 [2.2]: https://github.com/mossfinch/perch/compare/v2.1...v2.2
 [2.1]: https://github.com/mossfinch/perch/compare/v2.0...v2.1

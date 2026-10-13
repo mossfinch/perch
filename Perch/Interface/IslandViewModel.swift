@@ -95,6 +95,9 @@ final class IslandViewModel: ObservableObject {
     @Published var projects: [ProjectStatus] = []                  // one status dot per project
     /// Whether the second row offers to connect the agents. See `IslandViewModel+Setup.swift`.
     @Published var agentSetup: AgentSetup = .hidden
+    /// Set once if the socket could not be opened; wins over whatever the hook check says,
+    /// because wired hooks pushing at a socket nobody holds is still nothing heard.
+    var listenFailure: String?
 
     /// Mirrors `stretch.asking` for the views. It is a separate published value so the
     /// 15-second refresh does not republish an unchanged answer.
@@ -342,6 +345,13 @@ final class IslandViewModel: ObservableObject {
             } catch {
                 return
             }
+        }
+        agentMonitor.onListenFailed = { [weak self] reason in
+            guard let self else { return }
+            listenFailure = reason
+            agentSetup = .cannotListen(reason)
+            // At launch the panel may not exist yet; same delay as the Connect offer.
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1) { [weak self] in self?.peekOpen() }
         }
         agentMonitor.start()
     }

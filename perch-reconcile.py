@@ -943,13 +943,12 @@ def atomic_write_json(path, value):
 
 
 def publish_reconciliation(socket_path, health, canonical):
-    """Hand derived files to the entitled Perch app for App Group publication.
+    """Hand derived files to the Perch app, which publishes them in `~/.perch/island`.
 
-    A plain LaunchAgent is allowed to read the existing group ledger on current
-    macOS, but TCC rejects creating or atomically replacing files there.  The
-    app already owns an AF_UNIX bridge in that container, so the unprivileged
-    scanner sends bounded derived bytes to the signed app instead of pretending
-    a successful terminal write proves the background path.
+    The island is the only writer of that folder, so the scanner sends bounded
+    derived bytes over the island's AF_UNIX bridge instead of writing there
+    itself, and a write that succeeds from a terminal proves nothing about the
+    background path.
     """
     message = b"\t".join((
         b"reconciliation",

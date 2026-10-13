@@ -122,6 +122,7 @@ struct GuidedCareCard: View {
         case .hidden, .needsConnect: line = "Perch can't hear Claude Code or codex yet"
         case .notInApplications: line = "Move Perch to Applications to connect your agents"
         case .failed(let reason): line = "Couldn't connect: \(reason)"
+        case .cannotListen(let reason): line = "Perch can't receive events (\(reason)). Quit and reopen it"
         case .connected(let trust):
             line = trust ? "Connected. In codex, trust Perch's hooks once under /hooks"
                          : "Connected. Your agents will show up here"

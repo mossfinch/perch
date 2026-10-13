@@ -9,7 +9,7 @@ import Foundation
 /// person was focused, or even present.
 enum AgentEventLog {
     private static var directory: URL {
-        AppGroup.containerURL.appendingPathComponent("agent-events")
+        DataHome.url.appendingPathComponent("agent-events")
     }
 
     /// Every production read and write happens on this queue, so nothing blocks

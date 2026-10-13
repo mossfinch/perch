@@ -33,7 +33,7 @@
 		00A1CE00000000000000001A /* IslandHoverMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00A1CE000000000000000019 /* IslandHoverMonitor.swift */; };
 		00A1CE00000000000000001C /* IslandPresentationPhase.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00A1CE00000000000000001B /* IslandPresentationPhase.swift */; };
 		00A1CE00000000000000001E /* IslandWindowController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00A1CE00000000000000001D /* IslandWindowController.swift */; };
-		00A1CE000000000000000020 /* AppGroup.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00A1CE00000000000000001F /* AppGroup.swift */; };
+		00A1CE000000000000000020 /* DataHome.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00A1CE00000000000000001F /* DataHome.swift */; };
 		00A1CE000000000000000022 /* PerchApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00A1CE000000000000000021 /* PerchApp.swift */; };
 		00A1CE000000000000000024 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 00A1CE000000000000000023 /* Assets.xcassets */; };
 		00A1CE000000000000000026 /* BeatTick.aiff in Resources */ = {isa = PBXBuildFile; fileRef = 00A1CE000000000000000025 /* BeatTick.aiff */; };
@@ -78,7 +78,7 @@
 		00A1CE000000000000000019 /* IslandHoverMonitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IslandHoverMonitor.swift; sourceTree = "<group>"; };
 		00A1CE00000000000000001B /* IslandPresentationPhase.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IslandPresentationPhase.swift; sourceTree = "<group>"; };
 		00A1CE00000000000000001D /* IslandWindowController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IslandWindowController.swift; sourceTree = "<group>"; };
-		00A1CE00000000000000001F /* AppGroup.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppGroup.swift; sourceTree = "<group>"; };
+		00A1CE00000000000000001F /* DataHome.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DataHome.swift; sourceTree = "<group>"; };
 		00A1CE000000000000000021 /* PerchApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PerchApp.swift; sourceTree = "<group>"; };
 		00A1CE000000000000000023 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		00A1CE000000000000000025 /* BeatTick.aiff */ = {isa = PBXFileReference; lastKnownFileType = audio.aiff; path = BeatTick.aiff; sourceTree = "<group>"; };
@@ -187,7 +187,7 @@
 		00A1CE000000000000000036 /* Perch */ = {
 			isa = PBXGroup;
 			children = (
-				00A1CE00000000000000001F /* AppGroup.swift */,
+				00A1CE00000000000000001F /* DataHome.swift */,
 				00A1CE000000000000000021 /* PerchApp.swift */,
 				00A1CE000000000000000A19 /* DemoMode.swift */,
 				00A1CE00000000000000002F /* AgentEvents */,
@@ -289,7 +289,7 @@
 				00A1CE000000000000000A14 /* IslandViewModel+Setup.swift in Sources */,
 				00A1CE000000000000000002 /* AgentEventLog.swift in Sources */,
 				00A1CE000000000000000004 /* AgentEventMonitor.swift in Sources */,
-				00A1CE000000000000000020 /* AppGroup.swift in Sources */,
+				00A1CE000000000000000020 /* DataHome.swift in Sources */,
 				00A1CE000000000000000008 /* CareLedger.swift in Sources */,
 				00A1CE00000000000000000A /* CareMovePool.swift in Sources */,
 				00A1CE000000000000000A08 /* StretchNudge.swift in Sources */,

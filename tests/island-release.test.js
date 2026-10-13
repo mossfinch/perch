@@ -332,7 +332,7 @@ test("island sources split into 5 duty groups, never flattened back into one lay
   const WHERE = {
     // DemoMode sits beside AppGroup because it works by answering the same question:
     // where the container is.
-    ".":            ["PerchApp.swift", "AppGroup.swift", "DemoMode.swift",
+    ".":            ["PerchApp.swift", "DataHome.swift", "DemoMode.swift",
                      "Info.plist", "Perch.entitlements"],
     // StalePolicy belongs here: it answers "how long before an agent event is
     // stale", which is event lifecycle, not interface.
@@ -390,7 +390,7 @@ test("island sources split into 5 duty groups, never flattened back into one lay
 
   // AppGroup stays top-level on purpose: socket / event log / ledger all ask
   // it where the container is; filing it under any one of them is a lie.
-  assert.equal(actual.get("AppGroup.swift"), ".", "AppGroup is the shared foundation of all three, must stay top-level");
+  assert.equal(actual.get("DataHome.swift"), ".", "AppGroup is the shared foundation of all three, must stay top-level");
 
   // The project must group too: Xcode's navigator shows PBXGroups, and grouped
   // on disk but flat in the project is grouped for nobody.

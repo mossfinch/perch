@@ -9,7 +9,7 @@ const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
 const { execFileSync } = require("node:child_process");
-const { ISLAND_CARE_LEDGER_SWIFT, ISLAND_CATALOG, islandViews, viewModelSource, SOURCE_HEALTH_SWIFT, APP_GROUP_SWIFT, CARE_MOVE_POOL_SWIFT, CARE_SESSION_CLOCK_SWIFT, CARE_SESSION_RECORDER_SWIFT, islandPath, pkgPath } = require("./island-paths");
+const { ISLAND_CARE_LEDGER_SWIFT, ISLAND_CATALOG, islandViews, viewModelSource, SOURCE_HEALTH_SWIFT, DATA_HOME_SWIFT, CARE_MOVE_POOL_SWIFT, CARE_SESSION_CLOCK_SWIFT, CARE_SESSION_RECORDER_SWIFT, islandPath, pkgPath } = require("./island-paths");
 
 test("source health remains validated and atomically published for background diagnostics", () => {
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "perch-source-health-"));
@@ -54,7 +54,7 @@ precondition(try! Data(contentsOf: publishDirectory.appendingPathComponent("sour
 precondition(try! Data(contentsOf: publishDirectory.appendingPathComponent("canonical-turns.jsonl")) == canonical)
 `);
 
-  execFileSync("swiftc", [source, APP_GROUP_SWIFT, main, "-o", binary], { stdio: "pipe" });
+  execFileSync("swiftc", [source, DATA_HOME_SWIFT, main, "-o", binary], { stdio: "pipe" });
   execFileSync(binary, { stdio: "pipe" });
 });
 
@@ -122,7 +122,7 @@ for key in ["\\"date\\"", "\\"moveId\\"", "\\"category\\"", "\\"sets\\"", "\\"se
 precondition(json.contains("\\"neck\\""))  // category encodes as its raw string, never a number
 `);
 
-  execFileSync("swiftc", [ISLAND_CARE_LEDGER_SWIFT, APP_GROUP_SWIFT, main, "-o", binary], { stdio: "pipe" });
+  execFileSync("swiftc", [ISLAND_CARE_LEDGER_SWIFT, DATA_HOME_SWIFT, main, "-o", binary], { stdio: "pipe" });
   execFileSync(binary, { stdio: "pipe" });
 });
 
@@ -193,7 +193,7 @@ precondition(wide.count == 5, "control: a wide window should see all 5 good rows
 `);
 
   execFileSync("swiftc", [islandPath("AgentEventLog.swift"), islandPath("FlowMath.swift"),
-                          APP_GROUP_SWIFT, main, "-o", binary], { stdio: "pipe" });
+                          DATA_HOME_SWIFT, main, "-o", binary], { stdio: "pipe" });
   execFileSync(binary, { stdio: "pipe" });
 
   // The order matters: seeding must happen before the monitor opens, or an
@@ -301,7 +301,7 @@ precondition(partial.sets == 0)
 precondition(partial.seconds == 18)
 `);
 
-  execFileSync("swiftc", [ISLAND_CARE_LEDGER_SWIFT, APP_GROUP_SWIFT, CARE_MOVE_POOL_SWIFT, CARE_SESSION_RECORDER_SWIFT, main, "-o", binary], { stdio: "pipe" });
+  execFileSync("swiftc", [ISLAND_CARE_LEDGER_SWIFT, DATA_HOME_SWIFT, CARE_MOVE_POOL_SWIFT, CARE_SESSION_RECORDER_SWIFT, main, "-o", binary], { stdio: "pipe" });
   execFileSync(binary, { stdio: "pipe" });
 });
 
@@ -387,18 +387,17 @@ clock.resume(at: 132)
 check(clock.position(for: chin, at: 135), elapsed: 15, frame: 1, reps: 3, complete: false)
 `);
 
-  execFileSync("swiftc", [ISLAND_CARE_LEDGER_SWIFT, APP_GROUP_SWIFT, CARE_MOVE_POOL_SWIFT, CARE_SESSION_CLOCK_SWIFT, main, "-o", binary], { stdio: "pipe" });
+  execFileSync("swiftc", [ISLAND_CARE_LEDGER_SWIFT, DATA_HOME_SWIFT, CARE_MOVE_POOL_SWIFT, CARE_SESSION_CLOCK_SWIFT, main, "-o", binary], { stdio: "pipe" });
   execFileSync(binary, { stdio: "pipe" });
 });
 
 test("island care session uses monotonic state and agent completion does not interrupt it", () => {
   const monitor = fs.readFileSync(islandPath("AgentEventMonitor.swift"), "utf8");
-  // The App Group definition lives in AppGroup.swift (the ledger should not
-  // depend on the socket listener just to know the container path).
-  // Invariant: the container id is read from Info.plist; no Team ID in source.
-  const appGroup = fs.readFileSync(islandPath("AppGroup.swift"), "utf8");
-  assert.match(appGroup, /forInfoDictionaryKey: "AppGroupID"/);
-  assert.match(monitor, /AppGroup\.id/);
+  // Where the island keeps things lives in DataHome.swift (the ledger should not
+  // depend on the socket listener just to know the folder).
+  const home = fs.readFileSync(islandPath("DataHome.swift"), "utf8");
+  assert.match(home, /"\.perch\/island"/);
+  assert.match(monitor, /DataHome\.url/);
   assert.match(monitor, /case "complete"/);   // event semantics (transport asserted elsewhere)
   assert.match(monitor, /case "working"/);
 
@@ -456,8 +455,8 @@ test("island receives agent events over a unix domain socket, zero polling", () 
   assert.match(monitor, /\bbind\b/);
   assert.match(monitor, /\blisten\b/);
   assert.match(monitor, /DispatchSource/);
-  assert.match(monitor, /bridge\.sock/);              // the socket lives in the app group container
-  assert.match(monitor, /AppGroup\.containerURL/);   // container derivation: see AppGroup.swift
+  assert.match(monitor, /bridge\.sock/);              // the socket lives in ~/.perch/island
+  assert.match(monitor, /DataHome\.url/);            // the folder: see DataHome.swift
   assert.doesNotMatch(monitor, /Timer\.scheduledTimer/);   // zero polling
   assert.match(monitor, /case "complete"/);
   assert.match(monitor, /case "working"/);
@@ -570,7 +569,7 @@ cx = importlib.util.module_from_spec(spec); spec.loader.exec_module(cx)
 # machine is not a test.
 def no_app(*a, **k):
     raise SystemExit("no island installed")
-cx.app_group_id = no_app
+cx.require_island = no_app
 foreign = {"hooks": [{"command": "someone-elses-hook", "type": "command"}]}
 root = {"hooks": {"PostToolUse": [dict(foreign)]}}
 # Explicit launcher path: the command must be buildable without Perch
@@ -614,14 +613,14 @@ test("yellow survives the 15-min sweep, no silent container fallback, screen cha
     "no duration constants in the ViewModel — the policy exists once, somewhere tests can reach");
   assert.doesNotMatch(prune, /removeAll \{ \$0\.updatedAt < cutoff \}/, "the old blanket sweep must not remain");
 
-  // ③ Failing to get the App Group container must crash loudly. A sandboxed
-  //    app's homeDirectoryForCurrentUser is the home inside the container;
-  //    falling back there writes everything into a shadow directory nothing
-  //    outside can read, without a sound.
-  const group = read("AppGroup.swift");
-  assert.doesNotMatch(group, /homeDirectoryForCurrentUser/, "no fallback to the sandbox's own home");
-  const container = group.match(/static let containerURL[\s\S]*?\n    \}\(\)/)?.[0] ?? "";
-  assert.match(container, /fatalError/, "an unavailable container must crash on the spot with a clear reason");
+  // ③ Failing to find the real home must crash loudly. A sandboxed app's
+  //    homeDirectoryForCurrentUser and NSHomeDirectory() are the home inside
+  //    its container; falling back there writes everything into a shadow
+  //    directory nothing outside can read, without a sound.
+  const home = read("DataHome.swift");
+  assert.doesNotMatch(home, /homeDirectoryForCurrentUser|NSHomeDirectory\(\)/, "no fallback to the sandbox's own home");
+  const realHome = home.match(/static var realHome[\s\S]*?\n    \}/)?.[0] ?? "";
+  assert.match(realHome, /getpwuid[\s\S]*fatalError/, "an unreadable home must crash on the spot with a clear reason");
 
   // ④ Panel coordinates are computed against the screen of that moment; without
   //    recomputing after a screen change the island draws on a screen that no

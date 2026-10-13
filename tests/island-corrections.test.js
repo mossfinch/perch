@@ -9,7 +9,7 @@ const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
 const { execFileSync } = require("node:child_process");
-const { ISLAND_CARE_LEDGER_SWIFT, islandViews, viewModelSource, APP_GROUP_SWIFT, islandPath } = require("./island-paths");
+const { ISLAND_CARE_LEDGER_SWIFT, islandViews, viewModelSource, DATA_HOME_SWIFT, islandPath } = require("./island-paths");
 
 test("a flow correction holds until the island changes its mind, and a spent one never revives", () => {
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "perch-flow-correct-"));
@@ -166,7 +166,7 @@ test("a flow correction lands as one line, and a write that fails never reaches 
   // day-score test next door.
   fs.writeFileSync(stub, `
 import Foundation
-enum AppGroup { static var containerURL: URL { URL(fileURLWithPath: NSTemporaryDirectory()) } }
+enum DataHome { static var url: URL { URL(fileURLWithPath: NSTemporaryDirectory()) } }
 `);
   fs.writeFileSync(main, `
 import Foundation
@@ -339,7 +339,7 @@ let after = try! String(contentsOf: ledgerURL, encoding: .utf8)
 precondition(after == corrupt, "the broken file must stay untouched — overwriting it means losing the history")
 `);
 
-  execFileSync("swiftc", [ISLAND_CARE_LEDGER_SWIFT, APP_GROUP_SWIFT, main, "-o", binary], { stdio: "pipe" });
+  execFileSync("swiftc", [ISLAND_CARE_LEDGER_SWIFT, DATA_HOME_SWIFT, main, "-o", binary], { stdio: "pipe" });
   execFileSync(binary, { stdio: "pipe" });
 });
 
@@ -424,7 +424,7 @@ out["arguedAgain"] = DayScore.record(date: "2026-08-24", field: .flow, value: 5,
 out["afterArguingAgain"] = look()
 print(String(data: try! JSONSerialization.data(withJSONObject: out), encoding: .utf8)!)
 `);
-  execFileSync("swiftc", [islandPath("DayScore.swift"), APP_GROUP_SWIFT, main, "-o", binary],
+  execFileSync("swiftc", [islandPath("DayScore.swift"), DATA_HOME_SWIFT, main, "-o", binary],
     { stdio: "pipe" });
   const r = JSON.parse(execFileSync(binary, [tmp], { encoding: "utf8" }));
 

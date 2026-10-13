@@ -9,7 +9,7 @@ const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
 const { execFileSync } = require("node:child_process");
-const { APP_GROUP_SWIFT, islandPath, pkgPath } = require("./island-paths");
+const { DATA_HOME_SWIFT, islandPath, pkgPath } = require("./island-paths");
 
 // The island (Swift) and the daily report (Python) compute the same numbers: one
 // algorithm, two implementations, and nothing but this test standing between them
@@ -699,7 +699,7 @@ print(String(data: try! JSONSerialization.data(withJSONObject: out), encoding: .
 `);
   execFileSync("swiftc", [islandPath("FlowMath.swift"), islandPath("FlowSense.swift"),
                           islandPath("DayFlow.swift"), islandPath("DayScore.swift"),
-                          islandPath("AgentEventLog.swift"), APP_GROUP_SWIFT, main, "-o", binary],
+                          islandPath("AgentEventLog.swift"), DATA_HOME_SWIFT, main, "-o", binary],
     { stdio: "pipe" });
   const fromSwift = JSON.parse(execFileSync(binary, [payload], { encoding: "utf8" }));
 
@@ -772,20 +772,20 @@ print(String(data: try! JSONSerialization.data(withJSONObject: out), encoding: .
   assert.doesNotMatch(repSrc, /agents ran \{hm\(busy\)\}/,
     "a display site says 'agents ran' with the parallel sum again — a 12h wall prints as 22h");
 
-  // The day report must accept both installed container spellings, `group.x`
-  // and `<TeamID>.group.x`.
-  // Pinned to the prefix-free shape alone, it refuses to run after a signed
-  // install.
-  const shapes = JSON.parse(execFileSync("python3", ["-B", "-c", `
-import importlib.util, json, sys
+  // The day report reads where the island writes: `~/.perch/island`, the same
+  // folder DataHome.swift names. (It used to accept two App Group spellings;
+  // the island no longer uses a container, so there is nothing to spell.)
+  const where = JSON.parse(execFileSync("python3", ["-B", "-c", `
+import importlib.util, json, os, sys
 spec = importlib.util.spec_from_file_location("rep", sys.argv[1])
 rep = importlib.util.module_from_spec(spec); spec.loader.exec_module(rep)
-print(json.dumps([rep.group_core("group.io.example.perch"),
-                  rep.group_core("ABCDE12345.group.io.example.perch"),
-                  rep.group_core("nonsense"), rep.group_core("group.")]))
+home = os.path.expanduser("~")
+print(json.dumps([rep.events_dir().replace(home, "~"), rep.bridge_socket().replace(home, "~")]))
 `, pkgPath("island-day-report.py")], { encoding: "utf8" }));
-  assert.deepEqual(shapes, ["group.io.example.perch", "group.io.example.perch", "", ""],
-    "the report no longer accepts both container spellings (or accepts garbage)");
+  assert.deepEqual(where, ["~/.perch/island/agent-events", "~/.perch/island/bridge.sock"],
+    "the report looks for the island's log somewhere the island does not write");
+  assert.match(fs.readFileSync(islandPath("DataHome.swift"), "utf8"), /"\.perch\/island"/,
+    "DataHome.swift no longer names ~/.perch/island, so the report and the island have drifted apart");
 
   // ③ Pickups are ordered by turn end; ordering by start reads an overlapping
   //    day's gaps as flow.
@@ -853,7 +853,7 @@ print("[" + [report("thin", thin), report("slow", slow), report("quick", quick)]
   const binary = path.join(tmp, "judged-check");
   execFileSync("swiftc", [islandPath("FlowMath.swift"), islandPath("FlowSense.swift"),
                           islandPath("DayScore.swift"), islandPath("DayFlow.swift"),
-                          islandPath("AgentEventLog.swift"), APP_GROUP_SWIFT,
+                          islandPath("AgentEventLog.swift"), DATA_HOME_SWIFT,
                           main, "-o", binary], { stdio: "pipe" });
   const rows = JSON.parse(execFileSync(binary, { encoding: "utf8" }));
   const by = Object.fromEntries(rows.map((r) => [r.name, r]));

@@ -2,7 +2,7 @@ import Foundation
 
 /// Disposable health summary published by the non-sandbox reconciler.
 /// Provider history stays outside the sandbox; no prompt or response body
-/// enters this app process or its App Group.
+/// enters this app process or `~/.perch/island`.
 struct SourceHealthSnapshot: Decodable {
     struct Source: Decodable {
         let status: String
@@ -55,15 +55,15 @@ struct SourceHealthSnapshot: Decodable {
 }
 
 enum SourceHealthStore {
-    /// The scanner cannot write a Team App Group from a plain LaunchAgent on
-    /// current macOS. Validate its bounded socket payload, then let this signed
-    /// app publish both disposable files. Health is written last and acts as
+    /// The scanner hands its result over the socket instead of writing here
+    /// itself, so the island stays the only writer of `~/.perch/island`.
+    /// Validate its bounded socket payload, then publish both disposable files. Health is written last and acts as
     /// the commit marker: readers never see a new health summary paired with
     /// the previous canonical cache.
     static func publish(
         health: Data,
         canonical: Data,
-        directory: URL = AppGroup.containerURL.appendingPathComponent(
+        directory: URL = DataHome.url.appendingPathComponent(
             "reconciliation", isDirectory: true)
     ) throws {
         _ = try SourceHealthSnapshot.decode(health)

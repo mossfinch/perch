@@ -18,8 +18,8 @@ test("event log: record without judging, and time must match the human's clock",
   // uses the local zone. Diverge and the report is off by a whole timezone.
   assert.match(log, /f\.timeZone = TimeZone\.current/, "the timestamp must set the local zone explicitly, or the report is a timezone off");
 
-  // Everything the island writes stays in its own App Group; no shared
-  // directories, no paths outside that container. Strip comments first so words
+  // Everything the island writes stays in ~/.perch/island; no shared
+  // directories, no paths outside that folder. Strip comments first so words
   // legitimately used in comments don't collide.
   const code = (s) => s.replace(/\/\/.*$/gm, "").replace(/^\s*\/\/\/.*$/gm, "");
   assert.match(log, /appendingPathComponent\("agent-events"\)/);

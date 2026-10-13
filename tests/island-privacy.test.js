@@ -186,8 +186,8 @@ test("no Team ID anywhere in the island's files — it links to the registrant's
     assert.match(ignore, /^Config\.xcconfig$/m, "the real-value file must be gitignored");
   }
 
-  // No App Group, in either of the two places that used to declare one: an ad-hoc app's
-  // group container made macOS ask on every launch, and "Don't Allow" cost every event.
+  // No App Group in either Info.plist or the entitlements: an ad-hoc app's group
+  // container makes macOS ask on every launch, and "Don't Allow" costs every event.
   const ent = fs.readFileSync(islandPath("Perch.entitlements"), "utf8");
   const plist = fs.readFileSync(islandPath("Info.plist"), "utf8");
   assert.doesNotMatch(ent, /application-groups/);
@@ -222,7 +222,7 @@ test("no Team ID anywhere in the island's files — it links to the registrant's
     assert.match(src, /\.perch\/island|"\.perch" \/ "island"/, `${f} does not name ~/.perch/island`);
   }
   assert.doesNotMatch(fs.readFileSync(islandPath("DataHome.swift"), "utf8"), /AppGroupID|forSecurityApplicationGroupIdentifier/);
-  // Owner-only, like ~/.claude and the container it replaced: ~/.perch itself is world-readable.
+  // Owner-only, like ~/.claude: ~/.perch itself may be world-readable.
   assert.match(fs.readFileSync(islandPath("DataHome.swift"), "utf8"), /setAttributes\(\[\.posixPermissions: 0o700\]/);
   // And it is checked, not hoped for: until the folder is private the socket stays shut.
   assert.match(fs.readFileSync(islandPath("AgentEventMonitor.swift"), "utf8"),
@@ -712,7 +712,7 @@ test("a demo recording never opens the real ~/.perch/island", () => {
   assert.ok(sources.filter(([, src]) => /DataHome\.url/.test(src)).length >= 5,
     "control: too few users of DataHome.url seen");
 
-  // Run it: the container is scratch, and the week seeded into it is made up and in the past.
+  // Run it: the folder is scratch, and the week seeded into it is made up and in the past.
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "perch-demo-"));
   const main = path.join(tmp, "main.swift");
   fs.writeFileSync(main, "DemoMode.seed()\nprint(DataHome.url.path)\n");

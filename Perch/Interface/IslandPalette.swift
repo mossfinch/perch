@@ -8,8 +8,8 @@ enum IslandPalette {
     ///
     /// Nothing dim may be drawn here at an alpha tuned against a lighter
     /// ground. sRGB is not linear, so the same alpha emits far less light on
-    /// black: dim bars lost 2.4× of their contrast when this went black, and
-    /// `FlowSense.dimAlpha` was derived again for it.
+    /// black: dim bars lose 2.4× of their contrast against black, which is
+    /// why `FlowSense.dimAlpha` is tuned against this ground.
     static let capsule = Color(red: 0, green: 0, blue: 0)
     static let paper = Color(red: 0.998, green: 0.996, blue: 0.991)
     static let accent = Color(red: 0.620, green: 0.372, blue: 0.322)

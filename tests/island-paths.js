@@ -88,8 +88,8 @@ const viewModelSource = () => {
   return files.map((f) => fs.readFileSync(islandPath(f), "utf8")).join("\n\n");
 };
 const SOURCE_HEALTH_SWIFT = islandPath("SourceHealth.swift");
-// The ledger needs the container location; the container id is read from
-// Info.plist (DataHome.swift). Compiling the ledger requires it.
+// The ledger needs to know where ~/.perch/island is (DataHome.swift).
+// Compiling the ledger requires it.
 const DATA_HOME_SWIFT = islandPath("DataHome.swift");
 const CARE_MOVE_POOL_SWIFT = islandPath("CareMovePool.swift");
 const CARE_SESSION_CLOCK_SWIFT = islandPath("CareSessionClock.swift");

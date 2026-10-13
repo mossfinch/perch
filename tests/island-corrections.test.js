@@ -161,7 +161,7 @@ test("a flow correction lands as one line, and a write that fails never reaches 
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "perch-flow-corrections-"));
   const stub = path.join(tmp, "stub.swift");
   const main = path.join(tmp, "main.swift");
-  // AppGroup pulls in the app bundle; it is not on the path under test, which
+  // DataHome reaches for the real ~/.perch/island; it is not on the path under test, which
   // always writes into a directory the caller names. Same stub shape as the
   // day-score test next door.
   fs.writeFileSync(stub, `

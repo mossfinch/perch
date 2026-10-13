@@ -1,5 +1,5 @@
 // Getting onto the machine and staying recognised: the app target, the installers, the
-// hooks, the launchd job, and the container the ledger lives in.
+// hooks, the launchd job, and the folder the ledger lives in.
 // One of the island suite's files; `tests/island-roster.js` is what knows they all
 // exist. Run them together; a single file run is a partial answer.
 
@@ -43,10 +43,9 @@ test("perch target is wired as an LSUIElement notch app", () => {
   assert.match(plist, /<key>LSUIElement<\/key>\s*<true\/>/);
 
   const ent = fs.readFileSync(islandPath("Perch.entitlements"), "utf8");
-  // The invariant turned around: no App Group. A download is ad-hoc signed, and macOS
-  // treats an ad-hoc app's group container as another app's data: a prompt on every
-  // launch, and after "Don't Allow" no event ever arrives. Everything lives in
-  // ~/.perch/island instead (DataHome.swift).
+  // No App Group. A download is ad-hoc signed, and macOS treats an ad-hoc app's group
+  // container as another app's data: a prompt on every launch, and after "Don't Allow"
+  // no event ever arrives. Everything lives in ~/.perch/island (DataHome.swift).
   assert.doesNotMatch(ent, /application-groups/);
   assert.doesNotMatch(plist, /AppGroupID/);
 
@@ -609,10 +608,10 @@ test("after a rename, the completion bell installed under the old name must stil
   assert.doesNotMatch(finder, /NOTIFY_MARK/, "self-location must not use the product name — names change");
 });
 
-// App Group files can outlive the feature that wrote them. The manifest maps
+// Files in ~/.perch/island can outlive the feature that wrote them. The manifest maps
 // every allowed entry to a current writer so readable but abandoned residue
 // cannot remain silently.
-const CONTAINER_WRITERS = {
+const ISLAND_WRITERS = {
   "agent-events": "the island, on every agent pickup",
   "care-ledger.json": "the island, when a care session is recorded",
   "day-scores.jsonl": "the island, when a day is scored",
@@ -625,30 +624,30 @@ const CONTAINER_WRITERS = {
 };
 
 // What a retired feature used to write. Still being here is residue, not health.
-const RETIRED_CONTAINER_ENTRIES = {
+const RETIRED_ISLAND_ENTRIES = {
   "today-summary.json": "the desktop widget it fed was retired",
   "presence": "presence collection was retired",
   "presence-corrections": "presence collection was retired",
 };
 
 // Why an entry does not belong, or null when it does. Split out from the sweep
-// so its three answers stay provable on a machine that has no container at all.
-const containerEntryFault = (entry) => {
-  if (RETIRED_CONTAINER_ENTRIES[entry]) return `residue: ${RETIRED_CONTAINER_ENTRIES[entry]}`;
-  if (!CONTAINER_WRITERS[entry]) return "nothing in this manifest claims to write it";
+// so its three answers stay provable on a machine that has no ~/.perch/island at all.
+const islandEntryFault = (entry) => {
+  if (RETIRED_ISLAND_ENTRIES[entry]) return `residue: ${RETIRED_ISLAND_ENTRIES[entry]}`;
+  if (!ISLAND_WRITERS[entry]) return "nothing in this manifest claims to write it";
   return null;
 };
 
-test("the container manifest separates a live entry, residue, and a stranger", () => {
-  assert.equal(containerEntryFault("agent-events"), null);
-  assert.equal(containerEntryFault("presence"), "residue: presence collection was retired");
+test("the ~/.perch/island manifest separates a live entry, residue, and a stranger", () => {
+  assert.equal(islandEntryFault("agent-events"), null);
+  assert.equal(islandEntryFault("presence"), "residue: presence collection was retired");
   // Control: an entry nobody has ever declared must not pass as live.
-  assert.equal(containerEntryFault("a-name-invented-for-this-control"),
+  assert.equal(islandEntryFault("a-name-invented-for-this-control"),
     "nothing in this manifest claims to write it");
 });
 
 test("nothing sits in ~/.perch/island that nothing writes", (t) => {
-  // The folder DataHome.swift names; it replaced the App Group container.
+  // The folder DataHome.swift names.
   assert.match(fs.readFileSync(islandPath("DataHome.swift"), "utf8"), /"\.perch\/island"/,
     "DataHome.swift moved; this sweep would be looking at the wrong folder");
   const dir = path.join(os.homedir(), ".perch", "island");
@@ -659,7 +658,7 @@ test("nothing sits in ~/.perch/island that nothing writes", (t) => {
     return;
   }
   for (const entry of fs.readdirSync(dir).filter((n) => !n.startsWith("."))) {
-    const fault = containerEntryFault(entry);
+    const fault = islandEntryFault(entry);
     assert.equal(fault, null,
       `${entry} is in ~/.perch/island but ${fault}. Either add it here with what writes it, ` +
       `or move it out — a file whose writer is gone still reads like live data.`);

@@ -17,9 +17,9 @@ interesting surface is narrow but real:
 - Anything that lets data leave the machine. There is no networking code in
   this package by design; a path that reaches the network is a bug of the
   highest order here.
-- Anything that lets another local process read or write Perch's App Group
-  container, which holds your agent event log — including the full path of
-  every project you ran an agent in.
+- Anything that lets another account on the Mac read or write
+  `~/.perch/island`, which holds your agent event log — including the full path
+  of every project you ran an agent in.
 - Anything in the installers that writes outside its own entries, replaces a
   file it did not create, or leaves a config half-written.
 - Anything that puts identifying information into the published package. The

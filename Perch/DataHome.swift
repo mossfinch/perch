@@ -3,11 +3,11 @@ import Foundation
 /// The one folder that holds the socket, the care ledger and the event log:
 /// `~/.perch/island/`.
 ///
-/// It used to be an App Group container. A download is ad-hoc signed, and
-/// macOS 26 treats an ad-hoc app's group container as another app's data: it
-/// asked "would like to access data from other apps" on every launch, never
-/// remembered the answer, and after "Don't Allow" the socket never bound and
-/// every hook event was lost without a word. A folder in the user's home needs
+/// Not an App Group container. A download is ad-hoc signed, and macOS 26
+/// treats an ad-hoc app's group container as another app's data: it asks
+/// "would like to access data from other apps" on every launch, never
+/// remembers the answer, and after "Don't Allow" the socket cannot bind and
+/// every hook event is lost without a word. A folder in the user's home needs
 /// no group: the entitlements already grant `~/.perch/`, and one sandbox rule
 /// lets the socket bind in this folder and nowhere else.
 ///
@@ -39,9 +39,9 @@ enum DataHome {
         return String(cString: entry.pointee.pw_dir)
     }
 
-    /// Owner-only, like `~/.claude` and like the group container it replaced:
+    /// Owner-only, like `~/.claude`:
     /// project paths and working hours are nobody else's business, and
-    /// `~/.perch` itself is world-readable. Set every launch, not just on
+    /// `~/.perch` itself may be world-readable. Set every launch, not just on
     /// creation, so a folder made some other way is tightened too. Whether it
     /// worked is `privacyProblem`'s job, not a `try?` that hopes.
     static let url: URL = {

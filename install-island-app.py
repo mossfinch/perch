@@ -48,10 +48,8 @@ HERE = Path(__file__).resolve().parent
 PROJECT = HERE / "Perch.xcodeproj"
 SCHEME = "Perch"
 # Everything the island keeps: socket, event log, care ledger, day scores.
-# Perch/DataHome.swift names the same folder; perch-hook.sh and
-# island-day-report.py hard-code it too. It replaced an App Group container,
-# which a download (ad-hoc signed) could only open after macOS asked "would
-# like to access data from other apps" on every launch.
+# Perch/DataHome.swift names the same folder, and says why it is not an App
+# Group container; perch-hook.sh and island-day-report.py hard-code it too.
 ISLAND_DIR = Path.home() / ".perch" / "island"
 SOCKET = ISLAND_DIR / "bridge.sock"
 # The App Group the island used to live in, `<TeamID>.` prefixed on a machine
@@ -170,7 +168,7 @@ def migrate_island_data(source: Path, island: Path | None = None) -> str:
     because two old containers can both hold data (a team-signed one and a
     bare one from an ad-hoc run) and only the person knows which is theirs.
 
-    Rules, kept from the ledger-only migration this replaces:
+    Rules:
       1. Anything already at the target: refuse, and copy nothing. Even one
          record there is real data and not ours to overwrite.
       2. A symlink anywhere: the target folder itself, an item, or anything
@@ -347,10 +345,8 @@ def sign_adhoc(app: Path) -> None:
     """Ad-hoc sign the built product, carrying the entitlements.
 
     Every build is signed this way, the one installed here as much as the one
-    that ships, so what runs on the builder's Mac is what a download runs.
-    (Local builds used to be team-signed so that the App Group container could
-    carry the Team prefix; with the container gone there is no reason left,
-    and a second signing path is a second thing to drift.)
+    that ships, so what runs on the builder's Mac is what a download runs. A
+    second signing path would be a second thing to drift.
 
     Xcode only compiles (`CODE_SIGNING_ALLOWED = NO`) and this signs, so
     anyone who wants to hack on the code needs no Apple account configured.

@@ -23,12 +23,13 @@ tool finished, so nothing is waiting on a person. Without approval the tool
 never runs, there is no PostToolUse, and yellow stays yellow, as it should.
 
 Migration-safe: a Perch hook is any command that runs the launcher, or that
-points at one of our own artifacts inside a Group Container (bridge.sock,
-agent-event.txt), so re-running removes a prior Perch hook (the old
-file-writer, an earlier socket version, or one written for a different App
-Group) before installing the current one. Recognition is by shape, not by the
-current group id: a changeable value used as identity misses the old entries
-the day the container changes (see the ARTIFACT_PATTERN comment).
+points at one of our own artifacts (bridge.sock, agent-event.txt) inside
+`~/.perch/island` or inside the App Group container older versions used, so
+re-running removes a prior Perch hook (the old file-writer, an earlier socket
+version, or one written for a different container) before installing the
+current one. Recognition is by shape, not by one current path: a changeable
+value used as identity misses the old entries the day the location changes
+(see the ARTIFACT_PATTERN comment).
 """
 from __future__ import annotations   # so `X | None` annotations parse on macOS's stock python 3.9
 

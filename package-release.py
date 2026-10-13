@@ -395,21 +395,19 @@ def prove_extractable(zip_path: Path, app_name: str) -> None:
 def refuse_team_signature(app: Path) -> None:
     """Refuse an archive whose signature names a development team.
 
-    A local install is signed with its owner's team on purpose: macOS gives a
-    team-signed app a prefixed App Group container, and that is where the local
-    data lives (see `inject_team_prefix` in install-island-app.py). The
-    installer injects the team at install time from a gitignored file, and
-    nothing about it reaches the repository.
+    Every build is ad-hoc, the local install included (`sign_adhoc` in
+    install-island-app.py), but a copy signed with a team, such as an install
+    made before 2.4, can still sit in /Applications.
 
-    None of that may leave the machine. A Team ID is registered to a named
+    A team signature may never leave the machine. A Team ID is registered to a named
     person, so a released binary carrying one links a pseudonymous repository
     to whoever pays for the developer account, and `codesign -dv` reads it out
     of the download in one command.
 
-    The release build path does not sign with a team (the project sets
-    `CODE_SIGNING_ALLOWED = NO`, and `sign_adhoc` is what runs without a
-    config), but that is a habit, not a guard: pointing this script at the copy
-    in /Applications would package the team signature with everything else and
+    The build path does not sign with a team (the project sets
+    `CODE_SIGNING_ALLOWED = NO`, and `sign_adhoc` is the only signing step),
+    but that is a habit, not a guard: pointing this script at an older
+    team-signed copy would package the team signature with everything else and
     report success.
     """
     out = subprocess.run(["codesign", "-dv", str(app)],

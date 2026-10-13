@@ -84,9 +84,7 @@ can tell "nothing recorded" from "measured zero".
 `--via-bridge` asks the running island over its socket instead of reading the
 log directory. The readings are the same: the reply is the day files' own bytes.
 It needs the island running, and reaches back 31 days; for anything older, read
-the directory. (It was needed while the log lived in an App Group container,
-which macOS guards against other programs; the log now sits in
-`~/.perch/island`, which any program of this user can read.)
+the directory.
 """
 from __future__ import annotations   # so `X | None` annotations parse on macOS's stock python 3.9
 

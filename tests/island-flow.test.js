@@ -773,8 +773,7 @@ print(String(data: try! JSONSerialization.data(withJSONObject: out), encoding: .
     "a display site says 'agents ran' with the parallel sum again — a 12h wall prints as 22h");
 
   // The day report reads where the island writes: `~/.perch/island`, the same
-  // folder DataHome.swift names. (It used to accept two App Group spellings;
-  // the island no longer uses a container, so there is nothing to spell.)
+  // folder DataHome.swift names.
   const where = JSON.parse(execFileSync("python3", ["-B", "-c", `
 import importlib.util, json, os, sys
 spec = importlib.util.spec_from_file_location("rep", sys.argv[1])

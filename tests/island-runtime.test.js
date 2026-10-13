@@ -522,7 +522,7 @@ test("island tracks per-project status dots, hook carries project dir", () => {
   assert.match(script, /CLAUDE_PROJECT_DIR/);   // the hook carries the project dir
 });
 
-test("the socket bridge accepts bounded reconciliation payloads for App Group publication", () => {
+test("the socket bridge accepts bounded reconciliation payloads for publication in ~/.perch/island", () => {
   const monitor = fs.readFileSync(islandPath("AgentEventMonitor.swift"), "utf8");
   assert.match(monitor, /case "reconciliation"/);
   assert.match(monitor, /onReconciliation/);
@@ -644,8 +644,8 @@ test("stale policy runs real behavior: yellow survives a meal, blue/green go at 
   //
   // So the policy must be extracted into pure-Foundation StalePolicy to be
   // testable at all: buried in IslandViewModel, that class drags in AppKit
-  // and the socket listener and cannot be constructed in a test (touching
-  // AppGroup.id hits fatalError), leaving only literal-matching.
+  // and the socket listener and cannot be constructed in a test (it would
+  // open the real ~/.perch/island), leaving only literal-matching.
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "perch-stale-"));
   const main = path.join(tmp, "main.swift");
   const binary = path.join(tmp, "stale-check");

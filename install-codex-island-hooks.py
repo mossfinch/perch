@@ -25,7 +25,7 @@ After installing, codex's next launch may ask "trust this new hook?". That
 click must come from the user; a script cannot answer it.
 
 Transport: the same as the Claude side. Each hook runs the launcher, which
-pushes one line to the Unix socket in the App Group container:
+pushes one line to the Unix socket in `~/.perch/island`:
 `<event>\t<projectDir>\t<nonce>\t<source>`. The fourth field (source) keeps
 codex and Claude apart, so the same directory open in both agents does not
 fight over one dot. If the island is not running, the connect fails and the
@@ -350,7 +350,7 @@ def our_tail_span(text: str) -> tuple[int, int] | None:
     changeable value as identity.
 
     The same criteria as `is_perch_command`: within one block there must be
-    both an own-artifact path inside the container and the wire-protocol
+    both an own-artifact path (in `~/.perch/island` or an old container) and the wire-protocol
     signature. The path alone is not enough (another tool may have its own
     `bridge.sock`); the signature alone is not enough (it is ours, but we need
     to know which block it belongs to).

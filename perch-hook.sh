@@ -3,19 +3,16 @@
 #
 #     perch-hook <event> <source>          e.g. perch-hook working codex
 #
-# **Why this file exists at all.** The hook commands used to carry the socket's
-# absolute path inline. Two things followed from that, and both bit:
+# **Why this file exists at all.** A hook command that carries the socket's
+# path inline has two costs:
 #
-#   · codex records trust per command TEXT, so every container rename made
-#     every hook look like a brand-new command and the owner had to re-approve
-#     them by hand — repeatedly, for our convenience.
-#   · The path was baked in at install time, so changing the container meant
-#     every writer had to be remembered and reinstalled. One was forgotten
-#     (codex, when the island moved to a Team-prefixed container) and its
-#     pushes failed silently for a day. Nothing reported it: the other writer
-#     kept logging, so the log looked alive.
+#   · codex records trust per command TEXT, so any change to that path makes
+#     every hook look like a brand-new command, to be re-approved by hand.
+#   · The path is baked in at install time, so moving it means every writer
+#     has to be found and reinstalled. A forgotten one fails silently, and
+#     nothing reports it while another writer keeps the log looking alive.
 #
-# So: the hook command is a fixed string that never changes again, and the
+# So: the hook command is a fixed string that never changes, and the
 # socket sits at one fixed path in the user's home, `~/.perch/island/bridge.sock`,
 # the folder the app itself keeps everything in (see `DataHome.swift`). There is
 # nothing to resolve and no list of writers anyone has to remember.

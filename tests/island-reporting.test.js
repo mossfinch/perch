@@ -399,11 +399,11 @@ test("the day score came off the card, and its ledger did not move", () => {
     `control: the corner scanner cannot see a real mount — found ${plantedCorner.length}, wanted 1`);
 
   // ③ Behaviour, compiled and run, not grepped. One stub stands in for the
-  //    symbol DayScore touches but this test must not drag in (AppGroup pulls
-  //    the app bundle); it is not on the code path under test, which always
+  //    symbol DayScore touches but this test must not drag in (DataHome reaches
+  //    for the real ~/.perch/island); it is not on the code path under test, which always
   //    passes an explicit file URL.
   //    DayScore owns the formatter, so the day names below use the production
-  //    formatter; only AppGroup needs a stub to keep the app bundle out.
+  //    formatter; only DataHome needs a stub to keep the real folder out.
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "perch-dayscore-"));
   const stub = path.join(tmp, "stub.swift");
   const main = path.join(tmp, "main.swift");

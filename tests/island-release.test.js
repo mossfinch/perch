@@ -330,8 +330,8 @@ test("island sources split into 5 duty groups, never flattened back into one lay
   // ①→②→③→④ is also the island's running order: receive events → compute the
   // notch position → draw → offer care while you wait.
   const WHERE = {
-    // DemoMode sits beside AppGroup because it works by answering the same question:
-    // where the container is.
+    // DemoMode sits beside DataHome because it works by answering the same question:
+    // where the island's folder is.
     ".":            ["PerchApp.swift", "DataHome.swift", "DemoMode.swift",
                      "Info.plist", "Perch.entitlements"],
     // StalePolicy belongs here: it answers "how long before an agent event is
@@ -340,7 +340,7 @@ test("island sources split into 5 duty groups, never flattened back into one lay
     // "Interface": the view only draws what it is handed.
     // DayScore sits with the flow readers on purpose: the hand-written daily
     // score is the standard answer the flow numbers will one day be fitted
-    // against (same ledger family, same container, read side by side).
+    // against (same ledger family, same folder, read side by side).
     // FlowSense reads FlowMath's settled turns and answers one more question
     // about them ("in flow right now"), so it belongs beside them and not in
     // Interface: the wave only draws the answer it is handed.
@@ -388,9 +388,9 @@ test("island sources split into 5 duty groups, never flattened back into one lay
   const stray = [...actual.keys()].filter((f) => !declared.has(f));
   assert.deepEqual(stray, [], `files not registered in any group: ${stray.join(", ")}`);
 
-  // AppGroup stays top-level on purpose: socket / event log / ledger all ask
-  // it where the container is; filing it under any one of them is a lie.
-  assert.equal(actual.get("DataHome.swift"), ".", "AppGroup is the shared foundation of all three, must stay top-level");
+  // DataHome stays top-level on purpose: socket / event log / ledger all ask
+  // it where the folder is; filing it under any one of them is a lie.
+  assert.equal(actual.get("DataHome.swift"), ".", "DataHome is the shared foundation of all three, must stay top-level");
 
   // The project must group too: Xcode's navigator shows PBXGroups, and grouped
   // on disk but flat in the project is grouped for nobody.
@@ -434,11 +434,9 @@ test("splitting the view layer widened exactly seven types, and not one more", (
   // When a private type is needed across files, move the type rather than
   // widening it.
   const MAY_BE_WIDE = new Set([
-    // Already module-wide before the split and not part of its price:
-    // PerchApp constructs this one.
+    // Module-wide because PerchApp constructs it.
     "IslandView",
-    // Widened by the split, seven of them, each because it is used from
-    // another file now.
+    // The seven, each because it is used from another file.
     "IslandPalette", "ProjectCaption", "GuidedCareCard", "GuidedCareLayout",
     "AgentActivityStrip", "TopWeekRow", "WeekPerch",
   ]);
@@ -1028,8 +1026,8 @@ function styleFaults(text) {
 
 // Both run from byte copies under ~/.perch/bin, and tests/perch_reconcile_test.py
 // compares those copies with the tree byte for byte. A comment edit would read there
-// as a stale install until the installers run again, so these two get cleaned
-// together with the next reinstall. The test fails once either is clean, so an
+// as a stale install until the installers run again, so a style cleanup of these
+// two has to ship with a reinstall. The test fails once either is clean, so an
 // entry cannot outlive its reason.
 const STYLE_WAITS_FOR_REINSTALL = {
   "perch-hook.sh": "installed as ~/.perch/bin/perch-hook by the hook installers",

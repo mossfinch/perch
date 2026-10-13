@@ -15,24 +15,71 @@ struct IslandView: View {
 
     var body: some View {
         let display = viewModel.display
+        let opened = viewModel.presentationPhase == .opened
         let phase = viewModel.presentationPhase
+        let ground = IslandMorphShape(
+            progress: opened ? 1 : 0,
+            closedSize: CGSize(width: display.closedWidth, height: display.closedHeight),
+            topEdge: display.isNotched ? .notch : .topBar,
+            travels: !reduceMotion
+        )
+        // Read here, on the main actor: the animator's closure may run elsewhere.
+        let shake: CGFloat = reduceMotion ? 0 : 1
 
-        // When closed, the card leaves the view tree instead of sitting at
-        // opacity 0. It holds a 30fps TimelineView (the wave) and a row of frame
-        // animations, which transparency does not stop, and the island is
-        // closed most of the time: a hidden card would burn a 30fps animation
-        // around the clock. Both branches carry .transition(.opacity) and
-        // cross-fade inside the ZStack.
+        // One black ground for both states. Opening grows it out of the notch to the card's
+        // size and shape on the same spring that flips the phase; closing shrinks it back.
+        // The contents ride on top, clipped to it: the capsule's bird and counts leave at
+        // once, and the card arrives only once the ground has mostly grown, so nothing is
+        // ever drawn outside the black.
+        //
+        // When closed, the card leaves the view tree instead of sitting at opacity 0. It
+        // holds a 30fps TimelineView (the wave) and a row of frame animations, which
+        // transparency does not stop, and the island is closed most of the time: a hidden
+        // card would burn a 30fps animation around the clock.
         ZStack(alignment: .top) {
-            if phase == .opened {
-                openedPlaceholder(display: display)
-                    .transition(.opacity)
-            } else {
-                capsule(display: display)
-                    .background(alignment: .top) {
-                        if viewModel.stretchNudge { stretchTab(display: display) }
-                    }
-                    .transition(.opacity)
+            // Outside the clip: the tab hangs below the capsule's outline.
+            if !opened, viewModel.stretchNudge {
+                stretchTab(display: display)
+                    .transition(.opacity.animation(.easeOut(duration: 0.12)))
+            }
+
+            ground
+                .fill(IslandPalette.capsule)
+                .shadow(color: .black.opacity(opened ? 0.18 : 0.12),
+                        radius: opened ? 12 : 6, y: opened ? 6 : 3)
+
+            ZStack(alignment: .top) {
+                if phase == .opened {
+                    openedPlaceholder(display: display)
+                        .transition(.asymmetric(
+                            insertion: .opacity.combined(with: .offset(y: -6))
+                                .animation(.easeOut(duration: 0.24).delay(0.1)),
+                            removal: .opacity.animation(.easeIn(duration: 0.1))))
+                } else {
+                    capsule(display: display)
+                        .transition(.asymmetric(
+                            insertion: .opacity.animation(.easeOut(duration: 0.18).delay(0.16)),
+                            removal: .opacity.animation(.easeIn(duration: 0.08))))
+                }
+            }
+            .frame(width: display.layoutWidth, height: display.layoutHeight, alignment: .top)
+            .clipShape(ground)
+        }
+        .frame(width: display.layoutWidth, height: display.layoutHeight, alignment: .top)
+        // When the card opens to ask for a break it shakes once, the way a refused password
+        // does: the corner of an eye catches motion long before it reads a line of text.
+        // Routine peeks never bump the trigger, so they stay still. The ground shakes with
+        // the card, or the contents would slide about inside a black that stays put.
+        .keyframeAnimator(initialValue: CGFloat.zero, trigger: viewModel.stretchShake) { island, x in
+            island.offset(x: x * shake)
+        } keyframes: { _ in
+            KeyframeTrack {
+                LinearKeyframe(-9, duration: 0.06)
+                LinearKeyframe(9, duration: 0.08)
+                LinearKeyframe(-7, duration: 0.08)
+                LinearKeyframe(7, duration: 0.08)
+                LinearKeyframe(-3, duration: 0.07)
+                LinearKeyframe(0, duration: 0.07)
             }
         }
         .padding(.horizontal, display.openedShadowHorizontalInset)
@@ -84,40 +131,15 @@ struct IslandView: View {
         }
         .padding(.horizontal, display.isNotched ? 0 : display.closedHeight / 2)
         .frame(width: display.closedWidth, height: display.closedHeight)
-        .background(IslandPalette.capsule, in: IslandCapsuleShape(cornerRadius: display.closedHeight / 2))
-        .shadow(color: .black.opacity(0.12), radius: 6, y: 3)
     }
 
     private func openedPlaceholder(display: IslandDisplayMetrics) -> some View {
-        let surfaceShape = IslandCardShape(
-            topEdge: display.isNotched ? .notch : .topBar
-        )
-        // Read here, on the main actor: the animator's closure may run elsewhere.
-        let shake: CGFloat = reduceMotion ? 0 : 1
-
         // The card fills the panel with nothing stacked above it: the frame
         // height is fixed, so anything above the card would shrink the whole
         // card the moment it appears, and it would sit behind the notch where
-        // nobody can see it anyway.
+        // nobody can see it anyway. Its ground is the island's own, drawn in `body`.
         return GuidedCareCard(viewModel: viewModel, topSafeInset: display.closedHeight)
             .frame(width: display.layoutWidth, height: display.closedHeight + display.resultHeight)
-            .background(IslandPalette.capsule, in: surfaceShape)
-            .shadow(color: .black.opacity(0.18), radius: 12, y: 6)
-            // When the card opens to ask for a break it shakes once, the way a refused
-            // password does: the corner of an eye catches motion long before it reads a
-            // line of text. Routine peeks never bump the trigger, so they stay still.
-            .keyframeAnimator(initialValue: CGFloat.zero, trigger: viewModel.stretchShake) { card, x in
-                card.offset(x: x * shake)
-            } keyframes: { _ in
-                KeyframeTrack {
-                    LinearKeyframe(-9, duration: 0.06)
-                    LinearKeyframe(9, duration: 0.08)
-                    LinearKeyframe(-7, duration: 0.08)
-                    LinearKeyframe(7, duration: 0.08)
-                    LinearKeyframe(-3, duration: 0.07)
-                    LinearKeyframe(0, duration: 0.07)
-                }
-            }
     }
 
     /// Hangs under the closed capsule while an ask is open, until a move is finished or no

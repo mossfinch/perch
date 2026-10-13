@@ -85,16 +85,16 @@ test("one black for both states, and the wave's dim end is derived from it", () 
   //     brightened instead.
   assert.ok(!/static let card\b/.test(view),
     "IslandPalette.card is back — its owner asked for one depth, not two");
-  // The two ground call sites only: IslandPalette.accent and .cue also back
-  // pills inside the card, and sweeping those in would make this pass for the
-  // wrong reason.
-  const closedGround = view.match(/\.background\(IslandPalette\.(\w+), in: IslandCapsuleShape/)?.[1];
-  const openGround = view.match(/\.background\(IslandPalette\.(\w+), in: surfaceShape\)/)?.[1];
-  assert.ok(closedGround && openGround,
-    `could not read both grounds (closed=${closedGround}, open=${openGround})`);
-  assert.equal(closedGround, openGround,
-    `the closed island and the open card draw different grounds again: ${closedGround} vs ${openGround}`);
-  assert.equal(closedGround, "capsule", "the grounds moved off IslandPalette.capsule");
+  // The ground is drawn once, by the outline both states share, so the two states
+  // cannot drift apart. Earlier the capsule and the card each painted their own
+  // ground and this guard compared the two; now that one morphing outline grows
+  // from one into the other, a second ground call is exactly the regression.
+  assert.match(view, /let ground = IslandMorphShape\(/, "the shared outline is no longer IslandMorphShape");
+  const ground = [...view.matchAll(/\bground\s*\n\s*\.fill\(IslandPalette\.(\w+)\)/g)];
+  const stray = view.match(/\.background\(IslandPalette\.\w+, in: (?:surfaceShape|IslandCardShape|IslandCapsuleShape\(cornerRadius: display\.closedHeight)/);
+  assert.equal(ground.length, 1, `the shared ground should be filled exactly once, found ${ground.length}`);
+  assert.equal(ground[0][1], "capsule", "the shared ground moved off IslandPalette.capsule");
+  assert.equal(stray, null, `a state paints its own ground again: ${stray?.[0]}`);
 
   // ②c The ground and the wave's dim alpha are one decision, and getting it
   //     wrong is easy: a black ground plus an alpha tuned against a lifted grey
@@ -129,11 +129,10 @@ test("one black for both states, and the wave's dim end is derived from it", () 
      (s) => !/static let paper = Color\(red: 0\.998/.test(s),
      "control mutation: paper went black and the control assertion stayed quiet"],
     // The failure mode this guards: the open card gets its own ground again.
-    ["            .background(IslandPalette.capsule, in: surfaceShape)",
-     "            .background(IslandPalette.card, in: surfaceShape)",
-     (s) => s.match(/\.background\(IslandPalette\.(\w+), in: IslandCapsuleShape/)?.[1]
-            !== s.match(/\.background\(IslandPalette\.(\w+), in: surfaceShape\)/)?.[1],
-     "the open card took a different ground and the one-depth guard stayed quiet"],
+    ["            .frame(width: display.layoutWidth, height: display.closedHeight + display.resultHeight)",
+     "            .frame(width: display.layoutWidth, height: display.closedHeight + display.resultHeight)\n            .background(IslandPalette.capsule, in: surfaceShape)",
+     (s) => s.match(/\.background\(IslandPalette\.\w+, in: (?:surfaceShape|IslandCardShape|IslandCapsuleShape\(cornerRadius: display\.closedHeight)/) !== null,
+     "the open card took its own ground and the one-ground guard stayed quiet"],
   ];
   for (const [anchor, replacement, fired, message] of shots) {
     const hits = view.split(anchor).length - 1;

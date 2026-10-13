@@ -655,8 +655,17 @@ print(Double(NSAttributedString(string: ${JSON.stringify(line)}, attributes: [.f
 test("while the island is asking, a tab hangs under the closed capsule and the pointer can reach it", () => {
   const view = fs.readFileSync(islandPath("IslandView.swift"), "utf8");
   // Drawn behind the capsule, not inside it, so the bird stays alone in its wing. The tab
-  // exists only while the island is asking.
-  assert.match(view, /\} else \{\s*\n\s*capsule\(display: display\)\s*\n\s*\.background\(alignment: \.top\) \{\s*\n\s*if viewModel\.stretchNudge \{ stretchTab\(display: display\) \}/);
+  // exists only while the island is asking and closed. It sits outside the outline the
+  // contents are clipped to, because it hangs below that outline, and before the ground
+  // in the stack, so the ground covers the part of it under the capsule.
+  const stack = view.match(/var body: some View \{[\s\S]*?\n    \}\n/)?.[0] ?? "";
+  assert.ok(stack, "IslandView.body not found");
+  const tabAt = stack.search(/if !opened, viewModel\.stretchNudge \{\s*\n\s*stretchTab\(display: display\)/);
+  const groundAt = stack.search(/\bground\s*\n\s*\.fill\(/);
+  const clipAt = stack.search(/\.clipShape\(ground\)/);
+  assert.ok(tabAt >= 0, "the tab is no longer gated on closed + asking");
+  assert.ok(groundAt > tabAt, "the tab must be drawn behind the ground");
+  assert.ok(clipAt > groundAt, "the contents must be clipped to the shared outline");
   const tab = view.match(/private func stretchTab\(display: IslandDisplayMetrics\)[\s\S]*?\n    \}\n/)?.[0] ?? "";
   assert.ok(tab, "stretchTab not found");
   // The same words, dot, font and colour as the card's own caption line.
@@ -686,13 +695,18 @@ test("the card shakes once when it opens to ask, and routine peeks stay still", 
   assert.ok(soon, "shakeSoon not found");
   assert.match(soon, /DispatchQueue\.main\.asyncAfter\([\s\S]*stretchShake \+= 1/);
 
+  // The shake moves the whole island, ground and card together: the card no longer
+  // paints its own ground, so shaking the card alone would slide it about inside a
+  // black that stays put.
   const view = fs.readFileSync(islandPath("IslandView.swift"), "utf8");
-  const opened = view.match(/private func openedPlaceholder[\s\S]*?\n    \}\n/)?.[0] ?? "";
-  assert.ok(opened, "openedPlaceholder not found");
-  assert.match(opened, /\.keyframeAnimator\(initialValue: CGFloat\.zero, trigger: viewModel\.stretchShake\)/);
+  const body = view.match(/var body: some View \{[\s\S]*?\n    \}\n/)?.[0] ?? "";
+  assert.ok(body, "IslandView.body not found");
+  assert.match(body, /\.keyframeAnimator\(initialValue: CGFloat\.zero, trigger: viewModel\.stretchShake\)/);
+  assert.ok(body.indexOf(".keyframeAnimator(") > body.indexOf(".clipShape(ground)"),
+    "the shake must wrap the ground and the clipped contents, not one of them");
   // Someone who asked the system for less motion gets the card without the shake.
   assert.match(view, /@Environment\(\\\.accessibilityReduceMotion\) private var reduceMotion/);
-  assert.match(opened, /reduceMotion \? 0 : /);
+  assert.match(body, /reduceMotion \? 0 : /);
 });
 
 test("an unanswered ask pulses ever more often: every 5 minutes, then 2, then every minute", () => {

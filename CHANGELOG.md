@@ -6,6 +6,13 @@ Notable changes to Perch, newest first. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- The island now grows out of the notch. Opening stretches the closed capsule
+  into the card on a spring, and the card's contents fade in once there is room
+  for them; closing runs the other way. With Reduce Motion on, the outline
+  changes at once and only the contents fade.
+
 ## [2.3] — 2026-10-09
 
 ### Added

@@ -29,12 +29,12 @@ final class AgentEventMonitor: @unchecked Sendable {
     // Callback parameters: (project directory, source agent, host app).
     // A message with only three fields counts as claude. Hooks are read once
     // when a session starts, so a session still running an older hook that
-    // sends three fields keeps working across an upgrade. The host app is the
-    // bundle identifier of the app the agent runs in, or "" when the hook did
-    // not say.
-    var onWorking: (@MainActor (String, String, String) -> Void)?
-    var onWaiting: (@MainActor (String, String, String) -> Void)?
-    var onComplete: (@MainActor (String, String, String) -> Void)?
+    // sends three fields keeps working across an upgrade. The host is the app
+    // the agent runs in, and its session when that app is the Claude app; nil
+    // when the hook did not say.
+    var onWorking: (@MainActor (String, String, AgentHost?) -> Void)?
+    var onWaiting: (@MainActor (String, String, AgentHost?) -> Void)?
+    var onComplete: (@MainActor (String, String, AgentHost?) -> Void)?
     var onReconciliation: ((Data, Data) -> Void)?
     /// The socket could not be set up, with the reason. Without it no hook can
     /// reach the island, and an island that looks fine while hearing nothing is
@@ -204,7 +204,7 @@ final class AgentEventMonitor: @unchecked Sendable {
     }
 
     private func deliver(_ text: String) {
-        // Format: <event>\t<projectDir>\t<nonce>\t<source>\t<host>
+        // Format: <event>\t<projectDir>\t<nonce>\t<source>\t<host>\t<session>
         // A missing source counts as claude (see the callbacks above).
         let parts = text.split(separator: "\t", omittingEmptySubsequences: false).map(String.init)
         func field(_ i: Int) -> String {
@@ -214,10 +214,7 @@ final class AgentEventMonitor: @unchecked Sendable {
         let project = field(1)
         let rawSource = field(3).lowercased()
         let source = rawSource.isEmpty ? "claude" : rawSource
-        // Only something shaped like a bundle identifier: it is handed to the system to open.
-        let rawHost = field(4)
-        let host = rawHost.count <= 200 && rawHost.allSatisfy({ $0.isASCII && ($0.isLetter || $0.isNumber || $0 == "." || $0 == "-") })
-            ? rawHost : ""
+        let host = AgentHost(app: field(4), session: field(5))
         switch event {
         case "working":
             let cb = onWorking

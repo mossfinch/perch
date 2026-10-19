@@ -347,7 +347,9 @@ test("island sources split into 5 duty groups, never flattened back into one lay
     // Interface: the wave only draws the answer it is handed.
     // FlowCorrectionLog is that verdict's annotation ledger, so it sits with the
     // verdict it annotates rather than with whatever else writes to disk.
-    "AgentEvents":  ["AgentEventMonitor.swift", "AgentEventLog.swift", "SourceHealth.swift", "StalePolicy.swift",
+    // AgentHost is where an event says its agent runs, the one part of an event the island
+    // hands back to the system to open.
+    "AgentEvents":  ["AgentEventMonitor.swift", "AgentHost.swift", "AgentEventLog.swift", "SourceHealth.swift", "StalePolicy.swift",
                      "FlowMath.swift", "DayScore.swift",
                      // DayFlow replays FlowSense's verdict across a whole day
                      // and totals it: still a reader of the same log, one

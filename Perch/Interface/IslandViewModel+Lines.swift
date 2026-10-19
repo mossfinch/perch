@@ -4,17 +4,21 @@ import AppKit
 /// Hooks send no reliable end-of-session event, so a dot is dropped after a quiet period;
 /// how long is `StalePolicy`'s answer.
 extension IslandViewModel {
-    /// Brings forward the app the project's agent runs in: Terminal, iTerm, a code editor,
-    /// the Claude app. Only the app, not the window or the session: the Claude app offers no way
-    /// in from outside, and reaching a Terminal window would need permission to control
-    /// other apps. Opening through LaunchServices rather than activating the running app,
-    /// because Perch is never the active app, and macOS ignores activation requests from
-    /// an app in the background.
+    /// Takes you to where the project's agent runs. In the Claude app, to that session, through
+    /// the app's own link to it; anywhere else (Terminal, iTerm, a code editor) only the app
+    /// comes forward, since reaching a window there would need permission to control other
+    /// apps. Opening through LaunchServices rather than activating the running app, because
+    /// Perch is never the active app, and macOS ignores activation requests from an app in
+    /// the background.
     func openHost(of project: ProjectStatus) {
-        guard let id = project.hostApp,
-              let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: id) else { return }
+        guard let host = project.host else { return }
         let configuration = NSWorkspace.OpenConfiguration()
         configuration.activates = true
+        if let link = host.sessionURL {
+            NSWorkspace.shared.open(link, configuration: configuration)
+            return
+        }
+        guard let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: host.app) else { return }
         NSWorkspace.shared.openApplication(at: url, configuration: configuration)
     }
 

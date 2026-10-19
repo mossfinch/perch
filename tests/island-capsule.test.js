@@ -209,7 +209,7 @@ test("status dots split into rows by agent source, claude above codex", () => {
   const height = Number(view.match(/activityHeight: CGFloat = (\d+)/)[1]);
   assert.equal(top + height, 40, "the top row must keep 40pt total, or it steals the figure strip's height");
 
-  // Wire format: <event>\\t<dir>\\t<nonce>\\t<source>\\t<host>. Each new field goes last, so a
+  // Wire format: <event>\\t<dir>\\t<nonce>\\t<source>\\t<host>\\t<session>. Each new field goes last, so a
   // reader that knows fewer fields still parses the ones it knows, and an older hook
   // that sends fewer still works.
   // The push lives in one launcher script (a hook command whose text never
@@ -217,24 +217,73 @@ test("status dots split into rows by agent source, claude above codex", () => {
   // and each installer is checked for the only thing it still decides: which
   // source token it hands the launcher.
   const launcher = fs.readFileSync(pkgPath("perch-hook.sh"), "utf8");
-  assert.match(launcher, /printf '%s\\t%s\\t%s-%s\\t%s\\t%s'/,
-    "the launcher's push is no longer the five-field wire format");
-  assert.match(launcher, /"\$event" "\$dir" "\$\(date \+%s\)" "\$\$" "\$source" "\$host"/,
-    "the five fields are no longer event, project, nonce, source, host");
+  assert.match(launcher, /printf '%s\\t%s\\t%s-%s\\t%s\\t%s\\t%s'/,
+    "the launcher's push is no longer the six-field wire format");
+  assert.match(launcher, /"\$event" "\$dir" "\$\(date \+%s\)" "\$\$" "\$source" "\$host" "\$session"/,
+    "the six fields are no longer event, project, nonce, source, host, session");
+  // The Claude app names its own session in the agent's environment; the hook passes it on, filtered.
+  // The Claude app names itself and its session in the agent's environment. The Codex app names
+  // neither its bundle nor itself in __CFBundleIdentifier, only in its own variable, with the
+  // conversation alongside; the hook fills both in from there, and filters what it passes on.
+  assert.match(launcher, /session=\$\{CLAUDE_CODE_HOST_SESSION_ID:-\}/);
+  assert.match(launcher, /case "\$\{CODEX_INTERNAL_ORIGINATOR_OVERRIDE:-\}" in\s*Codex\*\)\s*host=com\.openai\.codex/,
+    "a codex line from the Codex app has nothing to open again");
+  assert.match(launcher, /grep -o '"session_id"[^']*' \| head -n 1/,
+    "the Codex conversation is no longer the first session_id codex hands the hook");
+  assert.match(launcher, /session=\$\(printf '%s' "\$session" \| tr -cd 'A-Za-z0-9_-'\)/, "the session reaches the socket unfiltered");
   // The host is handed to the system to open, so only bundle-identifier characters pass, at both ends.
   assert.match(launcher, /host=\$\(printf '%s' "\$\{__CFBundleIdentifier:-\}" \| tr -cd 'A-Za-z0-9\.-'\)/);
   const monitorSource = fs.readFileSync(islandPath("AgentEventMonitor.swift"), "utf8");
-  assert.match(monitorSource, /let rawHost = field\(4\)[\s\S]*?\$0\.isLetter \|\| \$0\.isNumber \|\| \$0 == "\." \|\| \$0 == "-"/);
+  assert.match(monitorSource, /AgentHost\(app: field\(4\), session: field\(5\)\)/, "the monitor no longer reads the host and session fields");
   // Pressing a name opens its app through LaunchServices, and only a name whose app is known reacts.
   const lines = fs.readFileSync(islandPath("IslandViewModel+Lines.swift"), "utf8");
-  assert.match(lines, /func openHost\(of project: ProjectStatus\)[\s\S]*?openApplication\(at: url/);
+  assert.match(lines, /func openHost\(of project: ProjectStatus\)[\s\S]*?if let link = host\.sessionURL[\s\S]*?open\(link[\s\S]*?openApplication\(at: url/,
+    "pressing a name no longer tries the session before the app");
   const captions = islandViews();
   // Both captions ignore a press when the app is unknown.
-  assert.match(captions, /guard let current, current\.hostApp != nil else \{ return \}/, "the running caption reacts with no known app");
-  assert.match(captions, /if project\.hostApp != nil \{ onOpen\(project\) \}/, "the finished caption reacts with no known app");
+  assert.match(captions, /guard let current, current\.host != nil else \{ return \}/, "the running caption reacts with no known app");
+  assert.match(captions, /if project\.host != nil \{ onOpen\(project\) \}/, "the finished caption reacts with no known app");
   // macOS keeps the arrow over the island, so a pressable line shows an underline under the
   // pointer instead, and only when pressing it does something.
-  assert.match(captions, /\.underline\(pointerOver && current\?\.hostApp != nil\)/);
+  assert.match(captions, /\.underline\(pointerOver && current\?\.host != nil\)/);
+  assert.match(viewModelSource(), /projects\[idx\]\.host = host\.keepingSession\(of: projects\[idx\]\.host\)/,
+    "each event replaces the host whole again, erasing a known session");
+
+  // What the hook sends is handed to the system to open: compiled and run, not read.
+  const hostDir = fs.mkdtempSync(path.join(os.tmpdir(), "perch-host-"));
+  const hostMain = path.join(hostDir, "main.swift");
+  const hostBinary = path.join(hostDir, "host-check");
+  fs.writeFileSync(hostMain, `
+import Foundation
+let claude = "com.anthropic.claudefordesktop"
+// The Claude app with one of its sessions: its own link to that session.
+precondition(AgentHost(app: claude, session: "local_0307790f-4e70")?.sessionURL?.absoluteString
+             == "claude://claude.ai/epitaxy/local_0307790f-4e70", "the Claude app's session link")
+// Any other app has no such link, session or not: only the app comes forward.
+precondition(AgentHost(app: "com.apple.Terminal", session: "local_abc")?.sessionURL == nil, "a session outside the Claude app")
+precondition(AgentHost(app: "com.apple.Terminal", session: "")?.app == "com.apple.Terminal", "an app without a session")
+// The Claude app without a session (a hook older than the session field): the app only.
+precondition(AgentHost(app: claude, session: "") != nil && AgentHost(app: claude, session: "")?.sessionURL == nil, "no session")
+// No app, no host: the name does not react.
+precondition(AgentHost(app: "", session: "local_abc") == nil, "a session with no app")
+// Anything outside each name's characters is refused, not trimmed into something else.
+precondition(AgentHost(app: "com.evil/../x", session: "") == nil, "a slash in the app")
+precondition(AgentHost(app: claude, session: "local_a?x=1")?.sessionURL == nil, "a query smuggled into the session")
+precondition(AgentHost(app: claude, session: String(repeating: "a", count: 300))?.sessionURL == nil, "an overlong session")
+// A later event from the same app that names no session keeps the one already known;
+// a newer session wins, and a different app never inherits it.
+let known = AgentHost(app: claude, session: "local_abc")!
+precondition(AgentHost(app: claude, session: "")!.keepingSession(of: known).sessionURL?.absoluteString
+             == "claude://claude.ai/epitaxy/local_abc", "a session-less event erased the known session")
+precondition(AgentHost(app: claude, session: "local_new")!.keepingSession(of: known).session == "local_new", "a newer session lost")
+precondition(AgentHost(app: "com.apple.Terminal", session: "")!.keepingSession(of: known).session == nil, "another app inherited the session")
+precondition(AgentHost(app: claude, session: "")!.keepingSession(of: nil).session == nil, "nothing known")
+// The Codex app's own link to one of its conversations.
+precondition(AgentHost(app: "com.openai.codex", session: "01a1548a-6c01-7403")?.sessionURL?.absoluteString
+             == "codex://threads/01a1548a-6c01-7403", "the Codex app's conversation link")
+`);
+  execFileSync("swiftc", [islandPath("AgentHost.swift"), hostMain, "-o", hostBinary], { stdio: "pipe" });
+  execFileSync(hostBinary, { stdio: "pipe" });
   assert.match(captions, /\.underline\(pointerOver && opens\(resting\)\)/);
   assert.doesNotMatch(captions, /pointerStyle|NSCursor/, "a cursor change that macOS ignores on the island came back");
   for (const [f, src] of [["install-island-hooks.py", "claude"], ["install-codex-island-hooks.py", "codex"]]) {
@@ -456,6 +505,42 @@ print("ok")
   const sources = pbx.match(/00A1CE00000000000000002C \/\* Sources \*\/ = \{[\s\S]*?files = \(([\s\S]*?)\);/)?.[1] ?? "";
   assert.ok(sources.includes("CarouselClock.swift"),
     "CarouselClock.swift is not compiled into the island");
+});
+
+// The hook runs inside every agent event: if it ever waits on stdin, the agent waits with it.
+// Run for real, with stdin left open the way a writer that never closes it would leave it.
+test("the hook reads the Codex app's conversation without ever waiting on an open stdin", async () => {
+  const net = require("node:net");
+  const { spawn } = require("node:child_process");
+  const run = async (stdinText) => {
+    const home = fs.mkdtempSync(path.join(os.tmpdir(), "perch-hook-"));
+    fs.mkdirSync(path.join(home, ".perch", "island"), { recursive: true });
+    const received = [];
+    const server = net.createServer((c) => { let d = ""; c.on("data", (x) => { d += x; }); c.on("end", () => received.push(d)); });
+    await new Promise((r) => server.listen(path.join(home, ".perch", "island", "bridge.sock"), r));
+    const started = Date.now();
+    const child = spawn("sh", [pkgPath("perch-hook.sh"), "working", "codex"], {
+      env: { HOME: home, PATH: "/usr/bin:/bin", CODEX_INTERNAL_ORIGINATOR_OVERRIDE: "Codex Desktop", CLAUDE_PROJECT_DIR: "/tmp/x" },
+      stdio: ["pipe", "ignore", "ignore"],
+    });
+    if (stdinText) child.stdin.write(stdinText);   // and never end(): the pipe stays open
+    const code = await Promise.race([
+      new Promise((r) => child.on("exit", r)),
+      new Promise((r) => setTimeout(() => r("hung"), 4000)),
+    ]);
+    child.stdin.destroy(); child.kill();
+    await new Promise((r) => setTimeout(r, 200));
+    server.close();
+    return { code, ms: Date.now() - started, line: received.join("") };
+  };
+  const full = await run('{"session_id":"01a15494-617c-7f71","tool_input":{"x":"\\"session_id\\":\\"other\\""}}\n');
+  assert.notEqual(full.code, "hung", "the hook waited on stdin a codex kept open");
+  assert.ok(full.ms < 3000, `the hook took ${full.ms} ms with the conversation already sent`);
+  assert.match(full.line, /\tcodex\tcom\.openai\.codex\t01a15494-617c-7f71$/, `sent: ${JSON.stringify(full.line)}`);
+  const empty = await run("");
+  assert.notEqual(empty.code, "hung", "the hook waited on an empty stdin left open");
+  assert.ok(empty.ms < 3000, `the hook took ${empty.ms} ms with nothing on stdin`);
+  assert.match(empty.line, /\tcodex\tcom\.openai\.codex\t$/, "with nothing to read, the app still comes forward");
 });
 
 test("persistent 'project · source' caption right of the wave, rotating when several run", () => {

@@ -16,8 +16,8 @@ struct ProjectStatus: Identifiable, Equatable {
     var updatedAt: Date
     /// When you opened the card while this line was finished. Cleared by every event.
     var seenAt: Date? = nil
-    /// The app the agent runs in, by bundle identifier, from its latest event that said.
-    var hostApp: String? = nil
+    /// Where the agent runs (the app, and its Claude app session), from its latest event that said.
+    var host: AgentHost? = nil
     var id: String { key }
 
     static func key(source: String, dir: String) -> String { "\(source)\t\(dir)" }
@@ -353,7 +353,7 @@ final class IslandViewModel: ObservableObject {
         agentMonitor.start()
     }
 
-    private func applyProjectEvent(_ dir: String, _ source: String, _ status: IslandAgentStatus, host: String = "") {
+    private func applyProjectEvent(_ dir: String, _ source: String, _ status: IslandAgentStatus, host: AgentHost? = nil) {
         // Record, never judge: nothing below reads this line. The log is read
         // back only to seed the verdict at launch and to draw the week.
         // It logs the raw dir (full path), not displayName, so grouping by
@@ -374,11 +374,11 @@ final class IslandViewModel: ObservableObject {
             projects[idx].status = status
             projects[idx].updatedAt = Date()
             projects[idx].seenAt = nil
-            if !host.isEmpty { projects[idx].hostApp = host }
+            if let host { projects[idx].host = host.keepingSession(of: projects[idx].host) }
         } else {
             projects.append(ProjectStatus(source: source, key: key, name: Self.displayName(dir),
                                           status: status, updatedAt: Date(),
-                                          hostApp: host.isEmpty ? nil : host))
+                                          host: host))
         }
         agentStatus = aggregateStatus()   // aggregate state for the leaf
 

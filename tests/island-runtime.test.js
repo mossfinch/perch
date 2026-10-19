@@ -534,7 +534,7 @@ test("island gains a 4th waiting state (PermissionRequest→yellow) + auto-peek 
 
 test("island tracks per-project status dots, hook carries project dir", () => {
   const monitor = fs.readFileSync(islandPath("AgentEventMonitor.swift"), "utf8");
-  assert.match(monitor, /@MainActor \(String, String, String\) -> Void/);   // callbacks carry (project cwd, source, host app)
+  assert.match(monitor, /@MainActor \(String, String, AgentHost\?\) -> Void/);   // callbacks carry (project cwd, source, where it runs)
 
   const vm = viewModelSource();
   assert.match(vm, /struct ProjectStatus/);

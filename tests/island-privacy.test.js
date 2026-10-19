@@ -718,7 +718,7 @@ test("a demo recording never opens the real ~/.perch/island", () => {
   fs.writeFileSync(main, "DemoMode.seed()\nprint(DataHome.url.path)\n");
   const binary = path.join(tmp, "demo");
   execFileSync("swiftc", ["DataHome.swift", "DemoMode.swift", "AgentEventLog.swift", "AgentEventMonitor.swift",
-    "FlowMath.swift"].map(islandPath).concat([main, "-o", binary]), { stdio: "pipe" });
+    "AgentHost.swift", "FlowMath.swift"].map(islandPath).concat([main, "-o", binary]), { stdio: "pipe" });
   const container = execFileSync(binary, ["--demo"], { encoding: "utf8" }).trim();
   assert.doesNotMatch(container, /\.perch/);
   const now = Date.now();

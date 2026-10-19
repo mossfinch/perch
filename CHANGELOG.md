@@ -6,6 +6,19 @@ Notable changes to Perch, newest first. The format follows
 
 ## [Unreleased]
 
+## [2.6] — 2026-10-19
+
+### Fixed
+
+- Pressing a project's name on the card now opens that project's session in
+  the Claude app, or its conversation in the Codex app. In 2.5 it only brought
+  the Claude app forward, showing whichever session was open last, so with
+  several projects it looked as if the press had missed; a codex line from the
+  Codex app did nothing at all. The hook now also passes the app's id for the
+  session, as a sixth field an older Perch simply ignores; sessions already
+  open pick it up at their next event. Terminal, iTerm and editors still bring
+  their app forward.
+
 ## [2.5] — 2026-10-19
 
 ### Added
@@ -231,7 +244,8 @@ Notable changes to Perch, newest first. The format follows
   The archive is packed deterministically: fixed timestamps, no extra fields,
   no comments, every byte accounted for.
 
-[Unreleased]: https://github.com/mossfinch/perch/compare/v2.5...HEAD
+[Unreleased]: https://github.com/mossfinch/perch/compare/v2.6...HEAD
+[2.6]: https://github.com/mossfinch/perch/compare/v2.5...v2.6
 [2.5]: https://github.com/mossfinch/perch/compare/v2.4...v2.5
 [2.4]: https://github.com/mossfinch/perch/compare/v2.3...v2.4
 [2.3]: https://github.com/mossfinch/perch/compare/v2.2...v2.3

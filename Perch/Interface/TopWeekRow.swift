@@ -171,7 +171,7 @@ private struct TodayFlowCell: View {
     /// it, and today's reading toggles the Record. The break line and a hovered day do not.
     private func opens(_ resting: (text: String, isReading: Bool, project: ProjectStatus?)?) -> Bool {
         guard inspecting == nil, let resting else { return false }
-        if let project = resting.project { return project.hostApp != nil }
+        if let project = resting.project { return project.host != nil }
         return resting.isReading && !nudge
     }
 
@@ -209,7 +209,7 @@ private struct TodayFlowCell: View {
             .onTapGesture {
                 guard inspecting == nil, let resting else { return }
                 if let project = resting.project {
-                    if project.hostApp != nil { onOpen(project) }
+                    if project.host != nil { onOpen(project) }
                 } else if resting.isReading, !nudge {
                     onRecord()
                 }

@@ -87,8 +87,8 @@ and the card unfolds: one status dot per project, with the project names
 cycling through one at a time. As long as one of those projects is waiting on
 your approval, the name stops there until you deal with it. Waiting on you
 also makes a sound of its own, different from the chime for a finished one.
-Press a project's name to bring forward the app its agent runs in: Terminal,
-iTerm, your editor, or the Claude app.
+Press a project's name to go to its agent: in the Claude app or the Codex app,
+straight to that session; in Terminal, iTerm or your editor, that app comes forward.
 
 ![Perch collapsed with a status key: blue for running, yellow for waiting for approval, green for done](perch-status-key.png)
 

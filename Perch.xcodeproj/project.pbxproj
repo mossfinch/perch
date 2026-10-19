@@ -18,6 +18,7 @@
 		00A1CE0000000000000000F4 /* IslandPalette.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00A1CE0000000000000000F3 /* IslandPalette.swift */; };
 		00A1CE000000000000000002 /* AgentEventLog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00A1CE000000000000000001 /* AgentEventLog.swift */; };
 		00A1CE000000000000000004 /* AgentEventMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00A1CE000000000000000003 /* AgentEventMonitor.swift */; };
+		00A1CE000000000000000A64 /* AgentHost.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00A1CE000000000000000A65 /* AgentHost.swift */; };
 		00A1CE000000000000000006 /* StalePolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00A1CE000000000000000005 /* StalePolicy.swift */; };
 		00A1CE000000000000000008 /* CareLedger.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00A1CE000000000000000007 /* CareLedger.swift */; };
 		00A1CE00000000000000000A /* CareMovePool.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00A1CE000000000000000009 /* CareMovePool.swift */; };
@@ -73,6 +74,7 @@
 		00A1CE0000000000000000F3 /* IslandPalette.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IslandPalette.swift; sourceTree = "<group>"; };
 		00A1CE000000000000000001 /* AgentEventLog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentEventLog.swift; sourceTree = "<group>"; };
 		00A1CE000000000000000003 /* AgentEventMonitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentEventMonitor.swift; sourceTree = "<group>"; };
+		00A1CE000000000000000A65 /* AgentHost.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentHost.swift; sourceTree = "<group>"; };
 		00A1CE000000000000000005 /* StalePolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StalePolicy.swift; sourceTree = "<group>"; };
 		00A1CE000000000000000007 /* CareLedger.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CareLedger.swift; sourceTree = "<group>"; };
 		00A1CE000000000000000009 /* CareMovePool.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CareMovePool.swift; sourceTree = "<group>"; };
@@ -135,6 +137,7 @@
 			children = (
 				00A1CE000000000000000001 /* AgentEventLog.swift */,
 				00A1CE000000000000000003 /* AgentEventMonitor.swift */,
+				00A1CE000000000000000A65 /* AgentHost.swift */,
 				00A1CE00000000000000006A /* DayScore.swift */,
 				00A1CE00000000000000006E /* FlowCorrectionLog.swift */,
 				00A1CE000000000000000051 /* FlowMath.swift */,
@@ -335,6 +338,7 @@
 				00A1CE000000000000000A22 /* IslandViewModel+Lines.swift in Sources */,
 				00A1CE000000000000000002 /* AgentEventLog.swift in Sources */,
 				00A1CE000000000000000004 /* AgentEventMonitor.swift in Sources */,
+				00A1CE000000000000000A64 /* AgentHost.swift in Sources */,
 				00A1CE000000000000000020 /* DataHome.swift in Sources */,
 				00A1CE000000000000000008 /* CareLedger.swift in Sources */,
 				00A1CE00000000000000000A /* CareMovePool.swift in Sources */,

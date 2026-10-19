@@ -134,7 +134,7 @@ private struct ActiveProjectLabel: View {
                 // out: it names the project and nothing else.
                 .foregroundStyle(IslandPalette.color(for: current?.status ?? .idle))
                 // See `TodayFlowCell`: the underline is the one sign a name can be pressed.
-                .underline(pointerOver && current?.hostApp != nil)
+                .underline(pointerOver && current?.host != nil)
                 .lineLimit(1)
                 .truncationMode(.tail)
                 .id(current?.id ?? "")
@@ -144,7 +144,7 @@ private struct ActiveProjectLabel: View {
         .contentShape(Rectangle())
         .onHover { pointerOver = $0 }
         .onTapGesture {
-            guard let current, current.hostApp != nil else { return }
+            guard let current, current.host != nil else { return }
             onOpen(current)
         }
         .onReceive(ticker) { _ in

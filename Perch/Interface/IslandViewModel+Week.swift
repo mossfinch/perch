@@ -1,4 +1,4 @@
-import Foundation
+import SwiftUI
 
 /// The week under the bird: what the branch shows, and what arguing with it does.
 ///
@@ -84,5 +84,14 @@ extension IslandViewModel {
         guard DayScore.clear(date: date, field: .flow) else { return }
         weekCorrections.removeValue(forKey: date)
         correctionGeneration &+= 1
+    }
+
+    /// Swaps the card's lower half between the move and the Record: every week since the
+    /// log began, one of them drawn large. The card is where it lives; closing the card
+    /// puts the move back. Reading the weeks again on each opening is cheap after the first:
+    /// past weeks come back from the store's cache.
+    func toggleRecord() {
+        if !showingRecord { RecordStore.shared.reload() }
+        withAnimation(.easeInOut(duration: 0.22)) { showingRecord.toggle() }
     }
 }

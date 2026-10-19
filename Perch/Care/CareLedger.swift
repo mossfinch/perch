@@ -39,6 +39,7 @@ enum CareCategory: String, Codable, CaseIterable, Equatable {
     case shoulders
     case eyes
     case face
+    case back
 }
 
 /// One v1 care record; see the format contract at the top of this file for field meanings.

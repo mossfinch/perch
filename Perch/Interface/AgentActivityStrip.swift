@@ -90,8 +90,11 @@ private struct ActiveProjectLabel: View {
     /// pre-filtered would be a second place the "yellow wins" rule could be
     /// written, and so a second place it could drift.
     let projects: [ProjectStatus]
+    /// Pressing the name brings forward the app that project's agent runs in.
+    let onOpen: (ProjectStatus) -> Void
 
     @State private var slot = 0
+    @State private var pointerOver = false
     // The ticker must be @State: the parent (the whole card) redraws every
     // second with the viewModel, and a plain `let` publisher would be replaced
     // on every redraw, resetting the 3-second clock before it ever completes.
@@ -130,12 +133,20 @@ private struct ActiveProjectLabel: View {
                 // The colour carries the state, so the caption never has to spell it
                 // out: it names the project and nothing else.
                 .foregroundStyle(IslandPalette.color(for: current?.status ?? .idle))
+                // See `TodayFlowCell`: the underline is the one sign a name can be pressed.
+                .underline(pointerOver && current?.hostApp != nil)
                 .lineLimit(1)
                 .truncationMode(.tail)
                 .id(current?.id ?? "")
                 .transition(.opacity)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+        .contentShape(Rectangle())
+        .onHover { pointerOver = $0 }
+        .onTapGesture {
+            guard let current, current.hostApp != nil else { return }
+            onOpen(current)
+        }
         .onReceive(ticker) { _ in
             // Something is waiting on you: the label is pinned, not rotating.
             guard waiting.isEmpty, shown.count > 1 else { return }
@@ -161,6 +172,9 @@ struct AgentActivityStrip: View {
     /// the island for a second control that would have to explain which reading
     /// it belongs to.
     let onTap: () -> Void
+
+    /// Pressing a project's name brings forward the app its agent runs in.
+    var onOpenProject: (ProjectStatus) -> Void = { _ in }
 
     /// Derived from the project list, the same source as the dots beside it,
     /// and not from viewModel.agentStatus: with two sources, any change in
@@ -237,7 +251,7 @@ struct AgentActivityStrip: View {
             HStack(spacing: 6) {
                 AgentStatusDots(projects: projects)
                     .fixedSize()
-                ActiveProjectLabel(projects: projects)
+                ActiveProjectLabel(projects: projects, onOpen: onOpenProject)
             }
             .frame(width: GuidedCareLayout.rightColumnWidth, alignment: .leading)
         }

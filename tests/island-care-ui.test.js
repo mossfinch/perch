@@ -131,6 +131,23 @@ test("the completion chime has one switch, in the corner under the figures, and 
   assert.ok(beat, "playBeat not found");
   assert.doesNotMatch(beat, /chimeMuted/, "the beat is the move's clock, not a notification");
 
+  // A line waiting on you makes its own sound, under the same switch. It stays a sound: the
+  // card does not open and nothing shakes, because nothing visual nags. Once per wait.
+  const waiting = vm.match(/private func playWaitingSound\(\)[\s\S]*?\n    \}/)?.[0] ?? "";
+  assert.ok(waiting, "playWaitingSound not found");
+  assert.match(waiting, /guard !chimeMuted else \{ return \}/, "the speaker must silence the waiting sound too");
+  const apply = vm.match(/private func applyProjectEvent\([\s\S]*?\n    \}/)?.[0] ?? "";
+  const waitingBranch = apply.match(/case \.waiting:([\s\S]*?)case \.idle/)?.[1] ?? "";
+  assert.ok(waitingBranch, "no .waiting branch inside applyProjectEvent");
+  assert.match(waitingBranch, /if before != \.waiting \{ playWaitingSound\(\) \}/, "waiting on you is silent, or rings on every repeat");
+  assert.doesNotMatch(waitingBranch, /peekOpen|shake/, "waiting on you must stay a sound");
+
+  // A green is kept until a hover sees it; every event starts the look over.
+  const hover = vm.match(/func hoverEntered\(\) \{[\s\S]*?\n    \}/)?.[0] ?? "";
+  assert.ok(hover, "hoverEntered not found");
+  assert.match(hover, /markFinishedLinesSeen\(\)/, "hovering no longer counts as seeing a green");
+  assert.match(apply, /projects\[idx\]\.seenAt = nil/, "a new event keeps the old look, so a fresh green can vanish unseen");
+
   // The switch lives in the corner under the figures: an overlay, in no row.
   const view = islandViews();
   const card = view.match(/struct GuidedCareCard: View[\s\S]*?\n\}/)?.[0] ?? "";
@@ -150,6 +167,17 @@ test("the completion chime has one switch, in the corner under the figures, and 
   const controls = card.match(/private var topControls: some View[\s\S]*?\n    \}/)?.[0] ?? "";
   assert.ok(controls, "topControls not found");
   assert.doesNotMatch(controls, /chime/i, "the move's controls must not carry the switch");
+});
+
+// Four part circles and Start take most of the row; a long move name must give way by
+// scaling, never the controls (squeezed, Start wrapped onto two lines).
+test("the idle controls keep their size and the move name scales instead", () => {
+  const card = fs.readFileSync(islandPath("GuidedCareCard.swift"), "utf8");
+  const controls = card.match(/private var topControls: some View[\s\S]*?\n    \}/)?.[0] ?? "";
+  const idle = controls.match(/case \.idle:[\s\S]*?case \.active:/)?.[0] ?? "";
+  assert.ok(idle, "the idle controls were not found");
+  assert.match(idle, /recommendationControls\s*\}\s*\.fixedSize\(\)/, "the idle controls can be squeezed");
+  assert.match(card, /Text\(move\.name\)[\s\S]{0,200}\.minimumScaleFactor\(/, "a long name has no way to give way");
 });
 
 // ── Which move the card offers ────────────────────────────────────────────────
@@ -594,7 +622,8 @@ test("the card's first line asks for the break while the island is asking, and a
   // At rest, the ask replaces the cycle. It is shown as a reading, in the readings' colour.
   const resting = row.match(/private func restingSlot\(at now: Date\)[\s\S]*?\n    \}\n/)?.[0] ?? "";
   assert.ok(resting, "restingSlot not found");
-  assert.match(resting, /if nudge \{ return \(StretchNudge\.line, true\) \}/);
+  // The third element is the project a slot names, so pressing it can open its app; the ask names none.
+  assert.match(resting, /if nudge \{ return \(StretchNudge\.line, true, nil\) \}/);
   // Hovering a day keeps strict priority over anything at rest, the ask included.
   assert.match(row, /let text = inspecting\.map \{ self\.inspected\(\$0, at: context\.date\) \} \?\? resting\?\.text/);
 });
@@ -813,4 +842,192 @@ print("{\\"almostAway\\":\\(almostAway),\\"away\\":\\(away),\\"clockRestarted\\"
     // The tab is already asking, so a second stretch reaching the threshold adds no second peek.
     askedTwice: false, stillAsking: true,
   });
+});
+
+test("the wait is a choice: half an hour asks at half an hour, never never asks, and the pick survives a relaunch", () => {
+  // Compiled and run with StretchInterval, which holds the choices, their words and their storage.
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "perch-interval-"));
+  const main = path.join(tmp, "main.swift");
+  const binary = path.join(tmp, "interval-check");
+  fs.writeFileSync(main, `import Foundation
+let t0 = Date(timeIntervalSince1970: 1_700_000_000)
+func at(_ s: Double) -> Date { t0.addingTimeInterval(s) }
+// A line working without a break, watched every 15 seconds, then a hand-off at the end.
+func asks(after seconds: TimeInterval?, workFor: Double) -> Bool {
+    var n = StretchNudge()
+    n.setInterval(seconds)
+    var t = 0.0
+    while t <= workFor { n.refresh(turns: [], busy: true, now: at(t), uptime: t); t += 15 }
+    return n.statusChanged(from: .done, to: .working, moving: false, at: at(workFor))
+}
+precondition(StretchNudge().interval == StretchNudge.after, "the default wait is no longer the hour she picked")
+precondition(!asks(after: 30 * 60, workFor: 29 * 60), "half an hour asked early")
+precondition(asks(after: 30 * 60, workFor: 30 * 60 + 15), "half an hour did not ask at half an hour")
+precondition(!asks(after: 90 * 60, workFor: 61 * 60), "an hour and a half asked at the hour")
+precondition(!asks(after: nil, workFor: 4 * 3600), "never asked")
+// Turning the asks off takes down one already on screen.
+var open = StretchNudge()
+var t = 0.0
+while t <= 3700 { open.refresh(turns: [], busy: true, now: at(t), uptime: t); t += 15 }
+precondition(open.statusChanged(from: .done, to: .working, moving: false, at: at(3700)) && open.asking)
+// A move straight after the ask says the reminder came at a good time; one after more than a
+// quarter of an hour says the wait may be too short. An ask that never opened is never slow.
+precondition(!open.answeredSlowly(at: at(3700 + StretchNudge.slowAnswer)), "an answer at exactly fifteen minutes counted as slow")
+precondition(open.answeredSlowly(at: at(3700 + StretchNudge.slowAnswer + 1)), "an answer past fifteen minutes did not count as slow")
+precondition(StretchNudge.slowAnswer == 15 * 60, "the slow line moved off the fifteen minutes she picked")
+precondition(!StretchNudge().answeredSlowly(at: at(99999)), "a move with no ask open counted as a slow answer")
+// At the longest wait there is nothing longer to offer; with reminders off there is no ask at all.
+precondition(StretchInterval.canLengthen(60) && StretchInterval.canLengthen(30))
+precondition(!StretchInterval.canLengthen(90), "the longest wait still offers a change, leaving only Never")
+precondition(!StretchInterval.canLengthen(nil))
+open.setInterval(nil)
+precondition(!open.asking && !open.due, "an ask stayed up after never was picked")
+// The words, and the storage: nothing stored is the default, never is kept as never, junk falls back.
+let d = UserDefaults(suiteName: "perch-interval-\\(UUID().uuidString)")!
+precondition(StretchInterval.load(d) == 60)
+precondition(StretchInterval.seconds(45) == 2700 && StretchInterval.seconds(nil) == nil)
+StretchInterval.save(30, d); precondition(StretchInterval.load(d) == 30)
+StretchInterval.save(nil, d); precondition(StretchInterval.load(d) == nil, "never came back as a wait")
+d.set(17, forKey: "stretchIntervalMinutes"); precondition(StretchInterval.load(d) == 60, "a stored oddity became the wait")
+precondition(StretchInterval.choices.map(StretchInterval.label) == ["30 min", "45 min", "1 hour", "90 min", "Never"])
+precondition([30, 45, 60, 90].map(StretchInterval.spoken) == ["half an hour", "45 minutes", "an hour", "an hour and a half"])
+print("ok")
+`);
+  execFileSync("swiftc", [islandPath("FlowMath.swift"), islandPath("AgentStatus.swift"), islandPath("StretchNudge.swift"),
+                          islandPath("StretchInterval.swift"), main, "-o", binary], { stdio: "pipe" });
+  assert.equal(execFileSync(binary, { encoding: "utf8" }).trim(), "ok");
+});
+
+test("after a move that answered a reminder the title line says when the next comes, and the menu is the way back from never", () => {
+  const strip = (s) => s.replace(/\/\/.*$/gm, "");
+  const vm = strip(fs.readFileSync(islandPath("IslandViewModel.swift"), "utf8"));
+  // Only a move that answered an ask left standing over fifteen minutes, and only while a longer
+  // wait is on offer. Judged before moved() closes the ask, or it never fires.
+  assert.match(vm, /let offer = stretch\.answeredSlowly\(at: Date\(\)\) && StretchInterval\.canLengthen\(stretchMinutes\)\s*stretch\.moved\(\)/,
+    "the offer is judged after moved() clears the ask, or ignores how long it waited");
+  assert.match(vm, /if offer \{ nudgeAnswered = true; peekOpen\(for: 8\) \}/);
+  assert.match(vm, /nudgeAnswered = false/, "the sentence would greet the next opening");
+  assert.match(vm, /stretch\.setInterval\(StretchInterval\.seconds\(stretchMinutes\)\)\s*stretch\.restore\(\.load\(\)\)\s*seedFlowFromLog\(\)/,
+    "a relaunch forgets the pick until it is chosen again");
+  const flow = strip(fs.readFileSync(islandPath("IslandViewModel+Flow.swift"), "utf8"));
+  assert.match(flow, /func chooseStretchInterval\(_ minutes: Int\?\) \{\s*stretchMinutes = minutes\s*StretchInterval\.save\(minutes\)\s*stretch\.setInterval/);
+  // The sentence replaces the title and nothing else: no extra lines above or below it, the
+  // controls and the pictures stay where they are.
+  const card = strip(fs.readFileSync(islandPath("GuidedCareCard.swift"), "utf8"));
+  assert.match(card, /if viewModel\.nudgeAnswered \{\s*NudgeSentence\(minutes: viewModel\.stretchMinutes, choosing: \$choosingWait\) \{\s*withAnimation\(\.easeInOut\(duration: 0\.22\)\) \{ viewModel\.nudgeAnswered = false \}\s*\}\s*\.layoutPriority\(1\)\s*\} else \{\s*Text\(move\.name\)/,
+    "the sentence no longer sits in the title's own place, before the sparkle");
+  assert.match(fs.readFileSync(islandPath("NudgeDoneView.swift"), "utf8"), /\.font\(\.system\(size: 22, weight: \.semibold\)\)/,
+    "the sentence is no longer in the title's type");
+  assert.doesNotMatch(card, /Up next|, done"/, "the extra small lines came back");
+  assert.match(card, /\.onChange\(of: viewModel\.nudgeAnswered\) \{ choosingWait = false \}/);
+  // The sentence gets the whole line, so it stays at the title's size; the waits float over the
+  // pictures instead of pushing them down.
+  assert.match(card, /if !viewModel\.nudgeAnswered \{ topControls \}/, "the controls squeeze the sentence small again");
+  assert.match(card, /\.overlay\(alignment: \.topLeading\) \{\s*if viewModel\.nudgeAnswered, choosingWait \{\s*NudgeChoices/, "the waits push the pictures down again");
+  // The sentence takes height from the pictures only when the choices open; sized by width alone
+  // they ran off the card's bottom.
+  assert.match(card, /GeometryReader \{ strip in\s*CareFrameStrip\([\s\S]*?areaHeight: strip\.size\.height/);
+  assert.match(card, /let imageSide = max\(0, min\(108, slotWidth \* 0\.9, fitsHeight\)\)/, "the pictures stopped fitting the height left");
+  const view = strip(fs.readFileSync(islandPath("NudgeDoneView.swift"), "utf8"));
+  assert.match(view, /\("Next nudge after ", StretchInterval\.spoken\(\$0\), " of work\."\)/);
+  assert.match(view, /\?\? \("Nudges are ", "off", "\."\)/);
+  // One Text, so a long wait shrinks the whole sentence beside the controls instead of clipping it.
+  assert.match(view, /\.lineLimit\(1\)\s*\.minimumScaleFactor\(0\.6\)/);
+  // Ten seconds, then the move's name and Start come back; never while the choices are open, and
+  // a sentence already gone (its task cancelled) does not reach back to close a later one.
+  assert.match(view, /static let shown: Duration = \.seconds\(10\)/);
+  assert.match(view, /try await Task\.sleep\(for: Self\.shown\)\s*while choosing \{ try await Task\.sleep\(for: \.seconds\(1\)\) \}\s*\} catch \{\s*return/);
+  assert.match(view, /\}\s*onExpire\(\)\s*\}/);
+  assert.match(view, /OpenURLAction \{ _ in\s*withAnimation\(\.easeInOut\(duration: 0\.18\)\) \{ choosing\.toggle\(\) \}/);
+  assert.match(view, /ForEach\(StretchInterval\.choices, id: \\\.self\) \{ option in\s*Button \{ choose\(option\) \}/);
+  const menu = strip(fs.readFileSync(islandPath("IslandMenu.swift"), "utf8"));
+  assert.match(menu, /NSMenuItem\(title: "Stretch Reminders"/);
+  assert.match(menu, /item\.state = minutes == viewModel\.stretchMinutes \? \.on : \.off/);
+  assert.match(menu, /viewModel\.chooseStretchInterval\(sender\.representedObject as\? Int\)/);
+});
+
+test("a relaunch remembers the stretch: no second ask for one asked or answered, an open ask stays open, a new stretch asks again", () => {
+  // Compiled and run: the memory is what StretchNudge hands out, stored by StretchInterval.swift.
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "perch-memory-"));
+  const main = path.join(tmp, "main.swift");
+  const binary = path.join(tmp, "memory-check");
+  fs.writeFileSync(main, `import Foundation
+let t0 = Date(timeIntervalSince1970: 1_700_000_000)
+func at(_ s: Double) -> Date { t0.addingTimeInterval(s) }
+func turn(_ a: Double, _ b: Double) -> FlowMath.Turn {
+    FlowMath.Turn(start: at(a), end: at(b), project: "/x/a", source: "claude", truncated: false)
+}
+// An hour and a bit of unbroken work, asked at the hand-off.
+func asked() -> StretchNudge {
+    var n = StretchNudge()
+    var t = 0.0
+    while t <= 3700 { n.refresh(turns: [], busy: true, now: at(t), uptime: t); t += 15 }
+    precondition(n.statusChanged(from: .done, to: .working, moving: false, at: at(3700)))
+    return n
+}
+// A fresh island, as after a relaunch: the stretch is rebuilt from the log, still going.
+func relaunched(_ memory: StretchNudge.Memory, turns: [FlowMath.Turn], now: Double) -> StretchNudge {
+    var n = StretchNudge()
+    n.restore(memory)
+    n.refresh(turns: turns, busy: false, now: at(now), uptime: 10)
+    return n
+}
+
+// Asked, not yet answered: the ask is still up after the relaunch, and the card does not open again.
+var open = relaunched(asked().memory, turns: [turn(0, 3790)], now: 3800)
+precondition(open.asking, "an open ask vanished on relaunch")
+precondition(!open.statusChanged(from: .done, to: .working, moving: false, at: at(3810)), "the relaunch asked the same stretch again")
+
+// Answered: no ask after the relaunch, now or at the next hand-off.
+var answered = asked()
+answered.moved(at: at(3760))
+precondition(answered.memory.askedAt == nil && answered.memory.spentAt != nil)
+var after = relaunched(answered.memory, turns: [turn(0, 3790)], now: 3800)
+precondition(!after.asking, "an answered ask came back on relaunch")
+precondition(!after.statusChanged(from: .done, to: .working, moving: false, at: at(3810)), "an answered stretch was asked again after relaunch")
+
+// A pause of more than five minutes ends the stretch; the next one is asked as usual.
+var fresh = relaunched(answered.memory, turns: [turn(4200, 4200 + 3700)], now: 4200 + 3700)
+precondition(fresh.statusChanged(from: .done, to: .working, moving: false, at: at(4200 + 3710)), "the memory silenced a new stretch")
+
+// Codex 10-18: an ask still open across a short rest (over five minutes, under twenty) belongs to
+// no stretch any more, yet it is still up; a relaunch must keep it up.
+var rested = asked()
+var r = 3715.0
+while r < 4300 { rested.refresh(turns: [], busy: false, now: at(r), uptime: r); r += 15 }
+while r <= 4400 { rested.refresh(turns: [], busy: true, now: at(r), uptime: r); r += 15 }
+precondition(rested.asking, "control: the live rule should keep this ask up")
+let restedBack = relaunched(rested.memory, turns: [turn(0, 3700), turn(4300, 4400)], now: 4410)
+precondition(restedBack.asking, "an ask kept up across a short rest vanished on relaunch")
+
+// Codex 10-18: a relaunch reads two hours of log, so a stretch longer than that comes back with a
+// later start than when it was answered. Still the same stretch: no second ask.
+var long = asked()
+long.moved(at: at(3760))
+var w = 3775.0
+while w <= 11000 { long.refresh(turns: [], busy: true, now: at(w), uptime: w); w += 15 }
+let window = stride(from: 3800.0, to: 11000, by: 600).map { turn($0, min($0 + 540, 11000)) }
+var longBack = relaunched(long.memory, turns: window, now: 11000)
+precondition(!longBack.statusChanged(from: .done, to: .working, moving: false, at: at(11010)),
+             "a stretch longer than the log window was asked again after relaunch")
+
+// Nothing asked yet: nothing to remember, and the first ask still comes.
+precondition(StretchNudge().memory == StretchNudge.Memory())
+
+// Stored and read back; an unreadable store is no memory, not a crash or a silenced reminder.
+let d = UserDefaults(suiteName: "perch-memory-\\(UUID().uuidString)")!
+StretchNudge.Memory.save(answered.memory, d)
+precondition(StretchNudge.Memory.load(d) == answered.memory, "the memory did not survive the round trip")
+d.set(Data("junk".utf8), forKey: "stretchMemory")
+precondition(StretchNudge.Memory.load(d) == StretchNudge.Memory())
+print("ok")
+`);
+  execFileSync("swiftc", [islandPath("FlowMath.swift"), islandPath("AgentStatus.swift"), islandPath("StretchNudge.swift"),
+                          islandPath("StretchInterval.swift"), main, "-o", binary], { stdio: "pipe" });
+  assert.equal(execFileSync(binary, { encoding: "utf8" }).trim(), "ok");
+  // Wired: read back at launch before the log is replayed, saved whenever the stretch is published.
+  const vm = fs.readFileSync(islandPath("IslandViewModel.swift"), "utf8").replace(/\/\/.*$/gm, "");
+  assert.match(vm, /stretch\.restore\(\.load\(\)\)\s*seedFlowFromLog\(\)/, "the memory is read after the log already rebuilt the stretch");
+  const flow = fs.readFileSync(islandPath("IslandViewModel+Flow.swift"), "utf8");
+  assert.match(flow, /func publishStretch\(\) \{\s*StretchNudge\.Memory\.save\(stretch\.memory\)/);
 });

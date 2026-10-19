@@ -22,6 +22,8 @@
 		00A1CE000000000000000008 /* CareLedger.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00A1CE000000000000000007 /* CareLedger.swift */; };
 		00A1CE00000000000000000A /* CareMovePool.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00A1CE000000000000000009 /* CareMovePool.swift */; };
 		00A1CE000000000000000A08 /* StretchNudge.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00A1CE000000000000000A07 /* StretchNudge.swift */; };
+		00A1CE000000000000000A60 /* StretchInterval.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00A1CE000000000000000A61 /* StretchInterval.swift */; };
+		00A1CE000000000000000A62 /* NudgeDoneView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00A1CE000000000000000A63 /* NudgeDoneView.swift */; };
 		00A1CE00000000000000000C /* CareSessionClock.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00A1CE00000000000000000B /* CareSessionClock.swift */; };
 		00A1CE00000000000000000E /* CareSessionRecorder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00A1CE00000000000000000D /* CareSessionRecorder.swift */; };
 		00A1CE000000000000000010 /* IslandView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00A1CE00000000000000000F /* IslandView.swift */; };
@@ -47,8 +49,16 @@
 		00A1CE000000000000000A10 /* OrderedJSON.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00A1CE000000000000000A11 /* OrderedJSON.swift */; };
 		00A1CE000000000000000A12 /* HookSetup.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00A1CE000000000000000A13 /* HookSetup.swift */; };
 		00A1CE000000000000000A14 /* IslandViewModel+Setup.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00A1CE000000000000000A15 /* IslandViewModel+Setup.swift */; };
+		00A1CE000000000000000A20 /* IslandViewModel+Sounds.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00A1CE000000000000000A21 /* IslandViewModel+Sounds.swift */; };
+		00A1CE000000000000000A22 /* IslandViewModel+Lines.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00A1CE000000000000000A23 /* IslandViewModel+Lines.swift */; };
 		00A1CE000000000000000A16 /* perch-hook.sh in Resources */ = {isa = PBXBuildFile; fileRef = 00A1CE000000000000000A17 /* perch-hook.sh */; };
 		00A1CE000000000000000A18 /* DemoMode.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00A1CE000000000000000A19 /* DemoMode.swift */; };
+		00A1CE000000000000000A40 /* RecordData.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00A1CE000000000000000A41 /* RecordData.swift */; };
+		00A1CE000000000000000A42 /* RecordStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00A1CE000000000000000A43 /* RecordStore.swift */; };
+		00A1CE000000000000000A44 /* RecordView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00A1CE000000000000000A45 /* RecordView.swift */; };
+		00A1CE000000000000000A30 /* IslandMenu.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00A1CE000000000000000A31 /* IslandMenu.swift */; };
+		00A1CE000000000000000A32 /* LoginItem.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00A1CE000000000000000A33 /* LoginItem.swift */; };
+		00A1CE000000000000000A34 /* HookSetup+Disconnect.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00A1CE000000000000000A35 /* HookSetup+Disconnect.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -67,6 +77,8 @@
 		00A1CE000000000000000007 /* CareLedger.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CareLedger.swift; sourceTree = "<group>"; };
 		00A1CE000000000000000009 /* CareMovePool.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CareMovePool.swift; sourceTree = "<group>"; };
 		00A1CE000000000000000A07 /* StretchNudge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StretchNudge.swift; sourceTree = "<group>"; };
+		00A1CE000000000000000A61 /* StretchInterval.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StretchInterval.swift; sourceTree = "<group>"; };
+		00A1CE000000000000000A63 /* NudgeDoneView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NudgeDoneView.swift; sourceTree = "<group>"; };
 		00A1CE00000000000000000B /* CareSessionClock.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CareSessionClock.swift; sourceTree = "<group>"; };
 		00A1CE00000000000000000D /* CareSessionRecorder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CareSessionRecorder.swift; sourceTree = "<group>"; };
 		00A1CE00000000000000000F /* IslandView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IslandView.swift; sourceTree = "<group>"; };
@@ -95,8 +107,16 @@
 		00A1CE000000000000000A11 /* OrderedJSON.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OrderedJSON.swift; sourceTree = "<group>"; };
 		00A1CE000000000000000A13 /* HookSetup.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HookSetup.swift; sourceTree = "<group>"; };
 		00A1CE000000000000000A15 /* IslandViewModel+Setup.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "IslandViewModel+Setup.swift"; sourceTree = "<group>"; };
+		00A1CE000000000000000A21 /* IslandViewModel+Sounds.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "IslandViewModel+Sounds.swift"; sourceTree = "<group>"; };
+		00A1CE000000000000000A23 /* IslandViewModel+Lines.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "IslandViewModel+Lines.swift"; sourceTree = "<group>"; };
 		00A1CE000000000000000A17 /* perch-hook.sh */ = {isa = PBXFileReference; lastKnownFileType = text.script.sh; path = "perch-hook.sh"; sourceTree = SOURCE_ROOT; };
 		00A1CE000000000000000A19 /* DemoMode.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DemoMode.swift; sourceTree = "<group>"; };
+		00A1CE000000000000000A41 /* RecordData.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecordData.swift; sourceTree = "<group>"; };
+		00A1CE000000000000000A43 /* RecordStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecordStore.swift; sourceTree = "<group>"; };
+		00A1CE000000000000000A45 /* RecordView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecordView.swift; sourceTree = "<group>"; };
+		00A1CE000000000000000A31 /* IslandMenu.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IslandMenu.swift; sourceTree = "<group>"; };
+		00A1CE000000000000000A33 /* LoginItem.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoginItem.swift; sourceTree = "<group>"; };
+		00A1CE000000000000000A35 /* HookSetup+Disconnect.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "HookSetup+Disconnect.swift"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -124,6 +144,7 @@
 				00A1CE000000000000000005 /* StalePolicy.swift */,
 				00A1CE000000000000000A11 /* OrderedJSON.swift */,
 				00A1CE000000000000000A13 /* HookSetup.swift */,
+				00A1CE000000000000000A35 /* HookSetup+Disconnect.swift */,
 			);
 			path = AgentEvents;
 			sourceTree = "<group>";
@@ -134,10 +155,21 @@
 				00A1CE000000000000000007 /* CareLedger.swift */,
 				00A1CE000000000000000009 /* CareMovePool.swift */,
 				00A1CE000000000000000A07 /* StretchNudge.swift */,
+				00A1CE000000000000000A61 /* StretchInterval.swift */,
 				00A1CE00000000000000000B /* CareSessionClock.swift */,
 				00A1CE00000000000000000D /* CareSessionRecorder.swift */,
 			);
 			path = Care;
+			sourceTree = "<group>";
+		};
+		00A1CE000000000000000A48 /* Record */ = {
+			isa = PBXGroup;
+			children = (
+				00A1CE000000000000000A41 /* RecordData.swift */,
+				00A1CE000000000000000A43 /* RecordStore.swift */,
+				00A1CE000000000000000A45 /* RecordView.swift */,
+			);
+			path = Record;
 			sourceTree = "<group>";
 		};
 		00A1CE000000000000000031 /* Interface */ = {
@@ -147,6 +179,7 @@
 				00A1CE00000000000000000F /* IslandView.swift */,
 				00A1CE0000000000000000FD /* GuidedCareCard.swift */,
 				00A1CE0000000000000000FB /* AgentActivityStrip.swift */,
+				00A1CE000000000000000A63 /* NudgeDoneView.swift */,
 				00A1CE0000000000000000F9 /* TopWeekRow.swift */,
 				00A1CE0000000000000000F7 /* WeekPerch.swift */,
 				00A1CE0000000000000000F5 /* ProjectCaption.swift */,
@@ -155,6 +188,8 @@
 				00A1CE000000000000000A01 /* IslandViewModel+Week.swift */,
 				00A1CE000000000000000A05 /* IslandViewModel+Flow.swift */,
 				00A1CE000000000000000A15 /* IslandViewModel+Setup.swift */,
+				00A1CE000000000000000A21 /* IslandViewModel+Sounds.swift */,
+				00A1CE000000000000000A23 /* IslandViewModel+Lines.swift */,
 				00A1CE000000000000000A03 /* CarouselClock.swift */,
 			);
 			path = Interface;
@@ -165,6 +200,7 @@
 			children = (
 				00A1CE000000000000000013 /* IslandCapsuleShape.swift */,
 				00A1CE000000000000000015 /* IslandCardShape.swift */,
+				00A1CE000000000000000A31 /* IslandMenu.swift */,
 				00A1CE000000000000000017 /* IslandDisplayMetrics.swift */,
 				00A1CE000000000000000019 /* IslandHoverMonitor.swift */,
 				00A1CE00000000000000001B /* IslandPresentationPhase.swift */,
@@ -190,8 +226,10 @@
 				00A1CE00000000000000001F /* DataHome.swift */,
 				00A1CE000000000000000021 /* PerchApp.swift */,
 				00A1CE000000000000000A19 /* DemoMode.swift */,
+				00A1CE000000000000000A33 /* LoginItem.swift */,
 				00A1CE00000000000000002F /* AgentEvents */,
 				00A1CE000000000000000030 /* Care */,
+				00A1CE000000000000000A48 /* Record */,
 				00A1CE000000000000000031 /* Interface */,
 				00A1CE000000000000000032 /* Notch */,
 				00A1CE000000000000000033 /* Resources */,
@@ -284,15 +322,25 @@
 			buildActionMask = 2147483647;
 			files = (
 				00A1CE000000000000000A18 /* DemoMode.swift in Sources */,
+				00A1CE000000000000000A40 /* RecordData.swift in Sources */,
+				00A1CE000000000000000A42 /* RecordStore.swift in Sources */,
+				00A1CE000000000000000A44 /* RecordView.swift in Sources */,
+				00A1CE000000000000000A30 /* IslandMenu.swift in Sources */,
+				00A1CE000000000000000A32 /* LoginItem.swift in Sources */,
+				00A1CE000000000000000A34 /* HookSetup+Disconnect.swift in Sources */,
 				00A1CE000000000000000A10 /* OrderedJSON.swift in Sources */,
 				00A1CE000000000000000A12 /* HookSetup.swift in Sources */,
 				00A1CE000000000000000A14 /* IslandViewModel+Setup.swift in Sources */,
+				00A1CE000000000000000A20 /* IslandViewModel+Sounds.swift in Sources */,
+				00A1CE000000000000000A22 /* IslandViewModel+Lines.swift in Sources */,
 				00A1CE000000000000000002 /* AgentEventLog.swift in Sources */,
 				00A1CE000000000000000004 /* AgentEventMonitor.swift in Sources */,
 				00A1CE000000000000000020 /* DataHome.swift in Sources */,
 				00A1CE000000000000000008 /* CareLedger.swift in Sources */,
 				00A1CE00000000000000000A /* CareMovePool.swift in Sources */,
 				00A1CE000000000000000A08 /* StretchNudge.swift in Sources */,
+				00A1CE000000000000000A60 /* StretchInterval.swift in Sources */,
+				00A1CE000000000000000A62 /* NudgeDoneView.swift in Sources */,
 				00A1CE00000000000000000C /* CareSessionClock.swift in Sources */,
 				00A1CE00000000000000000E /* CareSessionRecorder.swift in Sources */,
 				00A1CE000000000000000014 /* IslandCapsuleShape.swift in Sources */,

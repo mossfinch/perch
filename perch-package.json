@@ -46,6 +46,7 @@
     "tests/island-install.test.js",
     "tests/island-paths.js",
     "tests/island-privacy.test.js",
+    "tests/island-record.test.js",
     "tests/island-release.test.js",
     "tests/island-reporting.test.js",
     "tests/island-roster.js",

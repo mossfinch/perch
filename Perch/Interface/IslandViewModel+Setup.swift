@@ -39,8 +39,8 @@ extension IslandViewModel {
         return agentSetup == .needsConnect
     }
 
-    /// The Connect button's action, and the only place the app writes into another tool's
-    /// configuration.
+    /// The Connect button's action. With `disconnectAgents` below, the only places the app
+    /// writes into another tool's configuration.
     func connectAgents() {
         do {
             let report = try HookSetup.connect(.forThisMac())
@@ -48,5 +48,13 @@ extension IslandViewModel {
         } catch {
             agentSetup = .failed("\(error)")
         }
+    }
+
+    /// The menu's Disconnect Agents. Afterwards the card's second row offers Connect again.
+    @discardableResult
+    func disconnectAgents() throws -> HookSetup.DisconnectReport {
+        let report = try HookSetup.disconnect(.forThisMac())
+        refreshAgentSetup()
+        return report
     }
 }

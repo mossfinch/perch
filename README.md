@@ -85,7 +85,10 @@ Collapsed, the bird on the left takes the colour of whatever needs your attentio
 most, and the counts for each state sit on the right. Hover the notch
 and the card unfolds: one status dot per project, with the project names
 cycling through one at a time. As long as one of those projects is waiting on
-your approval, the name stops there until you deal with it.
+your approval, the name stops there until you deal with it. Waiting on you
+also makes a sound of its own, different from the chime for a finished one.
+Press a project's name to bring forward the app its agent runs in: Terminal,
+iTerm, your editor, or the Claude app.
 
 ![Perch collapsed with a status key: blue for running, yellow for waiting for approval, green for done](perch-status-key.png)
 
@@ -114,6 +117,14 @@ Hover a day on the branch and that area switches to showing that day's level,
 its `in flow` duration and its `agents ran` duration.
 
 ![Hovering Wednesday: that day's level and its two duration readings](perch-week-hover.png)
+
+Earlier weeks are in **Record**: press today's `in flow` reading, or choose
+**Record** from the card's right-click menu, and the card's lower half turns
+into it. It draws one week large, on the same branch, with a small dot under
+each day for every move you finished, and every week since Perch started
+listening as a row of strokes underneath; press one to see that week. Hover a
+day for its flow and the moves you did. Press the reading again, or let the
+card close, and the move comes back.
 
 ### What Perch means by "in flow"
 
@@ -157,16 +168,22 @@ measured.
 
 Work with a coding agent for hours and your attention keeps moving between
 tasks while your body holds the same seated position throughout. Perch breaks
-the neck, shoulder and eye care that is easiest to skip during a wait into
-30-second moves: the illustration shows how to move, the beat tells you when to
-switch, and you never have to leave what you are doing to go find a tutorial or
-a timer.
+the neck, shoulder, back and eye care that is easiest to skip during a wait
+into 30-second moves: the illustration shows how to move, the beat tells you
+when to switch, and you never have to leave what you are doing to go find a
+tutorial or a timer. Four circles beside Start choose the part: neck, eyes,
+shoulders or back. Press the chosen one again for its next move.
 
 When you are busy, a wait does not always feel like a rest. After an hour of
 steady work with your agents, Perch picks a moment when you hand something off
 and gently opens the card: *stretch your wings*. The little reminder stays under
 the notch, and now and then it stretches too. Follow the illustration and the
 beat for a moment; finish one move, and next time there is a different one.
+If the reminder waited more than a quarter of an hour, the card then says when
+the next nudge will come; press the time in that sentence to pick half an hour,
+45 minutes, an hour, an hour and a half, or never. Answered sooner, or already
+at the longest wait, it says nothing. With nudges off, Stretch Reminders in the right-click menu turns them
+back on.
 
 When you finish one, Perch leaves a line in a local move log, so later you can
 see what you actually did, not just that today you meant to get up and move
@@ -252,6 +269,9 @@ hasn't been granted yet.
    the agents it finds on this Mac. For codex, trust the new hooks once in its
    `/hooks` panel.
 
+From then on Perch opens at login. Right-click the open card for its menu: the
+version, **Open at Login**, **Disconnect Agents…** and **Quit Perch**.
+
 The download leaves out the history rebuild described above; to get it, build
 from source.
 
@@ -301,7 +321,13 @@ replacement is an atomic rename, so no half-written config can be left behind.
 
 ## Uninstall and delete your data
 
-Remove the app, its launch-at-login entry, and the history rebuild tool:
+Downloaded: right-click the open card, choose **Disconnect Agents…** to take
+Perch's hooks out of Claude Code and codex (a backup stays beside each file),
+then **Quit Perch** and move the app to the Trash. The data folder further down
+is yours to keep or delete.
+
+Built from source, remove the app, its launch-at-login entry, and the history
+rebuild tool:
 
 ```bash
 launchctl bootout gui/$UID/io.github.mossfinch.perch

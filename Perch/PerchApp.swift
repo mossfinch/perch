@@ -24,6 +24,7 @@ final class PerchAppDelegate: NSObject, NSApplicationDelegate {
             return
         }
         NSApp.setActivationPolicy(.accessory)
+        LoginItem.defaultOnFirstLaunch()
         if DataHome.isDemo { DemoMode.seed() }
         let controller = IslandWindowController()
         islandWindowController = controller

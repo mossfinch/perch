@@ -9,7 +9,7 @@ const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
 const { execFileSync } = require("node:child_process");
-const { islandPath, pkgPath, viewModelSource } = require("./island-paths");
+const { islandPath, islandTree, pkgPath, viewModelSource } = require("./island-paths");
 
 // One compiled harness for the whole file: the port, driven from the command line.
 let harness;
@@ -31,12 +31,22 @@ case "connect":
     } catch {
         print("refused: \\(error)")
     }
+case "disconnect":
+    do {
+        let report = try HookSetup.disconnect(paths, now: Date(timeIntervalSince1970: Double(a[4])!))
+        print(report.nothingToDo ? "nothing" : [report.claude ? "claude" : "", report.codex ? "codex" : ""].joined(separator: " "))
+    } catch {
+        print("refused: \\(error)")
+    }
+case "has":
+    print(HookSetup.hasPerchHooks(paths))
 default:
     fatalError()
 }
 `);
     harness = path.join(tmp, "hook-setup");
-    execFileSync("swiftc", [islandPath("OrderedJSON.swift"), islandPath("HookSetup.swift"), main, "-o", harness],
+    execFileSync("swiftc", [islandPath("OrderedJSON.swift"), islandPath("HookSetup.swift"),
+                           islandPath("HookSetup+Disconnect.swift"), main, "-o", harness],
       { stdio: "pipe" });
   }
   return execFileSync(harness, args, { encoding: "utf8" }).trim();
@@ -266,6 +276,74 @@ test("only the Connect button connects", () => {
   assert.match(model, /func connectAgents\(\)/);
   const card = fs.readFileSync(islandPath("GuidedCareCard.swift"), "utf8");
   assert.match(card, /Button\s*\{\s*viewModel\.connectAgents\(\)\s*\}/);
-  const callers = [model, card].join("\n").match(/connectAgents\(\)/g) ?? [];
+  // Word boundary: disconnectAgents ends in the same letters.
+  const callers = [model, card].join("\n").match(/\bconnectAgents\(\)/g) ?? [];
   assert.equal(callers.length, 2, "connectAgents is called from somewhere other than the button");
+
+  // Taking the hooks out is the other write, and only the menu's confirmed item reaches it.
+  assert.equal((model.match(/HookSetup\.disconnect\(/g) ?? []).length, 1);
+  const menu = fs.readFileSync(islandPath("IslandMenu.swift"), "utf8");
+  const everything = islandTree().filter((p) => p.endsWith(".swift"))
+    .map((p) => fs.readFileSync(islandPath(path.basename(p)), "utf8")).join("\n");
+  assert.equal((everything.match(/\.disconnectAgents\(\)/g) ?? []).length, 1, "disconnectAgents has a second caller");
+  assert.match(menu, /guard ask\(alert\) == \.alertFirstButtonReturn else \{ return \}\s*do \{\s*try viewModel\.disconnectAgents\(\)/,
+    "disconnecting must wait for the confirmation");
+});
+
+test("disconnecting takes out Perch's hooks and nothing else, with a backup", () => {
+  const home = makeHome(FIXTURES["a fresh Mac with both agents and no config yet"]);
+  // Someone else's tools first, so ours land after them, the way Connect leaves a real Mac.
+  fs.writeFileSync(path.join(home, ".claude/settings.json"), JSON.stringify({
+    hooks: { Stop: [{ matcher: "*", hooks: [{ type: "command", command: "other-tool notify" }] }],
+             PreToolUse: [{ matcher: "Edit", hooks: [{ type: "command", command: "lint --fix" }] }] },
+  }, null, 2));
+  fs.writeFileSync(path.join(home, ".codex/hooks.json"), JSON.stringify({
+    state: { "hooks.json:Stop:0:0": { trusted_hash: "abc" } },
+    hooks: { Stop: [{ hooks: [{ command: "other-bridge stop", type: "command" }] }] },
+  }, null, 2));
+  swift("connect", home, TARGET, EPOCH);
+  const claudeWired = read(home, ".claude/settings.json");
+  const codexWired = read(home, ".codex/hooks.json");
+  assert.match(claudeWired, /perch-hook/, "control: connect wrote no Claude hook");
+  assert.match(codexWired, /perch-hook/, "control: connect wrote no codex hook");
+  assert.equal(swift("has", home, TARGET, EPOCH), "true");
+
+  const later = String(Number(EPOCH) + 60);
+  assert.equal(swift("disconnect", home, TARGET, later), "claude codex");
+  const claude = JSON.parse(read(home, ".claude/settings.json"));
+  const codex = JSON.parse(read(home, ".codex/hooks.json"));
+  assert.doesNotMatch(JSON.stringify(claude) + JSON.stringify(codex), /perch/, "a Perch hook survived");
+  assert.deepEqual(claude.hooks, {
+    Stop: [{ matcher: "*", hooks: [{ type: "command", command: "other-tool notify" }] }],
+    PreToolUse: [{ matcher: "Edit", hooks: [{ type: "command", command: "lint --fix" }] }],
+  }, "another tool's Claude hooks changed");
+  // codex keys trust by address: the other hook keeps Stop:0:0, and its trust record stays.
+  assert.deepEqual(codex.hooks, { Stop: [{ hooks: [{ command: "other-bridge stop", type: "command" }] }] });
+  assert.deepEqual(codex.state, { "hooks.json:Stop:0:0": { trusted_hash: "abc" } });
+  assert.equal(read(home, `.claude/settings.json.perch-backup-${later}`), claudeWired);
+  assert.equal(read(home, `.codex/hooks.json.perch-backup-${later}`), codexWired);
+  assert.equal(swift("status", home, TARGET, "/Applications/Perch.app"), "needsConnect",
+    "after disconnecting, the card must offer Connect again");
+
+  // Nothing left to take out: nothing is written, not even a backup.
+  const quiet = snapshot(home);
+  assert.equal(swift("has", home, TARGET, later), "false");
+  assert.equal(swift("disconnect", home, TARGET, String(Number(EPOCH) + 120)), "nothing");
+  assert.deepEqual(snapshot(home), quiet, "disconnecting with nothing to do wrote to disk");
+
+  // And Connect puts back exactly what was there.
+  swift("connect", home, TARGET, String(Number(EPOCH) + 180));
+  assert.equal(read(home, ".claude/settings.json"), claudeWired);
+  assert.equal(read(home, ".codex/hooks.json"), codexWired);
+});
+
+test("a codex hook of ours in front of another tool's refuses the disconnect and writes nothing", () => {
+  // Connect replaces an old hook of ours in place, here in front of "mixed-neighbour".
+  // Taking it out would move that neighbour, and codex would silently stop trusting it.
+  const home = makeHome(FIXTURES["configs full of other tools and our old hooks"]);
+  swift("connect", home, TARGET, EPOCH);
+  const before = snapshot(home);
+  const answer = swift("disconnect", home, TARGET, String(Number(EPOCH) + 60));
+  assert.match(answer, /^refused: .*sits before another hook/, answer);
+  assert.deepEqual(snapshot(home), before, "a refused disconnect still wrote something");
 });

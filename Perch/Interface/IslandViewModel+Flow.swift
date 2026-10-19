@@ -60,9 +60,18 @@ extension IslandViewModel {
         if stretch.pulseDue(now: now), presentationPhase == .closed { stretchPulse += 1 }
     }
 
+    /// Picks how long a stretch runs before the island asks, and keeps the pick across launches.
+    func chooseStretchInterval(_ minutes: Int?) {
+        stretchMinutes = minutes
+        StretchInterval.save(minutes)
+        stretch.setInterval(StretchInterval.seconds(minutes))
+        publishStretch()
+    }
+
     /// Publishes the stretch's answer only when it changes. The refresh runs every 15 seconds,
     /// and republishing the same value would redraw the views for nothing.
     func publishStretch() {
+        StretchNudge.Memory.save(stretch.memory)
         if stretchNudge != stretch.asking { stretchNudge = stretch.asking }
     }
 

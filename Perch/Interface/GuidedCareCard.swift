@@ -42,6 +42,8 @@ struct GuidedCareCard: View {
     @ObservedObject var viewModel: IslandViewModel
     let topSafeInset: CGFloat
 
+    /// Whether the row of waits is open under the title, after a stretch.
+    @State private var choosingWait = false
     private var move: CareMove { viewModel.currentMove }
     private var isActiveSession: Bool { viewModel.sessionPhase != .idle }
 
@@ -55,13 +57,19 @@ struct GuidedCareCard: View {
             // for each. Every row is a complete sentence: an instrument on the
             // left, what it is saying on the right.
             VStack(spacing: GuidedCareLayout.topRowSpacing) {
-                TopWeekRow(viewModel: viewModel)
-                    .frame(height: GuidedCareLayout.topRowHeight)
+                // The Record draws the week large below; the branch here would be the same week
+                // twice, and its reading left alone on the row looked stranded.
+                if !viewModel.showingRecord {
+                    TopWeekRow(viewModel: viewModel)
+                        .frame(height: GuidedCareLayout.topRowHeight)
+                        .transition(.opacity)
+                }
 
                 Group {
                     if viewModel.agentSetup == .hidden {
                         AgentActivityStrip(projects: viewModel.projects, flow: viewModel.flow,
-                                           onTap: { viewModel.correctFlow() })
+                                           onTap: { viewModel.correctFlow() },
+                                           onOpenProject: { viewModel.openHost(of: $0) })
                     } else {
                         agentSetupRow
                     }
@@ -75,13 +83,22 @@ struct GuidedCareCard: View {
                 .frame(height: GuidedCareLayout.activityToMainSpacing)
 
             // The main area eats the remaining height: no dead zone at the card's bottom
-            mainContent
+            Group {
+                if viewModel.showingRecord {
+                    RecordView(store: RecordStore.shared, onClose: { viewModel.toggleRecord() })
+                        .transition(.opacity)
+                } else {
+                    mainContent
+                        .transition(.opacity)
+                }
+            }
                 .frame(maxHeight: .infinity)
                 .padding(.horizontal, GuidedCareLayout.contentHorizontalInset)
                 .padding(.bottom, GuidedCareLayout.bottomInset)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .overlay(alignment: .bottomTrailing) { chimeToggle }
+        .onChange(of: viewModel.nudgeAnswered) { choosingWait = false }
     }
 
     /// The island's one switch, in the one place that is empty in every state.
@@ -110,7 +127,7 @@ struct GuidedCareCard: View {
         // plain screen the flare is 0 and it sits a little further in.
         .padding(.trailing, IslandCardShape(topEdge: .notch).topCornerRadius + 16)
         .padding(.bottom, 8)
-        .accessibilityLabel(viewModel.chimeMuted ? "Completion chime off" : "Completion chime on")
+        .accessibilityLabel(viewModel.chimeMuted ? "Agent sounds off" : "Agent sounds on")
     }
 
     /// Takes the second row while the agents are not wired: until they are, the wave and the
@@ -122,7 +139,7 @@ struct GuidedCareCard: View {
         case .hidden, .needsConnect: line = "Perch can't hear Claude Code or codex yet"
         case .notInApplications: line = "Move Perch to Applications to connect your agents"
         case .failed(let reason): line = "Couldn't connect: \(reason)"
-        case .cannotListen(let reason): line = "Perch can't receive events (\(reason)). Quit and reopen it"
+        case .cannotListen(let reason): line = "Perch can't receive events (\(reason)). Right-click here, quit, and reopen it"
         case .connected(let trust):
             line = trust ? "Connected. In codex, trust Perch's hooks once under /hooks"
                          : "Connected. Your agents will show up here"
@@ -159,17 +176,36 @@ struct GuidedCareCard: View {
             VStack(alignment: .leading, spacing: GuidedCareLayout.titleToFramesSpacing) {
                 HStack(alignment: .center, spacing: 12) {
                     title
-                    Spacer(minLength: 12)
-                    topControls
+                    Spacer(minLength: 0)
+                    // The sentence needs the whole line to stay at the title's size.
+                    if !viewModel.nudgeAnswered { topControls }
                 }
+                .frame(minHeight: 32)
+                // The waits float over the pictures rather than pushing them down.
+                .overlay(alignment: .topLeading) {
+                    if viewModel.nudgeAnswered, choosingWait {
+                        NudgeChoices(minutes: viewModel.stretchMinutes) {
+                            viewModel.chooseStretchInterval($0)
+                            withAnimation(.easeInOut(duration: 0.18)) { choosingWait = false }
+                        }
+                        .offset(y: 40)
+                        .transition(.opacity)
+                    }
+                }
+                .zIndex(1)
 
-                CareFrameStrip(
-                    move: move,
-                    currentFrameIndex: viewModel.currentFrameIndex,
-                    isActiveSession: isActiveSession,
-                    areaWidth: geometry.size.width
-                )
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                // Measured, not assumed: the sentence after a stretch takes height from the
+                // pictures, and a picture sized by width alone ran off the card's bottom.
+                GeometryReader { strip in
+                    CareFrameStrip(
+                        move: move,
+                        currentFrameIndex: viewModel.currentFrameIndex,
+                        isActiveSession: isActiveSession,
+                        areaWidth: geometry.size.width,
+                        areaHeight: strip.size.height
+                    )
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                }
             }
         }
     }
@@ -189,6 +225,7 @@ struct GuidedCareCard: View {
                     .frame(width: 1, height: 22)
                 recommendationControls
             }
+            .fixedSize()   // a long move name scales down instead; squeezed, Start wraps
         case .active:
             HStack(spacing: 10) {
                 repCount
@@ -212,12 +249,21 @@ struct GuidedCareCard: View {
 
     private var title: some View {
         HStack(alignment: .firstTextBaseline, spacing: 7) {
-            Text(move.name)
-                .font(.system(size: 22, weight: .semibold))
-                .foregroundStyle(IslandPalette.paper)
-                .lineLimit(1)
-                .minimumScaleFactor(0.72)
+            // After a move that answered a reminder, the title says when the next one comes
+            // instead of naming the move, in the same type; everything else stays put.
+            if viewModel.nudgeAnswered {
+                NudgeSentence(minutes: viewModel.stretchMinutes, choosing: $choosingWait) {
+                    withAnimation(.easeInOut(duration: 0.22)) { viewModel.nudgeAnswered = false }
+                }
                 .layoutPriority(1)
+            } else {
+                Text(move.name)
+                    .font(.system(size: 22, weight: .semibold))
+                    .foregroundStyle(IslandPalette.paper)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.72)
+                    .layoutPriority(1)
+            }
 
             Image(systemName: "sparkle")
                 .font(.system(size: 12, weight: .semibold))
@@ -279,6 +325,7 @@ private struct CareFrameStrip: View {
     let currentFrameIndex: Int
     let isActiveSession: Bool
     let areaWidth: CGFloat
+    let areaHeight: CGFloat
 
     var body: some View {
         let frameSpacing: CGFloat = 10
@@ -295,6 +342,7 @@ private struct CareFrameStrip: View {
                     isActiveSession: isActiveSession,
                     isHighlighted: currentFrameIndex == index,
                     slotWidth: slotWidth,
+                    areaHeight: areaHeight,
                     beatDuration: move.frameDuration(at: index)
                 )
             }
@@ -309,6 +357,7 @@ private struct CareFrameView: View {
     let isActiveSession: Bool
     let isHighlighted: Bool
     let slotWidth: CGFloat
+    let areaHeight: CGFloat
     let beatDuration: TimeInterval
 
     /// Progress through this beat (0→1). The bar under the current frame
@@ -338,7 +387,10 @@ private struct CareFrameView: View {
         // narrowest slots, and anything smaller becomes illegible;
         // 2–3-frame moves sit at the 108 cap, unaffected; anything larger
         // pushes into the neighbors' whitespace and crowds the row.
-        let imageSide = min(108, slotWidth * 0.9)
+        // The height is a cap too: the picture, the highlight's overflow below it, the gap and
+        // the bar all have to fit in what the card has left.
+        let fitsHeight = (areaHeight - 6) / (1 + (Self.highlightScale - 1) / 2)
+        let imageSide = max(0, min(108, slotWidth * 0.9, fitsHeight))
         // scaleEffect enlarges the rendering without changing layout size: the
         // highlighted frame overflows about 7% of the image height downward,
         // onto the bar below. The spacing reserves exactly the overflow, not a
@@ -409,7 +461,7 @@ private struct CategoryDock: View {
     private var ringVisible: Bool { moveCount > 1 }
 
     var body: some View {
-        HStack(spacing: 7) {
+        HStack(spacing: 6) {
             ForEach(CareMovePool.selectableCategories, id: \.rawValue) { category in
                 Button { onSelect(category) } label: {
                     ZStack {
@@ -432,7 +484,7 @@ private struct CategoryDock: View {
                             .font(.system(size: 12, weight: .semibold))
                             .foregroundStyle(category == selected ? IslandPalette.cue : IslandPalette.paper.opacity(0.46))
                     }
-                    .frame(width: 30, height: 30)
+                    .frame(width: 27, height: 27)
                 }
                 .buttonStyle(.plain)
             }

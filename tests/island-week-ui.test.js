@@ -189,7 +189,9 @@ test("the week you have had lives on a branch in the top band, and never floats 
   //    neutral wood drains the hue on the way down and level 1 arrives a muddy
   //    warm grey, while scaling against the ground keeps every level the same
   //    coral, one colour becoming more transparent.
-  assert.match(perch, /private static func composited\(level: Int\) -> Color/,
+  // Not private: the Record window paints its large branch with this same rule, so a week
+  // looks the same in both places.
+  assert.match(perch, /static func composited\(level: Int\) -> Color \{\n        let a = alphas/,
     "the paint is not being blended against the ground — it will pick up the wood's grey");
 
   // ③a One branch, not seven pills: a single capsule carries the whole week

@@ -615,6 +615,7 @@ const ISLAND_WRITERS = {
   "agent-events": "the island, on every agent pickup",
   "care-ledger.json": "the island, when a care session is recorded",
   "day-scores.jsonl": "the island, when a day is scored",
+  "record-cache.json": "the island, once the Record has measured past weeks",
   "flow-corrections": "the island, when a flow verdict is corrected",
   "reconciliation": "the history rebuild, handed over the island's socket",
   "bridge.sock": "the island, for as long as it runs",
@@ -663,4 +664,31 @@ test("nothing sits in ~/.perch/island that nothing writes", (t) => {
       `${entry} is in ~/.perch/island but ${fault}. Either add it here with what writes it, ` +
       `or move it out — a file whose writer is gone still reads like live data.`);
   }
+});
+
+test("a download opens at login, and a source install is never started twice", () => {
+  const login = fs.readFileSync(islandPath("LoginItem.swift"), "utf8").replace(/\/\/.*$/gm, "");
+  // The ordinary login item. A launchd job shipped in the app is pinned by macOS to the
+  // binary it first saw; an ad-hoc signed update is a new binary, and the job is refused.
+  assert.match(login, /private static var service: SMAppService \{ \.mainApp \}/,
+    "an agent job inside an ad-hoc app breaks at the first update");
+  assert.doesNotMatch(login, /SMAppService\.agent|\.agent\(plistName/);
+  assert.ok(!fs.existsSync(path.join(path.dirname(islandPath("LoginItem.swift")), "Library")),
+    "a LaunchAgents folder is back inside the app");
+
+  // Two starts at login can both step aside and leave no Perch, so every road to
+  // registering goes through the source-install check.
+  const set = login.match(/static func set\(_ on: Bool\) throws \{[\s\S]*?\n    \}/)?.[0] ?? "";
+  assert.match(set, /^\s*static func set[^\n]*\n\s*guard !installedFromSource else \{ return \}/m,
+    "turning it on must refuse on a source install");
+  const first = login.match(/static func defaultOnFirstLaunch\(\) \{[\s\S]*?\n    \}/)?.[0] ?? "";
+  assert.match(first, /!installedFromSource/, "the first-launch default must skip source installs");
+  assert.match(first, /Bundle\.main\.bundlePath == HookSetup\.installedApp/, "registering outside Applications points at an app about to move");
+  assert.match(login, /XPC_SERVICE_NAME"\] == installerLabel/);
+  assert.match(login, /\/\.perch\/bin\/perch-reconcile/);
+  // The installer really does leave that sign behind, under the label the app checks.
+  const installer = fs.readFileSync(pkgPath("install-island-app.py"), "utf8");
+  assert.match(installer, /RECONCILER_BINARY = Path\.home\(\) \/ "\.perch" \/ "bin" \/ "perch-reconcile"/,
+    "the installer no longer leaves the helper where the app looks for it");
+  assert.match(installer, /"Label": "io\.github\.mossfinch\.perch",/);
 });

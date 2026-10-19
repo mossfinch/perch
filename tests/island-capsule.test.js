@@ -147,7 +147,8 @@ test("island capsule has a distinct persistent done state + retained chime", () 
   assert.match(status, /enum IslandAgentStatus[\s\S]*?case done/);
   assert.match(vm, /return \.done/);   // done is reachable (agentStatus comes from aggregateStatus())
   assert.doesNotMatch(vm, /playChime\(\)[\s\S]{0,200}agentStatus = \.idle/);   // completion never self-resets to idle
-  assert.match(vm, /private let completionSound/);
+  // Kept, not reloaded per completion. Static because it lives in an extension.
+  assert.match(vm, /static let completionSound/);
   assert.match(vm, /CompletionChime/);   // audio read from the app bundle (sandbox-safe)
   assert.match(vm, /func hoverEntered\(\)[\s\S]*?\.done/);
 
@@ -208,16 +209,34 @@ test("status dots split into rows by agent source, claude above codex", () => {
   const height = Number(view.match(/activityHeight: CGFloat = (\d+)/)[1]);
   assert.equal(top + height, 40, "the top row must keep 40pt total, or it steals the figure strip's height");
 
-  // Wire format: <event>\\t<dir>\\t<nonce>\\t<source>, source appended last (older hooks without it still work)
+  // Wire format: <event>\\t<dir>\\t<nonce>\\t<source>\\t<host>. Each new field goes last, so a
+  // reader that knows fewer fields still parses the ones it knows, and an older hook
+  // that sends fewer still works.
   // The push lives in one launcher script (a hook command whose text never
   // changes never needs trusting again), so the wire format is asserted there,
   // and each installer is checked for the only thing it still decides: which
   // source token it hands the launcher.
   const launcher = fs.readFileSync(pkgPath("perch-hook.sh"), "utf8");
-  assert.match(launcher, /printf '%s\\t%s\\t%s-%s\\t%s'/,
-    "the launcher's push is no longer the four-field wire format");
-  assert.match(launcher, /"\$event" "\$dir" "\$\(date \+%s\)" "\$\$" "\$source"/,
-    "the four fields are no longer event, project, nonce, source");
+  assert.match(launcher, /printf '%s\\t%s\\t%s-%s\\t%s\\t%s'/,
+    "the launcher's push is no longer the five-field wire format");
+  assert.match(launcher, /"\$event" "\$dir" "\$\(date \+%s\)" "\$\$" "\$source" "\$host"/,
+    "the five fields are no longer event, project, nonce, source, host");
+  // The host is handed to the system to open, so only bundle-identifier characters pass, at both ends.
+  assert.match(launcher, /host=\$\(printf '%s' "\$\{__CFBundleIdentifier:-\}" \| tr -cd 'A-Za-z0-9\.-'\)/);
+  const monitorSource = fs.readFileSync(islandPath("AgentEventMonitor.swift"), "utf8");
+  assert.match(monitorSource, /let rawHost = field\(4\)[\s\S]*?\$0\.isLetter \|\| \$0\.isNumber \|\| \$0 == "\." \|\| \$0 == "-"/);
+  // Pressing a name opens its app through LaunchServices, and only a name whose app is known reacts.
+  const lines = fs.readFileSync(islandPath("IslandViewModel+Lines.swift"), "utf8");
+  assert.match(lines, /func openHost\(of project: ProjectStatus\)[\s\S]*?openApplication\(at: url/);
+  const captions = islandViews();
+  // Both captions ignore a press when the app is unknown.
+  assert.match(captions, /guard let current, current\.hostApp != nil else \{ return \}/, "the running caption reacts with no known app");
+  assert.match(captions, /if project\.hostApp != nil \{ onOpen\(project\) \}/, "the finished caption reacts with no known app");
+  // macOS keeps the arrow over the island, so a pressable line shows an underline under the
+  // pointer instead, and only when pressing it does something.
+  assert.match(captions, /\.underline\(pointerOver && current\?\.hostApp != nil\)/);
+  assert.match(captions, /\.underline\(pointerOver && opens\(resting\)\)/);
+  assert.doesNotMatch(captions, /pointerStyle|NSCursor/, "a cursor change that macOS ignores on the island came back");
   for (const [f, src] of [["install-island-hooks.py", "claude"], ["install-codex-island-hooks.py", "codex"]]) {
     const script = fs.readFileSync(pkgPath(f), "utf8");
     assert.match(script, new RegExp(`\\{launcher or LAUNCHER\\}' \\{event\\} ${src}`),

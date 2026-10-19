@@ -92,9 +92,9 @@ test("care ledger model round-trips records and locks the wire format", () => {
   fs.writeFileSync(main, `
 import Foundation
 
-// 1. category enum covers exactly the four care categories, and rejects anything else
-precondition(CareCategory.allCases.map { $0.rawValue }.sorted() == ["eyes", "face", "neck", "shoulders"])
-precondition(CareCategory(rawValue: "back") == nil)
+// 1. category enum covers exactly the five care categories, and rejects anything else
+precondition(CareCategory.allCases.map { $0.rawValue }.sorted() == ["back", "eyes", "face", "neck", "shoulders"])
+precondition(CareCategory(rawValue: "wrists") == nil)
 
 // 2. append is order-preserving and starts from an empty version-1 ledger
 var ledger = CareLedger.empty
@@ -223,14 +223,20 @@ test("care move pool and session recorder lock the island content + ledger rules
   fs.writeFileSync(main, `
 import Foundation
 
-// Content contract: 5 moves, 13 frames, two selectable categories.
-precondition(CareMovePool.all.count == 5)
+// Content contract: 9 moves, 22 frames, four selectable categories.
+precondition(CareMovePool.all.count == 9)
 precondition(CareMovePool.all[0].id == "chin-tuck")
 precondition(CareMovePool.all.filter { $0.category == .neck }.count == 4)
 precondition(CareMovePool.all.filter { $0.category == .eyes }.count == 1)
-precondition(Set(CareMovePool.all.map { $0.id }).count == 5)
-precondition(CareMovePool.all.flatMap { $0.frames }.count == 13)
-precondition(CareMovePool.selectableCategories == [.neck, .eyes])
+precondition(CareMovePool.all.filter { $0.category == .shoulders }.count == 2)
+precondition(CareMovePool.all.filter { $0.category == .back }.count == 2)
+precondition(Set(CareMovePool.all.map { $0.id }).count == 9)
+precondition(CareMovePool.all.flatMap { $0.frames }.count == 22)
+precondition(CareMovePool.selectableCategories == [.neck, .eyes, .shoulders, .back])
+// Every category the card offers has moves, or tapping it would trap.
+for category in CareMovePool.selectableCategories {
+    precondition(!CareMovePool.moves(in: category).isEmpty)
+}
 
 // Third element = whether it is a pass-through frame: pass-throughs get a fixed 1s, holds split the rest (long-quick-long)
 let expected: [(String, CareCategory, Int, Int, [(String, String, Bool)])] = [
@@ -256,8 +262,26 @@ let expected: [(String, CareCategory, Int, Int, [(String, String, Bool)])] = [
         ("CareMoveEyeOrbitalInner", "inner", false),
         ("CareMoveEyeOrbitalTemple", "temple", false),
         ("CareMoveEyeOrbitalUnder", "under", false)
+    ]),
+    ("shoulder-rolls", .shoulders, 8, 32, [
+        ("CareMoveShoulderRollsUp", "up", false),
+        ("CareMoveShoulderRollsBack", "back and down", false)
+    ]),
+    ("chest-opener", .shoulders, 6, 30, [
+        ("CareMoveChestOpenerForward", "elbows in", false),
+        ("CareMoveChestOpenerOpen", "open", false)
+    ]),
+    ("seated-twist", .back, 2, 40, [
+        ("CareMoveSeatedTwistLeft", "twist left", false),
+        ("CareMoveSeatedTwistCenter", "center", true),
+        ("CareMoveSeatedTwistRight", "twist right", false)
+    ]),
+    ("seated-cat-cow", .back, 6, 30, [
+        ("CareMoveCatCowRound", "round", false),
+        ("CareMoveCatCowArch", "arch", false)
     ])
 ]
+precondition(expected.count == CareMovePool.all.count)
 
 for (move, contract) in zip(CareMovePool.all, expected) {
     precondition(move.id == contract.0)
@@ -279,6 +303,15 @@ precondition(CareMovePool.first(in: .eyes).id == "eye-orbital-massage")
 precondition(CareMovePool.next(in: .neck, after: "chin-tuck").id == "neck-side-stretch")
 precondition(CareMovePool.next(in: .neck, after: "trap-massage").id == "chin-tuck")
 precondition(CareMovePool.next(in: .eyes, after: "eye-orbital-massage").id == "eye-orbital-massage")
+precondition(CareMovePool.first(in: .shoulders).id == "shoulder-rolls")
+precondition(CareMovePool.first(in: .back).id == "seated-twist")
+precondition(CareMovePool.next(in: .shoulders, after: "chest-opener").id == "shoulder-rolls")
+// The twist holds each side 9 seconds and passes the center in 1, like the side-neck stretch.
+let twist = CareMovePool.first(in: .back)
+precondition(twist.playbackSequence == [0, 1, 2, 1])
+precondition(abs(twist.frameDuration(at: 0) - 9) < 0.001 && abs(twist.frameDuration(at: 1) - 1) < 0.001)
+// Each category shows its own picture in the card's row of circles.
+precondition(Set(CareMovePool.selectableCategories.map { CareMovePool.symbol(for: $0) }).count == 4)
 
 // Recording rule: whole sets count as sets
 let cal = Calendar(identifier: .gregorian)
@@ -501,7 +534,7 @@ test("island gains a 4th waiting state (PermissionRequest→yellow) + auto-peek 
 
 test("island tracks per-project status dots, hook carries project dir", () => {
   const monitor = fs.readFileSync(islandPath("AgentEventMonitor.swift"), "utf8");
-  assert.match(monitor, /@MainActor \(String, String\) -> Void/);   // callbacks carry (project cwd, source)
+  assert.match(monitor, /@MainActor \(String, String, String\) -> Void/);   // callbacks carry (project cwd, source, host app)
 
   const vm = viewModelSource();
   assert.match(vm, /struct ProjectStatus/);
@@ -668,6 +701,18 @@ precondition( StalePolicy.isStale(isWaiting: true, age: 8 * hour + 1), "a never-
 
 // The two lines must genuinely differ, yellow's being longer
 precondition(StalePolicy.waiting > StalePolicy.busy, "yellow's line is not longer than blue/green's — no distinction at all")
+
+// Green you have not looked at waits on you like yellow: back from a two-hour meeting, it is still there
+precondition(!StalePolicy.isStale(isWaiting: false, isDone: true, age: 16 * min, sinceSeen: nil), "unseen green swept at 16 minutes")
+precondition(!StalePolicy.isStale(isWaiting: false, isDone: true, age: 2 * hour, sinceSeen: nil), "back from a meeting and the green is gone")
+precondition( StalePolicy.isStale(isWaiting: false, isDone: true, age: 8 * hour + 1, sinceSeen: nil), "an unseen green must still end once a closed session goes quiet")
+// Once seen, 15 minutes counted from the look, not from the event: no vanishing under the pointer
+precondition(!StalePolicy.isStale(isWaiting: false, isDone: true, age: 3 * hour, sinceSeen: 1 * min), "a green seen a minute ago vanished because it finished long ago")
+precondition(!StalePolicy.isStale(isWaiting: false, isDone: true, age: 3 * hour, sinceSeen: 15 * min), "exactly 15 minutes after the look should not remove")
+precondition( StalePolicy.isStale(isWaiting: false, isDone: true, age: 3 * hour, sinceSeen: 16 * min), "a seen green outstays its 15 minutes")
+// The full rule changes nothing for blue and yellow
+precondition( StalePolicy.isStale(isWaiting: false, isDone: false, age: 16 * min, sinceSeen: nil), "blue now outlives 15 minutes")
+precondition(!StalePolicy.isStale(isWaiting: true, isDone: false, age: 90 * min, sinceSeen: nil), "yellow swept by the full rule")
 `);
 
   // Feed only StalePolicy.swift: it must be pure Foundation, and dragging in AppKit makes it untestable again

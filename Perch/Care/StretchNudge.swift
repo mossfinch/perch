@@ -22,8 +22,17 @@ struct StretchNudge {
     /// often someone reading at the desk, which looks the same as a break from here.
     static let away: TimeInterval = 20 * 60
 
-    /// How long a stretch runs before the island asks for a break. Chosen by hand.
+    /// How long a stretch runs before the island asks for a break, until someone picks another.
+    /// Chosen by hand.
     static let after: TimeInterval = 60 * 60
+
+    /// An ask left this long before its move suggests the wait is too short, so the card offers
+    /// another one after the move. Answered sooner, the reminder came at a good time and nothing
+    /// is offered.
+    static let slowAnswer: TimeInterval = 15 * 60
+
+    /// How long this island waits, from the choices in `StretchInterval`. Nil never asks.
+    private(set) var interval: TimeInterval? = StretchNudge.after
 
     struct Stretch: Equatable {
         var start: Date
@@ -51,6 +60,34 @@ struct StretchNudge {
     private(set) var due = false
     /// Set once the current stretch has been asked about or answered, so it asks once per stretch.
     private var spent = false
+    /// When `spent` was set. A stretch that began before this moment and has not paused since
+    /// is the same stretch, which is how a relaunch recognises it.
+    private var spentAt: Date?
+    /// Read back at launch and applied to the first stretch the island sees.
+    private var restored: Memory?
+
+    /// What must survive a relaunch. Without it the stretch is rebuilt from the log, found due,
+    /// and asked about again at the next hand-off, though it was asked or answered already.
+    struct Memory: Codable, Equatable {
+        var spentAt: Date? = nil
+        var askedAt: Date? = nil
+        /// The last work seen, to the minute. A relaunch replays only the last two hours of log,
+        /// so a longer stretch comes back with a later start; it is the same stretch as long as
+        /// it reaches back to this moment.
+        var seenAt: Date? = nil
+    }
+
+    var memory: Memory {
+        // Only worth keeping while there is something to remember; to the minute, so a working
+        // line rewrites it once a minute rather than on every refresh.
+        let seen = (spent || asking) ? watched.map { Date(timeIntervalSince1970: ($0.end.timeIntervalSince1970 / 60).rounded(.down) * 60) } : nil
+        return Memory(spentAt: spent ? spentAt : nil, askedAt: askedAt, seenAt: seen)
+    }
+
+    /// Call once at launch, before the first refresh.
+    mutating func restore(_ memory: Memory) {
+        restored = memory
+    }
     /// Both nil unless an ask is open.
     private var askedAt: Date?
     private var nextPulse: Date?
@@ -88,13 +125,27 @@ struct StretchNudge {
         // and that gap would otherwise start a new stretch.
         if busy { watch(Stretch(start: since, end: now)) }
         if let latest = Self.latest(in: turns) { watch(latest) }
+        if let memory = restored, let current = watched {
+            restored = nil
+            applyRestored(memory, to: current, now: now)
+        }
         let quiet = watched.map { now.timeIntervalSince($0.end) } ?? .infinity
         if quiet >= Self.away { dropAsk() }
         guard let watched, quiet <= Self.pause else {
             due = false
             return
         }
-        due = now.timeIntervalSince(watched.start) >= Self.after
+        due = interval.map { now.timeIntervalSince(watched.start) >= $0 } ?? false
+    }
+
+    /// Picks another wait. Turning the asks off also drops one that is open: an ask left on
+    /// screen after "Never" would read as the choice not taking.
+    mutating func setInterval(_ seconds: TimeInterval?) {
+        interval = seconds
+        if seconds == nil {
+            dropAsk()
+            due = false
+        }
     }
 
     /// Adds work to the watched stretch. Work that starts more than `pause` after the last work
@@ -120,6 +171,22 @@ struct StretchNudge {
         spent = false
     }
 
+    /// The same stretch picks up where it was: already asked or answered, and an ask still open
+    /// stays open (the tab, the breathing) without opening the card a second time.
+    private mutating func applyRestored(_ memory: Memory, to current: Stretch, now: Date) {
+        if let at = memory.spentAt, current.start <= max(at, memory.seenAt ?? at) {
+            spent = true
+            spentAt = at
+        }
+        // Apart from the stretch: an ask outlives a short rest that ends its stretch, and stays
+        // up until a move or twenty quiet minutes, relaunch or not.
+        if let asked = memory.askedAt, now.timeIntervalSince(current.end) < Self.away {
+            asking = true
+            askedAt = asked
+            nextPulse = now.addingTimeInterval(Self.pulseGap(asked: now.timeIntervalSince(asked)))
+        }
+    }
+
     private mutating func dropAsk() {
         asking = false
         askedAt = nil
@@ -136,6 +203,7 @@ struct StretchNudge {
                                 moving: Bool, at now: Date) -> Bool {
         guard after == .working, before != .working, due, !spent, !asking, !moving else { return false }
         spent = true
+        spentAt = now
         asking = true
         askedAt = now
         nextPulse = now.addingTimeInterval(Self.pulseGap(asked: 0))
@@ -157,10 +225,20 @@ struct StretchNudge {
         return 60
     }
 
+    /// Whether a move finished now answers an ask that stood longer than `slowAnswer`. Call it
+    /// before `moved()`, which closes the ask.
+    func answeredSlowly(at now: Date) -> Bool {
+        guard asking, let askedAt else { return false }
+        return now.timeIntervalSince(askedAt) > Self.slowAnswer
+    }
+
     /// Call when a move is finished. Once the stretch is due, a move answers it even if the card
     /// has not asked yet. A move earlier in the stretch does not count for the rest of it.
-    mutating func moved() {
+    mutating func moved(at now: Date = Date()) {
         dropAsk()
-        if due { spent = true }
+        if due, !spent {
+            spent = true
+            spentAt = now
+        }
     }
 }

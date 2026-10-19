@@ -6,6 +6,67 @@ Notable changes to Perch, newest first. The format follows
 
 ## [Unreleased]
 
+## [2.5] — 2026-10-19
+
+### Added
+
+- Four new moves, for the shoulders and the back: Shoulder rolls, Chest
+  opener, Seated twist and Seated cat-cow, all done sitting down. The circles
+  beside Start now choose among four parts: neck, eyes, shoulders and back.
+  The move log gains the category `back`; a Perch older than this one cannot
+  read a log that holds it, and leaves the file alone rather than starting it
+  over.
+- A line waiting for your approval or your choice now makes a sound of its own,
+  different from the completion chime. Until now the bird only turned yellow,
+  and the moment Perch exists for was the quietest one. It is a sound only: the
+  card does not open for it. The speaker in the card's corner mutes both.
+- A menu, on a right-click anywhere on the open card: the version, Open at
+  Login, Disconnect Agents and Quit Perch. Perch has no Dock icon and no menu
+  bar, so until now there was no way to quit it, or to see which version was
+  running. The branch under the bird keeps its own right-click.
+- Disconnect Agents takes Perch's hooks out of Claude Code and codex, by the
+  same rules Connect puts them in: a backup beside each file, nobody else's
+  hooks touched, and nothing written if a codex hook of Perch's sits in front
+  of another tool's, since moving that one would quietly cost it codex's trust.
+- **Record**, every week since Perch started listening, in the card itself.
+  Press today's `in flow` reading, or choose Record from the right-click menu,
+  and the card's lower half turns into it. One week is drawn large on the
+  card's own branch, with a dot under each day for every move finished; every
+  week sits underneath as a stroke as tall as its flow, and pressing one
+  brings it up. A day reads exactly as it does on the top row. Earlier weeks
+  are read in the background, this week first, so it opens at once, and they
+  are kept in a small file beside the event log, so after a restart only this
+  week is read again. Closing
+  the card puts the move back.
+- Press a project's name on the card to bring forward the app its agent runs
+  in: Terminal, iTerm, your editor, or the Claude app. The hook now tells
+  Perch which app that is, as a fifth field an older Perch simply ignores.
+  Only the app comes forward, not the window or the session.
+- The stretch reminder's hour is now a choice. After a move that answered a
+  reminder left waiting more than 15 minutes, the card's title says when the
+  next one will come, and the time in that sentence opens the choices: half an hour, 45 minutes, an hour, an hour and a
+  half, or never. Answered sooner, or already at the longest wait, the card
+  says nothing. The pick is kept across launches; an hour stays the default.
+  Stretch Reminders in the right-click menu holds the same choices, and is the
+  way back once reminders are off.
+- A download now opens at login, switched on the first time it is opened from
+  Applications. Built from source, the installer's own launch-at-login job
+  stays in charge and the switch only shows it.
+
+### Changed
+
+- A relaunch no longer asks again about a stretch already asked about or
+  answered. Until now that was kept in memory only, so the stretch was rebuilt
+  from the log, found due, and asked about once more at the next hand-off. An
+  ask still open when Perch restarts stays on the tab, without opening the card
+  a second time.
+- When Perch cannot receive events, the card now says where to quit it.
+- A finished project's green dot now stays until you hover the card and see
+  it, then goes fifteen minutes later. It used to go fifteen minutes after the
+  agent finished, so stepping away for longer brought you back to a bird that
+  no longer said which project was done. A dot nobody looks at still goes once
+  that session has been quiet for eight hours, as a yellow one does.
+
 ## [2.4] — 2026-10-13
 
 ### Fixed
@@ -170,7 +231,8 @@ Notable changes to Perch, newest first. The format follows
   The archive is packed deterministically: fixed timestamps, no extra fields,
   no comments, every byte accounted for.
 
-[Unreleased]: https://github.com/mossfinch/perch/compare/v2.4...HEAD
+[Unreleased]: https://github.com/mossfinch/perch/compare/v2.5...HEAD
+[2.5]: https://github.com/mossfinch/perch/compare/v2.4...v2.5
 [2.4]: https://github.com/mossfinch/perch/compare/v2.3...v2.4
 [2.3]: https://github.com/mossfinch/perch/compare/v2.2...v2.3
 [2.2]: https://github.com/mossfinch/perch/compare/v2.1...v2.2

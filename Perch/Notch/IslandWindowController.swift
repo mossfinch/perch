@@ -22,6 +22,7 @@ final class IslandWindowController: NSWindowController {
 
     private let viewModel = IslandViewModel()
     private let hoverMonitor = IslandHoverMonitor()
+    private lazy var islandMenu = IslandMenu(viewModel: viewModel)
     private var cancellables: Set<AnyCancellable> = []
     /// No deinit removal: the app delegate owns this controller for the app's
     /// whole lifetime, so it is never deallocated. The notification block uses
@@ -82,6 +83,9 @@ final class IslandWindowController: NSWindowController {
         let hostingView = IslandHostingView(rootView: IslandView(viewModel: viewModel))
         hostingView.hitTestRectProvider = { [weak self] in
             self?.interactiveContentRect()
+        }
+        hostingView.menuProvider = { [weak self] in
+            self?.islandMenu.make()
         }
         hostingView.wantsLayer = true
         hostingView.layer?.backgroundColor = .clear
@@ -272,6 +276,7 @@ final class IslandWindowController: NSWindowController {
 
 private final class IslandHostingView<Content: View>: NSHostingView<Content> {
     var hitTestRectProvider: (() -> NSRect?)?
+    var menuProvider: (() -> NSMenu?)?
 
     override var isOpaque: Bool {
         false
@@ -287,5 +292,12 @@ private final class IslandHostingView<Content: View>: NSHostingView<Content> {
             return nil
         }
         return super.hitTest(point) ?? self
+    }
+
+    /// A right-click anywhere on the open card that nothing inside claimed. The card only takes
+    /// mouse events while it is open, so the closed capsule never gets here.
+    override func rightMouseDown(with event: NSEvent) {
+        guard let menu = menuProvider?() else { return super.rightMouseDown(with: event) }
+        NSMenu.popUpContextMenu(menu, with: event, for: self)
     }
 }

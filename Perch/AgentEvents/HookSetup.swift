@@ -288,7 +288,7 @@ enum HookSetup {
         }
     }
 
-    private static func perchAddresses(_ groups: [OrderedJSON]) throws -> [(Int, Int)] {
+    static func perchAddresses(_ groups: [OrderedJSON]) throws -> [(Int, Int)] {
         var found: [(Int, Int)] = []
         for (i, group) in groups.enumerated() {
             guard case .object = group else { throw shape("a codex hook group") }
@@ -300,13 +300,13 @@ enum HookSetup {
         return found
     }
 
-    private static func isPurelyPerch(_ group: OrderedJSON) throws -> Bool {
+    static func isPurelyPerch(_ group: OrderedJSON) throws -> Bool {
         let hooks = try iterable(group["hooks"], "a codex hook group's hooks")
         return try !hooks.isEmpty && hooks.allSatisfy { isPerchCommand(try command(of: $0), codex: true) }
     }
 
     /// Every hook that is not ours, by `(event, group, hook)`, across every event in the file.
-    private static func foreignHooks(_ root: OrderedJSON) throws -> [((String, Int, Int), OrderedJSON)] {
+    static func foreignHooks(_ root: OrderedJSON) throws -> [((String, Int, Int), OrderedJSON)] {
         guard let hooksRoot = root["hooks"] else { return [] }
         guard case .object(let events) = hooksRoot else { throw shape("hooks") }
         var found: [((String, Int, Int), OrderedJSON)] = []
@@ -355,7 +355,7 @@ enum HookSetup {
         return installed == shipped && fm.isExecutableFile(atPath: paths.launcher)
     }
 
-    private static func read(_ path: String) throws -> OrderedJSON? {
+    static func read(_ path: String) throws -> OrderedJSON? {
         guard FileManager.default.fileExists(atPath: path) else { return nil }
         guard let data = FileManager.default.contents(atPath: path) else {
             throw SetupError(description: "cannot read \(path)")
@@ -374,7 +374,7 @@ enum HookSetup {
 
     /// A copy beside the file, never overwriting an earlier one: it may be the only copy of
     /// the config from before Perch touched it.
-    private static func backup(_ path: String, now: Date) throws {
+    static func backup(_ path: String, now: Date) throws {
         let fm = FileManager.default
         guard fm.fileExists(atPath: path) else { return }
         let stem = "\(path).perch-backup-\(Int(now.timeIntervalSince1970))"
@@ -390,7 +390,7 @@ enum HookSetup {
     /// Through a temporary file in the same folder, then a rename, so a full disk or a power
     /// cut leaves either the old file or the new one and never half of one. The old file's
     /// permissions carry over.
-    private static func writeAtomic(_ path: String, _ text: String) throws {
+    static func writeAtomic(_ path: String, _ text: String) throws {
         let tmp = "\(path).perch-tmp-\(getpid())"
         let fd = open(tmp, O_WRONLY | O_CREAT | O_TRUNC, 0o644)
         guard fd >= 0 else { throw SetupError(description: "cannot write \(tmp): \(String(cString: strerror(errno)))") }
@@ -419,7 +419,7 @@ enum HookSetup {
     // MARK: Shapes
 
     /// The command of one hook object, or "" when it has none.
-    private static func command(of hook: OrderedJSON) throws -> String {
+    static func command(of hook: OrderedJSON) throws -> String {
         guard case .object = hook else { throw shape("a hook") }
         switch hook["command"] {
         case nil: return ""
@@ -431,7 +431,7 @@ enum HookSetup {
     /// What iterating a value yields in Python, for the shapes a hook list can take. An empty
     /// object or string iterates as nothing; anything else that is not a list would fail
     /// there too.
-    private static func iterable(_ value: OrderedJSON?, _ what: String) throws -> [OrderedJSON] {
+    static func iterable(_ value: OrderedJSON?, _ what: String) throws -> [OrderedJSON] {
         switch value {
         case nil: return []
         case .array(let items)?: return items
@@ -441,7 +441,7 @@ enum HookSetup {
         }
     }
 
-    private static func shape(_ what: String) -> SetupError {
+    static func shape(_ what: String) -> SetupError {
         SetupError(description: "unexpected shape at \(what)")
     }
 }

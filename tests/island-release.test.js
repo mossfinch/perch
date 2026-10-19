@@ -332,7 +332,8 @@ test("island sources split into 5 duty groups, never flattened back into one lay
   const WHERE = {
     // DemoMode sits beside DataHome because it works by answering the same question:
     // where the island's folder is.
-    ".":            ["PerchApp.swift", "DataHome.swift", "DemoMode.swift",
+    // LoginItem decides whether the app starts at login, so it sits with the app itself.
+    ".":            ["PerchApp.swift", "DataHome.swift", "DemoMode.swift", "LoginItem.swift",
                      "Info.plist", "Perch.entitlements"],
     // StalePolicy belongs here: it answers "how long before an agent event is
     // stale", which is event lifecycle, not interface.
@@ -355,10 +356,10 @@ test("island sources split into 5 duty groups, never flattened back into one lay
                      "FlowSense.swift", "FlowCorrectionLog.swift", "DayFlow.swift",
                      // HookSetup wires the agents' hooks, the source of every event read
                      // here; OrderedJSON is how it reads and writes their config files.
-                     "HookSetup.swift", "OrderedJSON.swift"],
+                     "HookSetup.swift", "HookSetup+Disconnect.swift", "OrderedJSON.swift"],
     "Notch":        ["IslandWindowController.swift", "IslandDisplayMetrics.swift",
                      "IslandHoverMonitor.swift", "IslandPresentationPhase.swift",
-                     "IslandCapsuleShape.swift", "IslandCardShape.swift"],
+                     "IslandCapsuleShape.swift", "IslandCardShape.swift", "IslandMenu.swift"],
     // AgentStatus.swift depends on Foundation alone, so the closed capsule's
     // tally can be compiled, and therefore tested, on its own.
     // The view files are split by what each draws; IslandPalette and
@@ -366,14 +367,18 @@ test("island sources split into 5 duty groups, never flattened back into one lay
     // Every type has 0 to 2 dependents apart from IslandPalette, which has 11.
     "Interface":    ["AgentStatus.swift", "IslandView.swift", "IslandViewModel.swift",
                      "IslandViewModel+Week.swift", "IslandViewModel+Flow.swift", "IslandViewModel+Setup.swift",
+                     "IslandViewModel+Sounds.swift", "IslandViewModel+Lines.swift",
                      "CarouselClock.swift",
                      "IslandPalette.swift", "ProjectCaption.swift",
-                     "GuidedCareCard.swift", "AgentActivityStrip.swift",
+                     "GuidedCareCard.swift", "AgentActivityStrip.swift", "NudgeDoneView.swift",
                      "TopWeekRow.swift", "WeekPerch.swift"],
     // StretchNudge decides when to ask for a break from agent lines alone. It is pure
     // Foundation, so the rule compiles and runs on its own.
     "Care":         ["CareMovePool.swift", "CareSessionClock.swift",
-                     "CareSessionRecorder.swift", "CareLedger.swift", "StretchNudge.swift"],
+                     "CareSessionRecorder.swift", "CareLedger.swift", "StretchNudge.swift", "StretchInterval.swift"],
+    // The Record reads what AgentEvents measured and Care logged, and measures nothing
+    // itself: its data, the store that reads it, and the view the card swaps in.
+    "Record":       ["RecordData.swift", "RecordStore.swift", "RecordView.swift"],
     "Resources":    ["Assets.xcassets", "BeatTick.aiff", "CompletionChime.aiff"],
   };
 
@@ -395,7 +400,7 @@ test("island sources split into 5 duty groups, never flattened back into one lay
   // The project must group too: Xcode's navigator shows PBXGroups, and grouped
   // on disk but flat in the project is grouped for nobody.
   const pbx = fs.readFileSync(pkgPath("Perch.xcodeproj", "project.pbxproj"), "utf8");
-  for (const g of ["AgentEvents", "Notch", "Interface", "Care", "Resources"]) {
+  for (const g of ["AgentEvents", "Notch", "Interface", "Care", "Record", "Resources"]) {
     assert.match(pbx, new RegExp(`/\\* ${g} \\*/ = \\{\\n\\t\\t\\tisa = PBXGroup;`), `project is missing the ${g} group`);
   }
 });

@@ -52,6 +52,10 @@ private struct TodayFlowCell: View {
     /// Reset per day, crossing a day line would snap back to page zero and the
     /// second page would be hard to reach.
     let inspectOrigin: Date
+    /// Pressing a finished project's name brings forward the app it ran in.
+    let onOpen: (ProjectStatus) -> Void
+    /// Pressing today's reading swaps the card's lower half to the Record, where every past week is.
+    let onRecord: () -> Void
 
     /// A duration in words, or nil when there is no reading yet.
     /// With fewer than `FlowSense.window` pickups, `DayFlow.seconds` returns 0
@@ -94,8 +98,8 @@ private struct TodayFlowCell: View {
     /// derived from the clock and never held in `@State`.
     /// Nothing to restart when the set of projects changes, and no way to skip
     /// round faster than one slot per `slotSeconds`.
-    private func restingSlot(at now: Date) -> (text: String, isReading: Bool)? {
-        if nudge { return (StretchNudge.line, true) }
+    private func restingSlot(at now: Date) -> (text: String, isReading: Bool, project: ProjectStatus?)? {
+        if nudge { return (StretchNudge.line, true, nil) }
         let readings = todayReadings
         let items = finished
         let n = readings.count + items.count
@@ -103,8 +107,8 @@ private struct TodayFlowCell: View {
         let tick = CarouselClock.slot(now: now, origin: carouselOrigin,
                                       count: n, seconds: Self.slotSeconds)
         return tick < readings.count
-            ? (readings[tick], true)
-            : (ProjectCaption.caption(items[tick - readings.count]), false)
+            ? (readings[tick], true, nil)
+            : (ProjectCaption.caption(items[tick - readings.count]), false, items[tick - readings.count])
     }
 
     /// Builds the pages for the hovered day. Page zero carries that day's level
@@ -163,6 +167,19 @@ private struct TodayFlowCell: View {
                                         count: pages.count, seconds: Self.hoverSlotSeconds)]
     }
 
+    /// Whether pressing the line does anything: a finished project whose app is known opens
+    /// it, and today's reading toggles the Record. The break line and a hovered day do not.
+    private func opens(_ resting: (text: String, isReading: Bool, project: ProjectStatus?)?) -> Bool {
+        guard inspecting == nil, let resting else { return false }
+        if let project = resting.project { return project.hostApp != nil }
+        return resting.isReading && !nudge
+    }
+
+    /// Whether the pointer is over the line. macOS keeps the arrow over the island (the panel
+    /// never becomes key, so AppKit never asks it for a cursor), so an underline under a line
+    /// that can be pressed is the only sign it can be.
+    @State private var pointerOver = false
+
     var body: some View {
         // A one-second grain lets the 3s hover pages turn on time; each tick
         // redraws one line of text.
@@ -179,6 +196,7 @@ private struct TodayFlowCell: View {
                 Text(text ?? "")
                     .font(ProjectCaption.font)
                     .foregroundStyle(tint)
+                    .underline(pointerOver && opens(resting))
                     .lineLimit(1)
                     .truncationMode(.tail)
             }
@@ -186,6 +204,16 @@ private struct TodayFlowCell: View {
             // Hide the whole row when there is no reading today and nothing
             // finished.
             .opacity(text == nil ? 0 : 1)
+            .contentShape(Rectangle())
+            .onHover { pointerOver = $0 }
+            .onTapGesture {
+                guard inspecting == nil, let resting else { return }
+                if let project = resting.project {
+                    if project.hostApp != nil { onOpen(project) }
+                } else if resting.isReading, !nudge {
+                    onRecord()
+                }
+            }
         }
     }
 }
@@ -258,7 +286,9 @@ struct TopWeekRow: View {
                           corrections: viewModel.weekCorrections,
                           carouselOrigin: carouselOrigin,
                           nudge: viewModel.stretchNudge,
-                          inspectOrigin: inspectOrigin)
+                          inspectOrigin: inspectOrigin,
+                          onOpen: { viewModel.openHost(of: $0) },
+                          onRecord: { viewModel.toggleRecord() })
                 .frame(width: GuidedCareLayout.rightColumnWidth, alignment: .leading)
                 .alignmentGuide(.bottom) { d in
                     d[VerticalAlignment.center] + WeekPerch.segment.height / 2

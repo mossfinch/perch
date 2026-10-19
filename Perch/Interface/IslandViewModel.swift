@@ -14,6 +14,10 @@ struct ProjectStatus: Identifiable, Equatable {
     let name: String           // display name = directory basename
     var status: IslandAgentStatus
     var updatedAt: Date
+    /// When you opened the card while this line was finished. Cleared by every event.
+    var seenAt: Date? = nil
+    /// The app the agent runs in, by bundle identifier, from its latest event that said.
+    var hostApp: String? = nil
     var id: String { key }
 
     static func key(source: String, dir: String) -> String { "\(source)\t\(dir)" }
@@ -93,6 +97,8 @@ final class IslandViewModel: ObservableObject {
     static let flowTickInterval: TimeInterval = 15
 
     @Published var projects: [ProjectStatus] = []                  // one status dot per project
+    /// Whether the card's lower half shows the Record instead of the move. See `IslandViewModel+Week.swift`.
+    @Published var showingRecord = false
     /// Whether the second row offers to connect the agents. See `IslandViewModel+Setup.swift`.
     @Published var agentSetup: AgentSetup = .hidden
     /// Set once if the socket could not be opened; wins over whatever the hook check says,
@@ -109,12 +115,16 @@ final class IslandViewModel: ObservableObject {
     /// How long the work has run unbroken, and whether this stretch has been asked yet.
     /// Kept up to date by `refreshStretch` in `IslandViewModel+Flow.swift`.
     var stretch = StretchNudge()
+    /// The picked wait in minutes, nil for never. Set through `chooseStretchInterval`.
+    @Published var stretchMinutes: Int? = StretchInterval.load()
+    /// Set when a move just answered a reminder that waited too long; the title then offers another wait.
+    @Published var nudgeAnswered = false
 
-    /// The island's one setting: whether the completion chime plays. Kept in
-    /// UserDefaults so it survives a relaunch; a switch that springs back every
+    /// The island's one setting: whether the agents make a sound, finishing or waiting on
+    /// you. Kept in UserDefaults so it survives a relaunch; a switch that springs back every
     /// morning reads as broken.
     ///
-    /// It mutes the chime only. The beat is the move's clock: side-neck and
+    /// It mutes those two only. The beat is the move's clock: side-neck and
     /// levator stretches are done with the head turned away from the screen,
     /// where only sound keeps up, so muting it would make the move undoable.
     @Published var chimeMuted: Bool = UserDefaults.standard.bool(forKey: chimeMutedKey) {
@@ -145,30 +155,14 @@ final class IslandViewModel: ObservableObject {
     private var careClock = CareSessionClock()
     private var pendingCareRecord: CareRecord?
     private let agentMonitor = AgentEventMonitor()
-    private let completionSound: NSSound? = {
-        if let url = Bundle.main.url(forResource: "CompletionChime", withExtension: "aiff") {
-            return NSSound(contentsOf: url, byReference: false)   // audio from the app's own bundle; the sandbox allows that
-        }
-        return NSSound(named: "Funk")
-    }()
-    /// The frame-change tick. Side-neck and levator stretches are done with your
-    /// head turned away from the screen, where visual progress is useless and
-    /// only sound keeps up.
-    /// The audio is synthesized by artifacts/island-sounds/make_beat_tick.py
-    /// from a fixed seed, so it is reproducible.
-    private let beatSound: NSSound? = {
-        if let url = Bundle.main.url(forResource: "BeatTick", withExtension: "aiff") {
-            return NSSound(contentsOf: url, byReference: false)
-        }
-        return NSSound(named: "Bottle")   // fallback: never go mute even if the resource missed the bundle
-    }()
+    // The sounds are loaded in IslandViewModel+Sounds.swift.
 
     init() {
-        completionSound?.volume = 1.0
-        beatSound?.volume = 1.0    // full volume: any quieter and ambient noise swallows the tick
         // The order matters: seed from the log before the monitor opens.
         // Listening first lets an event land in memory and be read back out of
         // the log in the same breath, counting one turn twice.
+        stretch.setInterval(StretchInterval.seconds(stretchMinutes))
+        stretch.restore(.load())   // a relaunch must not ask again about a stretch already asked
         seedFlowFromLog()
         seedMoveFromLedger()   // the card opens on the move after the last one done
         refreshWeek()
@@ -188,6 +182,7 @@ final class IslandViewModel: ObservableObject {
         // side alone makes them contradict each other the moment the panel
         // opens. Done ends with the project's next event or stale pruning.
         isHovering = true
+        markFinishedLinesSeen()
         refreshPresentation()
     }
     func hoverExited() {
@@ -315,12 +310,14 @@ final class IslandViewModel: ObservableObject {
             _ = try CareLedgerStore.append(record)
             pendingCareRecord = nil
             caredThisRound = true
+            let offer = stretch.answeredSlowly(at: Date()) && StretchInterval.canLengthen(stretchMinutes)
             stretch.moved()
             publishStretch()
             sessionPhase = .idle
             resetCareProgress()
             seedMoveFromLedger()   // the record just written is now the ledger's last
             if playCompletionSound { playChime() }
+            if offer { nudgeAnswered = true; peekOpen(for: 8) }
         } catch {
             pendingCareRecord = record
             sessionPhase = .paused
@@ -336,9 +333,9 @@ final class IslandViewModel: ObservableObject {
     // MARK: - Multi-project events
 
     func startAgentMonitoring() {
-        agentMonitor.onWorking = { [weak self] dir, src in self?.applyProjectEvent(dir, src, .working) }
-        agentMonitor.onWaiting = { [weak self] dir, src in self?.applyProjectEvent(dir, src, .waiting) }
-        agentMonitor.onComplete = { [weak self] dir, src in self?.applyProjectEvent(dir, src, .done) }
+        agentMonitor.onWorking = { [weak self] dir, src, host in self?.applyProjectEvent(dir, src, .working, host: host) }
+        agentMonitor.onWaiting = { [weak self] dir, src, host in self?.applyProjectEvent(dir, src, .waiting, host: host) }
+        agentMonitor.onComplete = { [weak self] dir, src, host in self?.applyProjectEvent(dir, src, .done, host: host) }
         agentMonitor.onReconciliation = { health, canonical in
             do {
                 try SourceHealthStore.publish(health: health, canonical: canonical)
@@ -356,7 +353,7 @@ final class IslandViewModel: ObservableObject {
         agentMonitor.start()
     }
 
-    private func applyProjectEvent(_ dir: String, _ source: String, _ status: IslandAgentStatus) {
+    private func applyProjectEvent(_ dir: String, _ source: String, _ status: IslandAgentStatus, host: String = "") {
         // Record, never judge: nothing below reads this line. The log is read
         // back only to seed the verdict at launch and to draw the week.
         // It logs the raw dir (full path), not displayName, so grouping by
@@ -376,9 +373,12 @@ final class IslandViewModel: ObservableObject {
         if let idx = projects.firstIndex(where: { $0.key == key }) {
             projects[idx].status = status
             projects[idx].updatedAt = Date()
+            projects[idx].seenAt = nil
+            if !host.isEmpty { projects[idx].hostApp = host }
         } else {
             projects.append(ProjectStatus(source: source, key: key, name: Self.displayName(dir),
-                                          status: status, updatedAt: Date()))
+                                          status: status, updatedAt: Date(),
+                                          hostApp: host.isEmpty ? nil : host))
         }
         agentStatus = aggregateStatus()   // aggregate state for the leaf
 
@@ -400,16 +400,21 @@ final class IslandViewModel: ObservableObject {
             if !anyBusy(), caredThisRound {
                 peekOpen()   // everything done and you cared this round → peek so the green gets seen
             }
-        case .waiting, .idle:
+        case .waiting:
+            // A sound only: the card stays shut, because nothing visual nags. Once per wait,
+            // so a repeated request on a line already yellow does not ring twice.
+            if before != .waiting { playWaitingSound() }
+        case .idle:
             break
         }
+        if isHovering { markFinishedLinesSeen() }   // finished under your pointer is finished and seen
     }
 
     private func anyBusy() -> Bool {
         projects.contains { $0.status == .working || $0.status == .waiting }
     }
 
-    private func aggregateStatus() -> IslandAgentStatus {
+    func aggregateStatus() -> IslandAgentStatus {
         let all = projects.map { $0.status }
         if all.contains(.waiting) { return .waiting }
         if all.contains(.working) { return .working }
@@ -418,16 +423,18 @@ final class IslandViewModel: ObservableObject {
     }
 
     private func playBeat() {
-        beatSound?.stop()   // restart even mid-tick, so no beat gets swallowed
-        beatSound?.play()
+        Self.beatSound?.stop()   // restart even mid-tick, so no beat gets swallowed
+        Self.beatSound?.play()
     }
 
     private func playChime() {
         guard !chimeMuted else { return }   // muted means silent, not quieter
-        completionSound?.stop()
-        if completionSound?.play() != true {
-            NSSound.beep()   // fallback: if the named sound fails, the system beep guarantees something is heard
-        }
+        Self.play(Self.completionSound)
+    }
+
+    private func playWaitingSound() {
+        guard !chimeMuted else { return }
+        Self.play(Self.waitingSound)
     }
 
     static func displayName(_ key: String) -> String {
@@ -443,23 +450,15 @@ final class IslandViewModel: ObservableObject {
         }
     }
 
-    private func pruneStale() {
-        let now = Date()
-        let before = projects.count
-        projects.removeAll { project in
-            StalePolicy.isStale(isWaiting: project.status == .waiting,
-                                age: now.timeIntervalSince(project.updatedAt))
-        }
-        if projects.count != before { agentStatus = aggregateStatus() }
-    }
+    // `pruneStale` and `markFinishedLinesSeen` are in IslandViewModel+Lines.swift.
 
     // MARK: - Presentation orchestration
 
-    private func peekOpen() {
+    private func peekOpen(for seconds: TimeInterval = 3.5) {
         peekActive = true
         refreshPresentation()
         peekTimer?.invalidate()
-        peekTimer = Timer.scheduledTimer(withTimeInterval: 3.5, repeats: false) { [weak self] _ in
+        peekTimer = Timer.scheduledTimer(withTimeInterval: seconds, repeats: false) { [weak self] _ in
             Task { @MainActor in
                 self?.peekActive = false
                 self?.refreshPresentation()
@@ -486,6 +485,8 @@ final class IslandViewModel: ObservableObject {
             refreshAgentSetup()
             withAnimation(.spring(response: 0.42, dampingFraction: 0.86)) { presentationPhase = .opened }
         } else {
+            showingRecord = false   // the card always opens on the move, never on a record left open
+            nudgeAnswered = false
             withAnimation(.smooth(duration: 0.3)) { presentationPhase = .closed }
         }
     }

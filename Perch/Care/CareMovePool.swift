@@ -79,10 +79,10 @@ struct CareMove: Equatable, Identifiable {
 /// The moves the island can run. Array order is the paging order and the order the card
 /// offers them in.
 enum CareMovePool {
-    /// The categories the interface currently offers. Only neck and eyes have catalog
-    /// moves; until shoulders or face gain moves, do not pass them to `first` or `next`,
+    /// The categories the interface currently offers, one circle each in this order. Face
+    /// has no catalog moves; until it gains some, do not pass it to `first` or `next`,
     /// which require a non-empty category.
-    static let selectableCategories: [CareCategory] = [.neck, .eyes]
+    static let selectableCategories: [CareCategory] = [.neck, .eyes, .shoulders, .back]
 
     /// Validated when first built: anything that breaks the contract trips a precondition at
     /// once instead of handing an invalid tempo to the interface or the clock.
@@ -141,6 +141,42 @@ enum CareMovePool {
                     CareFrame(assetName: "CareMoveEyeOrbitalInner", label: "inner"),
                     CareFrame(assetName: "CareMoveEyeOrbitalTemple", label: "temple"),
                     CareFrame(assetName: "CareMoveEyeOrbitalUnder", label: "under")
+                ]
+            ),
+            CareMove(
+                // Up, then back and down: two equal 2-second beats per roll, 8 rolls.
+                id: "shoulder-rolls", category: .shoulders, name: "Shoulder rolls", reps: 8, seconds: 32,
+                frames: [
+                    CareFrame(assetName: "CareMoveShoulderRollsUp", label: "up"),
+                    CareFrame(assetName: "CareMoveShoulderRollsBack", label: "back and down")
+                ]
+            ),
+            CareMove(
+                // Hands behind the head; the elbows close in front, then open wide with the
+                // chest lifted. 2.5 seconds each way, 6 times.
+                id: "chest-opener", category: .shoulders, name: "Chest opener", reps: 6, seconds: 30,
+                frames: [
+                    CareFrame(assetName: "CareMoveChestOpenerForward", label: "elbows in"),
+                    CareFrame(assetName: "CareMoveChestOpenerOpen", label: "open")
+                ]
+            ),
+            CareMove(
+                // Same round-trip path as the side-neck stretch: 9 seconds twisted to each
+                // side, 1 second for each pass through sitting square.
+                id: "seated-twist", category: .back, name: "Seated twist", reps: 2, seconds: 40,
+                frames: [
+                    CareFrame(assetName: "CareMoveSeatedTwistLeft", label: "twist left"),
+                    CareFrame(assetName: "CareMoveSeatedTwistCenter", label: "center", isPassThrough: true),
+                    CareFrame(assetName: "CareMoveSeatedTwistRight", label: "twist right")
+                ],
+                playback: .pingPong
+            ),
+            CareMove(
+                // Rounding and arching the back on the chair, 2.5 seconds each, 6 times.
+                id: "seated-cat-cow", category: .back, name: "Seated cat-cow", reps: 6, seconds: 30,
+                frames: [
+                    CareFrame(assetName: "CareMoveCatCowRound", label: "round"),
+                    CareFrame(assetName: "CareMoveCatCowArch", label: "arch")
                 ]
             )
         ]
@@ -212,6 +248,8 @@ enum CareMovePool {
             return "eye"
         case .face:
             return "face.smiling"
+        case .back:
+            return "figure.cooldown"
         }
     }
 }

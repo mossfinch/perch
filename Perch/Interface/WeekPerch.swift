@@ -75,7 +75,7 @@ struct WeekPerch: View {
     static let alphas: [Double] = [0.45, 0.5875, 0.725, 0.8625, 1.0]
 
     /// The paint at a level, already blended against the card's ground.
-    private static func composited(level: Int) -> Color {
+    static func composited(level: Int) -> Color {
         let a = alphas[max(1, min(5, level)) - 1]
         return Color(red: 1.000 * a, green: 0.800 * a, blue: 0.720 * a)
     }
@@ -85,7 +85,7 @@ struct WeekPerch: View {
     /// Bright, not dim: the seven have to hold together as one piece of wood,
     /// and what keeps an unlived day from competing with a lived one is hue.
     /// rgb(56,56,56): clearly there, clearly not coral.
-    private static let unlived = 0.22
+    static let unlived = 0.22
 
     private var todayIndex: Int? { days.firstIndex { $0.date == today } }
 

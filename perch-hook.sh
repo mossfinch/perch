@@ -28,15 +28,20 @@ source=$2
 dir_island=$HOME/.perch/island
 sock=$dir_island/bridge.sock
 
-# The wire format the island parses: event, project, nonce, source. The nonce
-# keeps two pushes in the same second distinguishable.
+# The wire format the island parses: event, project, nonce, source, host. The
+# nonce keeps two pushes in the same second distinguishable. The host is the
+# app the agent runs in (Terminal, iTerm, a code editor, the Claude app), which macOS
+# names in __CFBundleIdentifier for everything started from an app; pressing a
+# project's name on the card brings that app forward. It goes last, so an older
+# island reading four fields never sees it.
 #
 # Hooks start in the project directory, so $PWD is usually right — but Claude
 # Code states the project explicitly and its hooks do not always run there.
 # Prefer what the agent says over where the process happens to stand; codex
 # does not set the variable, so it falls through to $PWD unchanged.
 dir=${CLAUDE_PROJECT_DIR:-$PWD}
-printf '%s\t%s\t%s-%s\t%s' "$event" "$dir" "$(date +%s)" "$$" "$source" |
+host=$(printf '%s' "${__CFBundleIdentifier:-}" | tr -cd 'A-Za-z0-9.-')
+printf '%s\t%s\t%s-%s\t%s\t%s' "$event" "$dir" "$(date +%s)" "$$" "$source" "$host" |
     /usr/bin/nc -U -w 1 "$sock" 2>/dev/null
 rc=$?
 

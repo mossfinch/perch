@@ -35,7 +35,8 @@ sock=$dir_island/bridge.sock
 # app; pressing a project's name on the card brings that app forward. The session
 # is the app's own id for the session: the Claude app puts its id in the agent's
 # environment, and the Codex app's conversation comes in what codex hands the
-# hook (below). With it, the same press opens that session. Empty anywhere else.
+# hook (below). With it, the same press opens that session. In Terminal it is
+# the tab's tty, so the press selects that tab (below too). Empty anywhere else.
 # Each goes last, so an older island reading fewer fields never sees it.
 #
 # Hooks start in the project directory, so $PWD is usually right — but Claude
@@ -43,6 +44,11 @@ sock=$dir_island/bridge.sock
 # Prefer what the agent says over where the process happens to stand; codex
 # does not set the variable, so it falls through to $PWD unchanged.
 dir=${CLAUDE_PROJECT_DIR:-$PWD}
+# Fields are separated by tabs: a tab or a line break in the folder's name would push every
+# field after it into the wrong place, so such a project is left out instead.
+tab=$(printf '\t')
+case $dir in *"$tab"*|*'
+'*) exit 0 ;; esac
 host=$(printf '%s' "${__CFBundleIdentifier:-}" | tr -cd 'A-Za-z0-9.-')
 session=${CLAUDE_CODE_HOST_SESSION_ID:-}
 # The Codex app starts its agent without __CFBundleIdentifier; it says who it is in its own
@@ -70,6 +76,19 @@ if [ -z "$host" ]; then
         } 3<&0 | grep -o '"session_id" *: *"[A-Za-z0-9_-]*"' | head -n 1 | sed 's/.*"\([A-Za-z0-9_-]*\)"$/\1/')
         ;;
     esac
+fi
+# In Terminal the session is the tab, named by its tty. codex runs its hooks detached from
+# the tab, so the hook has no tty of its own; the agent above it still has the tab's, so the
+# hook asks its parents in turn, a few levels up at most.
+if [ "$host" = com.apple.Terminal ]; then
+    p=$$
+    i=0
+    while [ "$i" -lt 6 ] && [ "${p:-0}" -gt 1 ]; do
+        t=$(ps -o tty= -p "$p" 2>/dev/null | tr -d ' ')
+        case $t in ttys[0-9]*) session=$t; break ;; esac
+        p=$(ps -o ppid= -p "$p" 2>/dev/null | tr -d ' ')
+        i=$((i + 1))
+    done
 fi
 session=$(printf '%s' "$session" | tr -cd 'A-Za-z0-9_-')
 printf '%s\t%s\t%s-%s\t%s\t%s\t%s' "$event" "$dir" "$(date +%s)" "$$" "$source" "$host" "$session" |

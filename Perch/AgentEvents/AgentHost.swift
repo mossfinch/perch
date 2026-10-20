@@ -11,6 +11,7 @@ import Foundation
 struct AgentHost: Equatable {
     static let claudeApp = "com.anthropic.claudefordesktop"
     static let codexApp = "com.openai.codex"
+    static let terminalApp = "com.apple.Terminal"
 
     let app: String
     let session: String?
@@ -30,8 +31,9 @@ struct AgentHost: Equatable {
 
     /// This event's host, still naming the session already known for the line when the event
     /// names none from the same app. A newer session wins; another app never inherits it.
+    /// Never in Terminal: a tab can close and its tty go to another one.
     func keepingSession(of previous: AgentHost?) -> AgentHost {
-        guard session == nil, let previous, previous.app == app else { return self }
+        guard session == nil, app != Self.terminalApp, let previous, previous.app == app else { return self }
         return AgentHost(app: app, knownSession: previous.session)
     }
 
@@ -44,6 +46,16 @@ struct AgentHost: Equatable {
         case Self.codexApp: return URL(string: "codex://threads/\(session)")
         default: return nil
         }
+    }
+
+    /// The tty of the Terminal tab the agent runs in, for `TerminalTab` to find. Only in Terminal,
+    /// and only a tty of its one exact shape (`ttys` and up to four digits): anything else names
+    /// no tab.
+    var terminalTTY: String? {
+        guard app == Self.terminalApp, let session, session.hasPrefix("ttys") else { return nil }
+        let number = session.dropFirst(4)
+        guard (1...4).contains(number.count), number.allSatisfy({ $0.isASCII && $0.isNumber }) else { return nil }
+        return "/dev/" + session
     }
 
     private static func fits(_ name: String, extra: Set<Character>) -> Bool {

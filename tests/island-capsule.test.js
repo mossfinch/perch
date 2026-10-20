@@ -237,8 +237,31 @@ test("status dots split into rows by agent source, claude above codex", () => {
   assert.match(monitorSource, /AgentHost\(app: field\(4\), session: field\(5\)\)/, "the monitor no longer reads the host and session fields");
   // Pressing a name opens its app through LaunchServices, and only a name whose app is known reacts.
   const lines = fs.readFileSync(islandPath("IslandViewModel+Lines.swift"), "utf8");
-  assert.match(lines, /func openHost\(of project: ProjectStatus\)[\s\S]*?if let link = host\.sessionURL[\s\S]*?open\(link[\s\S]*?openApplication\(at: url/,
-    "pressing a name no longer tries the session before the app");
+  assert.match(lines, /func openHost\(of project: ProjectStatus\)[\s\S]*?if let link = host\.sessionURL[\s\S]*?open\(link[\s\S]*?if let tty = host\.terminalTTY[\s\S]*?TerminalTab\.reveal\(tty: tty\)[\s\S]*?if !found \{ Self\.bringForward\(host\.app\) \}[\s\S]*?Self\.bringForward\(host\.app\)/,
+    "pressing a name no longer tries the session, then the Terminal tab, before the app");
+  // The script that drives Terminal is fixed text: the tty is the one argument to its one
+  // handler, passed as an Apple event parameter. Nothing that arrived on the socket is ever
+  // part of the script, and the script can only look at tabs, select one and raise its window.
+  const tab = fs.readFileSync(islandPath("TerminalTab.swift"), "utf8");
+  const script = tab.match(/private static let source = """([\s\S]*?)"""/)?.[1] ?? "";
+  assert.ok(script.includes("on reveal(wanted)"), "the fixed handler is gone");
+  assert.doesNotMatch(script, /\\\(/, "something is interpolated into the script's source");
+  assert.doesNotMatch(script, /do script|do shell script|keystroke|write text|run script/i, "the script can do more than select a tab");
+  assert.match(script, /tell application id "com\.apple\.Terminal"/);
+  assert.match(tab, /NSAppleEventDescriptor\(string: tty\)/, "the tty no longer goes in as a parameter");
+  assert.match(tab, /executeAppleEvent\(/);
+  // Off the main thread: the first time, macOS holds the event until the user answers.
+  assert.match(tab, /queue\.async \{/);
+  assert.match(script, /with timeout of \d+ seconds/);
+  // A tab whose program has finished still reports the tty it had, and macOS hands that tty to
+  // the next tab opened: only a tab with something still running in it can be the agent's.
+  assert.match(script, /if tty of t is wanted and processes of t is not \{\} then/, "a finished tab can still be picked");
+  // What it does with that tab, in this order: out of the Dock if minimized, waiting for that to
+  // land; the tab selected; Terminal brought forward; and only then its window raised, since
+  // bringing Terminal forward puts its own current window back on top. Only then a yes, which
+  // stops the fallback.
+  assert.match(script, /if miniaturized of w then\s+set miniaturized of w to false\s+delay [\d.]+\s+end if\s+set selected tab of w to t\s+activate\s+set index of w to 1\s+return true/,
+    "the tab is no longer restored, selected and raised, in that order, before it answers yes");
   const captions = islandViews();
   // Both captions ignore a press when the app is unknown.
   assert.match(captions, /guard let current, current\.host != nil else \{ return \}/, "the running caption reacts with no known app");
@@ -278,6 +301,18 @@ precondition(AgentHost(app: claude, session: "")!.keepingSession(of: known).sess
 precondition(AgentHost(app: claude, session: "local_new")!.keepingSession(of: known).session == "local_new", "a newer session lost")
 precondition(AgentHost(app: "com.apple.Terminal", session: "")!.keepingSession(of: known).session == nil, "another app inherited the session")
 precondition(AgentHost(app: claude, session: "")!.keepingSession(of: nil).session == nil, "nothing known")
+// Terminal has no link; the tab is found by its tty, which has one exact shape. Anything else
+// is refused, not trimmed into something that would match another tab.
+let term = AgentHost(app: "com.apple.Terminal", session: "ttys003")!
+precondition(term.terminalTTY == "/dev/ttys003", "Terminal's tab")
+precondition(term.sessionURL == nil, "Terminal has no link")
+precondition(AgentHost(app: "com.apple.Terminal", session: "ttys3x")?.terminalTTY == nil, "a tty that is not one")
+precondition(AgentHost(app: "com.apple.Terminal", session: "ttys12345")?.terminalTTY == nil, "an overlong tty")
+precondition(AgentHost(app: "com.apple.Terminal", session: "")?.terminalTTY == nil, "no tty")
+precondition(AgentHost(app: "com.googlecode.iterm2", session: "ttys003")?.terminalTTY == nil, "only Terminal is driven")
+precondition(AgentHost(app: claude, session: "ttys003")?.terminalTTY == nil, "the Claude app's session is not a tab")
+// A tab can close and its tty go to another one: an event without a tty never keeps the old one.
+precondition(AgentHost(app: "com.apple.Terminal", session: "")!.keepingSession(of: term).terminalTTY == nil, "a stale tab kept")
 // The Codex app's own link to one of its conversations.
 precondition(AgentHost(app: "com.openai.codex", session: "01a1548a-6c01-7403")?.sessionURL?.absoluteString
              == "codex://threads/01a1548a-6c01-7403", "the Codex app's conversation link")
@@ -541,6 +576,61 @@ test("the hook reads the Codex app's conversation without ever waiting on an ope
   assert.notEqual(empty.code, "hung", "the hook waited on an empty stdin left open");
   assert.ok(empty.ms < 3000, `the hook took ${empty.ms} ms with nothing on stdin`);
   assert.match(empty.line, /\tcodex\tcom\.openai\.codex\t$/, "with nothing to read, the app still comes forward");
+});
+
+// Fields are separated by tabs, so a folder whose name holds a tab or a line break would push
+// every field after it into the wrong place: the line would be filed under a wrong source, or
+// carry a wrong app to open. The hook leaves such a project out; the island refuses a message
+// with more fields than the format has.
+test("a folder whose name holds a tab is left out rather than shifting the fields after it", async () => {
+  const net = require("node:net");
+  const { spawn } = require("node:child_process");
+  const run = async (dir) => {
+    const home = fs.mkdtempSync(path.join(os.tmpdir(), "perch-hook-"));
+    fs.mkdirSync(path.join(home, ".perch", "island"), { recursive: true });
+    const received = [];
+    const server = net.createServer((c) => { let d = ""; c.on("data", (x) => { d += x; }); c.on("end", () => received.push(d)); });
+    await new Promise((r) => server.listen(path.join(home, ".perch", "island", "bridge.sock"), r));
+    const child = spawn("sh", [pkgPath("perch-hook.sh"), "working", "claude"], {
+      env: { HOME: home, PATH: "/usr/bin:/bin", CLAUDE_PROJECT_DIR: dir }, stdio: ["ignore", "ignore", "ignore"],
+    });
+    await new Promise((r) => child.on("exit", r));
+    await new Promise((r) => setTimeout(r, 200));
+    server.close();
+    return received.join("");
+  };
+  assert.match(await run("/tmp/plain"), /^working\t\/tmp\/plain\t/, "control: a plain folder is reported");
+  assert.equal(await run("/tmp/a\tb"), "", "a folder with a tab in its name was reported");
+  assert.equal(await run("/tmp/a\nb"), "", "a folder with a line break in its name was reported");
+  const monitor = fs.readFileSync(islandPath("AgentEventMonitor.swift"), "utf8");
+  assert.match(monitor, /private func deliver\(_ text: String\) \{[\s\S]*?guard parts\.count <= 6 else \{ return \}/,
+    "the island takes a message with more fields than the format has");
+});
+
+// codex runs its hooks detached from the tab (no controlling terminal of their own) while it
+// stays on the tab. Run for real in that shape: under a pseudo-terminal, from a parent that
+// starts the hook in a new session.
+test("in Terminal the hook names the agent's tab even when it runs detached from it", async () => {
+  const net = require("node:net");
+  const { spawn } = require("node:child_process");
+  const run = async (bundle) => {
+    const home = fs.mkdtempSync(path.join(os.tmpdir(), "perch-hook-"));
+    fs.mkdirSync(path.join(home, ".perch", "island"), { recursive: true });
+    const received = [];
+    const server = net.createServer((c) => { let d = ""; c.on("data", (x) => { d += x; }); c.on("end", () => received.push(d)); });
+    await new Promise((r) => server.listen(path.join(home, ".perch", "island", "bridge.sock"), r));
+    const py = "import subprocess,sys; subprocess.run(['sh', sys.argv[1], 'working', 'codex'], start_new_session=True)";
+    const child = spawn("script", ["-q", "/dev/null", "python3", "-c", py, pkgPath("perch-hook.sh")], {
+      env: { HOME: home, PATH: "/usr/bin:/bin", CLAUDE_PROJECT_DIR: "/tmp/x", __CFBundleIdentifier: bundle },
+      stdio: ["ignore", "ignore", "ignore"],
+    });
+    await new Promise((r) => child.on("exit", r));
+    await new Promise((r) => setTimeout(r, 200));
+    server.close();
+    return received.join("");
+  };
+  assert.match(await run("com.apple.Terminal"), /\tcodex\tcom\.apple\.Terminal\tttys\d+$/, "the tab's tty did not come through");
+  assert.match(await run("com.example.other"), /\tcodex\tcom\.example\.other\t$/, "a tty went out for an app that is not Terminal");
 });
 
 test("persistent 'project · source' caption right of the wave, rotating when several run", () => {

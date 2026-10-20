@@ -240,9 +240,14 @@ test("the sandbox opens exactly the three folders connecting needs, and nothing 
   // Allow" cost every event) and no network key of any kind.
   assert.deepEqual(keys, [
     "com.apple.security.app-sandbox",
+    "com.apple.security.temporary-exception.apple-events",
     "com.apple.security.temporary-exception.files.home-relative-path.read-write",
     "com.apple.security.temporary-exception.sbpl",
   ]);
+  // Apple events go to Terminal only, to select the tab an agent runs in.
+  const targets = [...ent.split("apple-events</key>")[1].split("</array>")[0]
+    .matchAll(/<string>([^<]+)<\/string>/g)].map((m) => m[1]);
+  assert.deepEqual(targets, ["com.apple.Terminal"]);
   const block = ent.split("home-relative-path.read-write</key>")[1].split("</array>")[0];
   const folders = [...block.matchAll(/<string>([^<]+)<\/string>/g)].map((m) => m[1]).sort();
   assert.deepEqual(folders, ["/.claude/", "/.codex/", "/.perch/"]);

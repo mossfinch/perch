@@ -22,6 +22,10 @@ interesting surface is narrow but real:
   of every project you ran an agent in.
 - Anything in the installers that writes outside its own entries, replaces a
   file it did not create, or leaves a config half-written.
+- Anything that gets Perch's Terminal script to do more than select a tab and
+  bring its window forward: type into a tab, run a command, or act on any app
+  but Terminal. What arrives from a hook is only ever a parameter to that fixed
+  script, never part of it.
 - Anything that puts identifying information into the published package. The
   export refuses on the ones it knows about; a shape it does not know about is
   worth telling us.

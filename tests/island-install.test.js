@@ -120,6 +120,9 @@ out["extrarule"] = verdict(signed("extrarule", {**repo, sbpl: repo[sbpl] + ["(al
 rw = "com.apple.security.temporary-exception.files.home-relative-path.read-write"
 out["extrafolder"] = verdict(signed("extrafolder", {**repo, rw: repo[rw] + ["/Documents/"]}))
 out["extrakey"] = verdict(signed("extrakey", {**repo, "com.apple.security.files.user-selected.read-write": True}))
+ev = "com.apple.security.temporary-exception.apple-events"
+out["extraevents"] = verdict(signed("extraevents", {**repo, ev: repo.get(ev, []) + ["com.apple.finder"]}))
+out["noevents"] = verdict(signed("noevents", {k: v for k, v in repo.items() if k != ev}))
 import json; print(json.dumps(out))
 `;
   const out = JSON.parse(execFileSync("python3", ["-B", "-c", py, pkgPath("install-island-app.py"), tmp,
@@ -133,6 +136,10 @@ import json; print(json.dumps(out))
   assert.match(out.extrakey, /nothing here expects: com\.apple\.security\.files\.user-selected\.read-write/);
   assert.match(out.network, /network access: com\.apple\.security\.network\.client/);
   assert.match(out.nosandbox, /sandbox is off/);
+  // Perch may send Apple events to Terminal only (to select the tab an agent runs in); one more
+  // app in that list would let it drive that app too.
+  assert.match(out.extraevents, /not exactly Terminal/);
+  assert.match(out.noevents, /not exactly Terminal/);
 });
 
 test("the app installer keeps the scanner outside the sandbox and publishes through Perch", () => {

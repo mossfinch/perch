@@ -88,7 +88,8 @@ cycling through one at a time. As long as one of those projects is waiting on
 your approval, the name stops there until you deal with it. Waiting on you
 also makes a sound of its own, different from the chime for a finished one.
 Press a project's name to go to its agent: in the Claude app or the Codex app,
-straight to that session; in Terminal, iTerm or your editor, that app comes forward.
+straight to that session; in Terminal, to the tab the agent runs in; in iTerm or
+your editor, that app comes forward.
 
 ![Perch collapsed with a status key: blue for running, yellow for waiting for approval, green for done](perch-status-key.png)
 
@@ -216,6 +217,16 @@ The app is sandboxed and may write to three folders and no others: `~/.claude`,
 `~/.codex` and `~/.perch`. It keeps its own data in `~/.perch/island`, and it
 writes nothing into `~/.claude` or `~/.codex` until you press **Connect**. It
 asks for no network access, and the sandbox holds it to that.
+
+To reach a Terminal tab, Perch sends Apple events to Terminal, and to no other app:
+the sandbox allows Terminal alone. The first time you press a name from Terminal,
+macOS asks whether Perch may control Terminal. That permission covers all of
+Terminal, so what Perch does with it rests on its own code, which you can read in
+`Perch/AgentEvents/TerminalTab.swift`: one fixed script that looks through
+Terminal's tabs, selects the one the agent runs in and brings its window forward.
+It never types into a tab or runs a command. If you decline, or later turn it off
+under System Settings › Privacy & Security › Automation, pressing a name just
+brings Terminal forward.
 
 <details>
 <summary>Why the history rebuild exists, and what it reads</summary>

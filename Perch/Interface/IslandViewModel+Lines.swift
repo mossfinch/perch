@@ -4,22 +4,36 @@ import AppKit
 /// Hooks send no reliable end-of-session event, so a dot is dropped after a quiet period;
 /// how long is `StalePolicy`'s answer.
 extension IslandViewModel {
-    /// Takes you to where the project's agent runs. In the Claude app, to that session, through
-    /// the app's own link to it; anywhere else (Terminal, iTerm, a code editor) only the app
-    /// comes forward, since reaching a window there would need permission to control other
-    /// apps. Opening through LaunchServices rather than activating the running app, because
-    /// Perch is never the active app, and macOS ignores activation requests from an app in
-    /// the background.
+    /// Takes you to where the project's agent runs. In the Claude app or the Codex app, to that
+    /// session, through the app's own link to it; in Terminal, to its tab, which `TerminalTab`
+    /// selects. Anywhere else (iTerm, a code editor), and when the tab cannot be reached, only
+    /// the app comes forward.
     func openHost(of project: ProjectStatus) {
         guard let host = project.host else { return }
-        let configuration = NSWorkspace.OpenConfiguration()
-        configuration.activates = true
         if let link = host.sessionURL {
-            NSWorkspace.shared.open(link, configuration: configuration)
+            NSWorkspace.shared.open(link, configuration: Self.activating())
             return
         }
-        guard let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: host.app) else { return }
-        NSWorkspace.shared.openApplication(at: url, configuration: configuration)
+        if let tty = host.terminalTTY {
+            TerminalTab.reveal(tty: tty) { found in
+                if !found { Self.bringForward(host.app) }
+            }
+            return
+        }
+        Self.bringForward(host.app)
+    }
+
+    /// Opening through LaunchServices rather than activating the running app, because Perch is
+    /// never the active app, and macOS ignores activation requests from an app in the background.
+    private static func bringForward(_ app: String) {
+        guard let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: app) else { return }
+        NSWorkspace.shared.openApplication(at: url, configuration: activating())
+    }
+
+    private static func activating() -> NSWorkspace.OpenConfiguration {
+        let configuration = NSWorkspace.OpenConfiguration()
+        configuration.activates = true
+        return configuration
     }
 
     func pruneStale() {

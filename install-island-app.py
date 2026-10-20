@@ -461,6 +461,7 @@ EXPECTED_ENTITLEMENTS = {
     "com.apple.security.temporary-exception.files.home-relative-path.read-write":
         ["/.claude/", "/.codex/", "/.perch/"],
     "com.apple.security.temporary-exception.sbpl": [SOCKET_RULE],
+    "com.apple.security.temporary-exception.apple-events": ["com.apple.Terminal"],
 }
 
 
@@ -471,6 +472,9 @@ def check_entitlements(app: Path) -> None:
       · no socket rule: the sandbox refuses the bind, and no hook event
         arrives (the card says so, but only after install);
       · an App Group: the macOS prompt on every launch is back;
+      · Apple events to any app but Terminal, which Perch drives only to
+        select the tab an agent runs in: one more app there and it could
+        drive that app too;
       · any network entitlement, or any extra sandbox rule or key: Perch
         promises it never goes online, and the sandbox is what keeps that
         promise. So the whole set is compared, not just the parts we want.
@@ -487,6 +491,8 @@ def check_entitlements(app: Path) -> None:
         problems.append("the sandbox is off")
     if ent.get("com.apple.security.temporary-exception.sbpl") != [SOCKET_RULE]:
         problems.append("the sandbox rules are not exactly the one that lets the socket bind in ~/.perch/island")
+    if ent.get("com.apple.security.temporary-exception.apple-events") != ["com.apple.Terminal"]:
+        problems.append("the apps it may send Apple events to are not exactly Terminal")
     if "com.apple.security.application-groups" in ent:
         problems.append("it still declares an App Group")
     network = [key for key in ent if key.startswith("com.apple.security.network.")]

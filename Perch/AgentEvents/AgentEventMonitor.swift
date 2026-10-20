@@ -207,6 +207,9 @@ final class AgentEventMonitor: @unchecked Sendable {
         // Format: <event>\t<projectDir>\t<nonce>\t<source>\t<host>\t<session>
         // A missing source counts as claude (see the callbacks above).
         let parts = text.split(separator: "\t", omittingEmptySubsequences: false).map(String.init)
+        // More fields than the format has means one of them held a tab, and every field after
+        // it is in the wrong place.
+        guard parts.count <= 6 else { return }
         func field(_ i: Int) -> String {
             parts.count > i ? parts[i].trimmingCharacters(in: .whitespacesAndNewlines) : ""
         }

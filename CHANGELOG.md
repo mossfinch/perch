@@ -6,6 +6,25 @@ Notable changes to Perch, newest first. The format follows
 
 ## [Unreleased]
 
+## [2.7] — 2026-10-20
+
+### Added
+
+- In Terminal, pressing a project's name now selects the tab its agent runs
+  in and brings that window forward, out of the Dock if it was minimized,
+  rather than only bringing Terminal forward. The hook names the tab by its
+  terminal device, which it finds even when codex runs it detached from the
+  tab. Perch sends Apple events for this to Terminal alone, so macOS asks
+  once whether Perch may control Terminal; declining keeps the old
+  behaviour. What the permission is used for is in the README's privacy
+  section. iTerm and editors still bring their app forward.
+
+### Fixed
+
+- A project folder whose name holds a tab or a line break no longer reaches
+  the island, where it pushed every later field of the message out of place.
+  The island also refuses a message with more fields than it knows.
+
 ## [2.6] — 2026-10-19
 
 ### Fixed
@@ -244,7 +263,8 @@ Notable changes to Perch, newest first. The format follows
   The archive is packed deterministically: fixed timestamps, no extra fields,
   no comments, every byte accounted for.
 
-[Unreleased]: https://github.com/mossfinch/perch/compare/v2.6...HEAD
+[Unreleased]: https://github.com/mossfinch/perch/compare/v2.7...HEAD
+[2.7]: https://github.com/mossfinch/perch/compare/v2.6...v2.7
 [2.6]: https://github.com/mossfinch/perch/compare/v2.5...v2.6
 [2.5]: https://github.com/mossfinch/perch/compare/v2.4...v2.5
 [2.4]: https://github.com/mossfinch/perch/compare/v2.3...v2.4

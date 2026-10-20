@@ -127,14 +127,15 @@ private struct ActiveProjectLabel: View {
         // finish and leave at any moment; normalizing at read time is simplest
         // and avoids chasing state inside onChange.
         let current = shown.isEmpty ? nil : shown[slot % shown.count]
+        let tint = IslandPalette.color(for: current?.status ?? .idle)
         ZStack(alignment: .trailing) {   // old and new lines overlap during the cross-fade instead of pushing each other
             Text(current.map(ProjectCaption.caption) ?? "")
                 .font(ProjectCaption.font)
                 // The colour carries the state, so the caption never has to spell it
                 // out: it names the project and nothing else.
-                .foregroundStyle(IslandPalette.color(for: current?.status ?? .idle))
+                .foregroundStyle(tint)
                 // See `TodayFlowCell`: the underline is the one sign a name can be pressed.
-                .underline(pointerOver && current?.host != nil)
+                .underline(current?.host != nil, color: tint.opacity(pointerOver ? 1 : 0.4))
                 .lineLimit(1)
                 .truncationMode(.tail)
                 .id(current?.id ?? "")

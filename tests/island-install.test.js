@@ -699,3 +699,182 @@ test("a download opens at login, and a source install is never started twice", (
     "the installer no longer leaves the helper where the app looks for it");
   assert.match(installer, /"Label": "io\.github\.mossfinch\.perch",/);
 });
+
+// The one-line installer runs for real here, in a folder of its own: a stand-in Applications,
+// a release zip holding a stand-in Perch, and stand-ins for curl, sw_vers, codesign, pgrep,
+// pkill and open that record what they were asked. Nothing reaches the network or the real
+// Applications folder.
+test("the one-line installer checks the download, leaves other apps alone, and puts Perch in place", () => {
+  const crypto = require("node:crypto");
+  const { spawnSync } = require("node:child_process");
+  const source = fs.readFileSync(pkgPath("install.sh"), "utf8");
+  const plist = fs.readFileSync(islandPath("Info.plist"), "utf8");
+  const version = plist.match(/<key>CFBundleShortVersionString<\/key>\s*<string>([^<]+)<\/string>/)[1];
+
+  // What a release has to carry: this version, a real checksum shape, Perch's own address.
+  assert.equal(source.match(/^version=(.+)$/m)?.[1], version, "install.sh names a different release than Info.plist");
+  assert.match(source, /^checksum=[0-9a-f]{64}$/m);
+  assert.match(source, /^url="https:\/\/github\.com\/mossfinch\/perch\/releases\/download\/v\$version\/Perch-\$version\.zip"$/m);
+  // And what it must never do.
+  const code = source.split("\n").filter((l) => !/^\s*#/.test(l)).join("\n");
+  assert.doesNotMatch(code, /\bsudo\b|\bxattr\b|\bspctl\b|quarantine|\.claude|\.codex/, "the installer reaches past installing the app");
+
+  const makeApp = (dir, id, mark) => {
+    fs.mkdirSync(path.join(dir, "Contents"), { recursive: true });
+    fs.writeFileSync(path.join(dir, "Contents", "Info.plist"),
+      `<?xml version="1.0" encoding="UTF-8"?>\n<plist version="1.0"><dict><key>CFBundleIdentifier</key><string>${id}</string></dict></plist>\n`);
+    fs.writeFileSync(path.join(dir, "Contents", "mark"), mark);
+  };
+  const run = ({ shape = "clean", os = "26.6.2", sign = 0, running = false, others = false, sum, stuck = false, swapFails = false, rollbackFails = false, launchd = false, stubborn = false, slow = false, ownedElsewhere = false } = {}) => {
+    const root = fs.mkdtempSync(path.join(os_tmp(), "perch-install-sh-"));
+    const apps = path.join(root, "Applications");
+    const bin = path.join(root, "bin");
+    const log = path.join(root, "log");
+    fs.mkdirSync(apps); fs.mkdirSync(bin);
+    makeApp(path.join(root, "release", "Perch.app"), "io.github.mossfinch.perch", "new");
+    const zip = path.join(root, "release.zip");
+    execFileSync("ditto", ["-c", "-k", "--keepParent", path.join(root, "release", "Perch.app"), zip]);
+    if (shape === "update") makeApp(path.join(apps, "Perch.app"), "io.github.mossfinch.perch", "old");
+    if (shape === "foreign") makeApp(path.join(apps, "Perch.app"), "com.example.other", "theirs");
+    const stub = (name, body) => fs.writeFileSync(path.join(bin, name), `#!/bin/sh\n${body}\n`, { mode: 0o755 });
+    // Time passes only through sleep, so a wait that is taken out of the script stops time.
+    const clock = path.join(root, "clock");
+    fs.writeFileSync(clock, "0");
+    stub("sleep", `awk -v t="$1" '{ printf "%.1f", $1 + t }' '${clock}' > '${clock}.n' && mv '${clock}.n' '${clock}'`);
+    stub("curl", `echo "curl $*" >> '${log}'; while [ $# -gt 0 ]; do [ "$1" = -o ] && cp '${zip}' "$2"; shift; done`);
+    stub("sw_vers", `echo ${os}`);
+    stub("codesign", `exit ${sign}`);
+    // pgrep prints one pid per Perch: this user's with -U, everyone's without. This user's
+    // Perch quits once pkill is sent, a second and a half later when slow, never when
+    // stubborn; another user's keeps running.
+    const quit = path.join(root, "quit");
+    stub("pgrep", `mine=${running ? 1 : 0}
+if [ -e '${quit}' ] && awk -v now="$(cat '${clock}')" '{ exit !(now >= $1) }' '${quit}'; then mine=0; fi
+all=$((mine + ${others ? 1 : 0}))
+case " $* " in *" -U "*) n=$mine ;; *) n=$all ;; esac
+i=0; while [ $i -lt $n ]; do echo $((4242 + i)); i=$((i + 1)); done
+[ "$n" -gt 0 ]`);
+    stub("pkill", `echo "pkill $*" >> '${log}'${stubborn ? "" : `; awk '{ printf "%.1f", $1 + ${slow ? 1.5 : 0} }' '${clock}' > '${quit}'`}`);
+    stub("open", `echo "open $*" >> '${log}'`);
+    // Moving the old Perch aside fails: the step after the new copy is already staged.
+    if (stuck) stub("mv", `case "$2" in *Perch-previous-*) exit 1 ;; esac; exec /bin/mv "$@"`);
+    // Or the last step fails: the new copy cannot be moved into place.
+    if (swapFails) stub("mv", `case "$1" in *.Perch-install-*) exit 1 ;; esac; exec /bin/mv "$@"`);
+    // Or nothing can be moved into place at all, not even the old copy back.
+    // The Perch in Applications was put there by another account: stat reports its owner.
+    if (ownedElsewhere) stub("stat", "echo $(( $(id -u) + 1 ))");
+    if (rollbackFails) stub("mv", `case "$2" in */Perch.app) exit 1 ;; esac; exec /bin/mv "$@"`);
+    // A Perch built from source is kept alive by its own launchd job, which restarts it the
+    // moment it is quit.
+    if (launchd) { fs.mkdirSync(path.join(root, "Library", "LaunchAgents"), { recursive: true });
+      fs.writeFileSync(path.join(root, "Library", "LaunchAgents", "io.github.mossfinch.perch.plist"), ""); }
+    const real = crypto.createHash("sha256").update(fs.readFileSync(zip)).digest("hex");
+    const script = source.split("/Applications").join(apps)
+      .replace(/^checksum=.*$/m, `checksum=${sum ?? real}`);
+    const r = spawnSync("sh", [], { input: script, encoding: "utf8",
+      env: { PATH: `${bin}:/usr/bin:/bin:/usr/sbin`, HOME: root } });
+    const mark = (p) => { try { return fs.readFileSync(path.join(p, "Contents", "mark"), "utf8"); } catch { return null; } };
+    return { code: r.status, err: r.stderr, out: r.stdout, log: fs.existsSync(log) ? fs.readFileSync(log, "utf8") : "",
+      installed: mark(path.join(apps, "Perch.app")), leftovers: fs.readdirSync(apps).filter((f) => f !== "Perch.app"), apps };
+  };
+  const os_tmp = () => os.tmpdir();
+
+  const fresh = run();
+  assert.equal(fresh.code, 0, fresh.err);
+  assert.equal(fresh.installed, "new");
+  assert.match(fresh.log, new RegExp(`curl .*releases/download/v${version.replace(".", "\\.")}/Perch-${version.replace(".", "\\.")}\\.zip`));
+  assert.match(fresh.log, new RegExp(`open ${fresh.apps.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}/Perch\\.app`));
+  assert.match(fresh.out, /Press Connect on its card/);
+  assert.deepEqual(fresh.leftovers, [], "a staged copy was left in Applications");
+
+  // An update quits the running Perch and replaces it.
+  const update = run({ shape: "update", running: true });
+  assert.equal(update.code, 0, update.err);
+  assert.equal(update.installed, "new");
+  assert.match(update.log, /pkill -x -U \d+ Perch/);
+  assert.deepEqual(update.leftovers, []);
+
+  // Each refusal installs nothing and says why.
+  const tampered = run({ sum: "f".repeat(64) });
+  assert.notEqual(tampered.code, 0);
+  assert.match(tampered.err, /does not match this release/);
+  assert.equal(tampered.installed, null);
+  assert.deepEqual(tampered.leftovers, []);
+
+  const unsigned = run({ shape: "update", sign: 1 });
+  assert.notEqual(unsigned.code, 0);
+  assert.match(unsigned.err, /signature does not verify/);
+  assert.equal(unsigned.installed, "old", "a bad download replaced the working Perch");
+
+  // A failure after the new copy is staged leaves the old Perch working and no half-installed
+  // copy behind in Applications.
+  const halfway = run({ shape: "update", stuck: true });
+  assert.notEqual(halfway.code, 0);
+  assert.equal(halfway.installed, "old");
+  assert.deepEqual(halfway.leftovers, [], "a staged copy was left in Applications");
+
+  // The last step failing puts the old Perch back rather than leaving none.
+  const swap = run({ shape: "update", swapFails: true });
+  assert.notEqual(swap.code, 0);
+  assert.equal(swap.installed, "old", "a failed swap lost the working Perch");
+  assert.deepEqual(swap.leftovers, []);
+
+  // Another user's Perch cannot be quit from here, and the bundle is shared: stop before
+  // anything is downloaded or moved.
+  const shared = run({ shape: "update", others: true });
+  assert.notEqual(shared.code, 0);
+  assert.match(shared.err, /another account/);
+  assert.equal(shared.installed, "old");
+  assert.doesNotMatch(shared.log, /curl|pkill/);
+
+  // A Perch that takes a moment to quit is waited for, not given up on.
+  const slowQuit = run({ shape: "update", running: true, slow: true });
+  assert.equal(slowQuit.code, 0, slowQuit.err);
+  assert.equal(slowQuit.installed, "new");
+
+  // When even the way back fails, the old copy is kept and the message says where.
+  const lost = run({ shape: "update", rollbackFails: true });
+  assert.notEqual(lost.code, 0);
+  assert.match(lost.err, /The previous one is at .*\.Perch-previous-\d+\.app/);
+  assert.equal(lost.leftovers.length, 1);
+  assert.equal(fs.readFileSync(path.join(lost.apps, lost.leftovers[0], "Contents", "mark"), "utf8"), "old");
+
+  // Both this account's and another's: still refused.
+  const both = run({ shape: "update", running: true, others: true });
+  assert.notEqual(both.code, 0);
+  assert.match(both.err, /another account/);
+  assert.equal(both.installed, "old");
+
+  // A Perch that will not quit is left as it is.
+  const stuckOpen = run({ shape: "update", running: true, stubborn: true });
+  assert.notEqual(stuckOpen.code, 0);
+  assert.match(stuckOpen.err, /did not quit/);
+  assert.equal(stuckOpen.installed, "old");
+  assert.deepEqual(stuckOpen.leftovers, []);
+
+  // Another account's copy in the shared Applications folder is theirs to update: this
+  // account could rename it but not remove what is inside, and would stop halfway.
+  const theirs = run({ shape: "update", ownedElsewhere: true });
+  assert.notEqual(theirs.code, 0);
+  assert.match(theirs.err, /installed by another account/);
+  assert.equal(theirs.installed, "old");
+  assert.doesNotMatch(theirs.log, /curl/);
+
+  // A source build stays with the installer it came from.
+  const built = run({ shape: "update", running: true, launchd: true });
+  assert.notEqual(built.code, 0);
+  assert.match(built.err, /install-island-app\.py/);
+  assert.equal(built.installed, "old");
+  assert.doesNotMatch(built.log, /curl|pkill/);
+
+  const foreign = run({ shape: "foreign" });
+  assert.notEqual(foreign.code, 0);
+  assert.match(foreign.err, /a different app \(com\.example\.other\); leaving it alone/);
+  assert.equal(foreign.installed, "theirs");
+  assert.doesNotMatch(foreign.log, /curl/, "it downloaded before checking what was in the way");
+
+  const old = run({ os: "14.6" });
+  assert.notEqual(old.code, 0);
+  assert.match(old.err, /needs macOS 15 or later; this Mac has 14\.6/);
+  assert.equal(old.installed, null);
+});

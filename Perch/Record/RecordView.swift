@@ -42,16 +42,23 @@ struct RecordView: View {
                     .lineLimit(1)
                     .truncationMode(.tail)
                 Spacer(minLength: 12)
-                // A button, so VoiceOver can press it; underlined under the pointer like every
-                // other word on the card that does something (the pointer itself cannot change here).
+                // A button, so VoiceOver can press it; underlined like every other word on the card
+                // that does something, solid under the pointer (the pointer itself cannot change
+                // here). The padding widens what can be hit; the negative padding outside gives the
+                // room back, so the row stays where it was.
                 Button { onClose() } label: {
                     Text("Back")
-                        .font(.system(size: 11))
-                        .foregroundStyle(Self.secondary)
-                        .underline(pointerOnBack)
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(IslandPalette.paper.opacity(0.85))
+                        .underline(true, color: IslandPalette.paper.opacity(pointerOnBack ? 0.85 : 0.35))
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .contentShape(Rectangle())
+                        .onHover { pointerOnBack = $0 }
                 }
                 .buttonStyle(.plain)
-                .onHover { pointerOnBack = $0 }
+                .padding(.horizontal, -8)
+                .padding(.vertical, -4)
             }
             Text(sentence)
                 .font(.system(size: 20, weight: .light))

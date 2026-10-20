@@ -13,6 +13,8 @@ extension IslandViewModel {
         /// The hook launcher finds the app at one fixed path, so connecting from anywhere
         /// else would wire the hooks to nothing.
         case notInApplications
+        /// A copy macOS runs from a temporary place (see `HookSetup.Status.translocated`).
+        case translocated
         case failed(String)
         case connected(codexNeedsTrust: Bool)
         /// The socket in `~/.perch/island` could not be opened, so nothing can arrive.
@@ -34,9 +36,26 @@ extension IslandViewModel {
         case .ready: agentSetup = .hidden
         case .needsConnect: agentSetup = .needsConnect
         case .notInApplications: agentSetup = .notInApplications
+        case .translocated: agentSetup = .translocated
         case .failed(let reason): agentSetup = .failed(reason)
         }
         return agentSetup == .needsConnect
+    }
+
+    /// What the card's second row says in each state, on one line of the card's width.
+    /// A temporary copy only turns into the real one after one more approval from macOS, so
+    /// the line says so: without it, the second warning looks like another failure.
+    var agentSetupLine: String {
+        switch agentSetup {
+        case .hidden, .needsConnect: return "Perch can't hear Claude Code or codex yet"
+        case .notInApplications: return "Move Perch to Applications to connect your agents"
+        case .translocated: return "Temporary copy: quit, open Perch from Applications, allow it once more"
+        case .failed(let reason): return "Couldn't connect: \(reason)"
+        case .cannotListen(let reason): return "Perch can't receive events (\(reason)). Right-click here, quit, and reopen it"
+        case .connected(let trust):
+            return trust ? "Connected. In codex, trust Perch's hooks once under /hooks"
+                         : "Connected. Your agents will show up here"
+        }
     }
 
     /// The Connect button's action. With `disconnectAgents` below, the only places the app

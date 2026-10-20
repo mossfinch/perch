@@ -40,6 +40,10 @@ enum HookSetup {
         case ready
         case needsConnect
         case notInApplications
+        /// macOS is running a temporary copy: the app was opened from where it was downloaded
+        /// before being approved, and macOS keeps running it from a private place even after
+        /// it has been moved to Applications.
+        case translocated
         case failed(String)
     }
 
@@ -84,7 +88,8 @@ enum HookSetup {
         do {
             let plan = try Plan(paths)
             guard plan.hasWork else { return .ready }
-            return appPath == installedApp ? .needsConnect : .notInApplications
+            if appPath == installedApp { return .needsConnect }
+            return appPath.contains("/AppTranslocation/") ? .translocated : .notInApplications
         } catch {
             return .failed("\(error)")
         }

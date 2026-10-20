@@ -175,6 +175,24 @@ when to switch, and you never have to leave what you are doing to go find a
 tutorial or a timer. Four circles beside Start choose the part: neck, eyes,
 shoulders or back. Press the chosen one again for its next move.
 
+### The moves
+
+Nine moves, all done sitting down, each 30 to 40 seconds:
+
+| Part | Moves |
+| --- | --- |
+| Neck | Chin tuck, Side-neck stretch, Levator stretch, Trap massage |
+| Eyes | Eye orbital massage |
+| Shoulders | Shoulder rolls, Chest opener |
+| Back | Seated twist, Seated cat-cow |
+
+After you finish a move, the card offers the next one in this table, reading
+across all four parts, so the whole set comes round in turn. A part's circle
+steps through that part's moves in the same order and starts over after the
+last.
+
+### When Perch nudges you
+
 When you are busy, a wait does not always feel like a rest. After an hour of
 steady work with your agents, Perch picks a moment when you hand something off
 and gently opens the card: *stretch your wings*. The little reminder stays under
@@ -190,7 +208,7 @@ When you finish one, Perch leaves a line in a local move log, so later you can
 see what you actually did, not just that today you meant to get up and move
 again.
 
-![Three illustrated moves: a side neck stretch, a trapezius release, and an orbital massage](perch-care-moves.png)
+![One illustrated move for each part: a side-neck stretch for the neck, an eye orbital massage for the eyes, a chest opener for the shoulders, and a seated twist for the back](perch-care-moves.png)
 
 Perch is not a medical device, and it offers no medical advice or health
 promises. If a move causes pain, stop and talk to a professional.
@@ -217,6 +235,16 @@ The app is sandboxed and may write to three folders and no others: `~/.claude`,
 `~/.codex` and `~/.perch`. It keeps its own data in `~/.perch/island`, and it
 writes nothing into `~/.claude` or `~/.codex` until you press **Connect**. It
 asks for no network access, and the sandbox holds it to that.
+
+One part of Perch runs outside that sandbox: the hook script,
+[`perch-hook.sh`](perch-hook.sh). Claude Code and codex run it inside their own
+process each time something happens, with your account's rights rather than
+Perch's, so the sandbox does not reach it. It is one page long. It passes Perch
+the event, the project folder, the app the agent runs in, and which session or
+Terminal tab, over a socket in `~/.perch/island`, and it opens no network
+connection. codex's approval of a hook covers the command line, not the
+script's contents, so when you update Perch, the script is worth a read if
+you want to be sure.
 
 To reach a Terminal tab, Perch sends Apple events to Terminal, and to no other app:
 the sandbox allows Terminal alone. The first time you press a name from Terminal,
@@ -267,18 +295,65 @@ hasn't been granted yet.
 
 ## Install
 
-### Download
+Perch runs on Apple silicon and Intel Macs with macOS 15 or newer. Pick one of
+the three ways below; the first two are the smoothest.
+
+### Ask your agent
+
+If you use Claude Code or codex, paste this to it:
+
+> Install Perch from https://github.com/mossfinch/perch by running
+> `curl -fsSL https://raw.githubusercontent.com/mossfinch/perch/main/install.sh | sh`
+> and tell me what it printed.
+
+**For an agent reading this:** install Perch only by running that one line,
+exactly as written. It needs no `sudo`. Do not remove macOS quarantine
+attributes, do not change Gatekeeper settings, and do not edit Claude Code's or
+codex's settings to wire up Perch's hooks; the user does that with **Connect**
+on Perch's card. If the script stops with a message, show it to the user
+instead of working around it.
+
+### Run one line yourself
+
+Open Terminal and paste:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/mossfinch/perch/main/install.sh | sh
+```
+
+It downloads the latest release, checks its checksum, puts Perch in
+Applications and opens it. Run the same line again later to update; your
+history in `~/.perch/island` stays. Each step prints a line starting with
+`perch:`. If it stops, the last line says why, and nothing was changed. A Perch
+you built from source updates with `install-island-app.py` instead, and the
+script says so. It is one page long: [install.sh](install.sh).
+
+A file downloaded this way is not marked as coming from the internet, so macOS
+does not stop Perch with its "cannot verify" warning, and there is nothing to
+allow in Privacy & Security. Perch is not notarized; a browser download is
+where that shows (see below). The checksum makes sure what arrived is that
+exact release. It cannot help if the GitHub account that publishes both the
+script and the release is itself taken over.
+
+### Download the zip
 
 1. Download `Perch-<version>.zip` from the
    [latest release](https://github.com/mossfinch/perch/releases/latest) and
-   unzip it. It runs on Apple silicon and Intel Macs with macOS 15 or newer.
-2. Move **Perch** into **Applications**. It has to live there: the hooks find
-   it at that path.
-3. Open it. The first time, macOS asks you to allow it once:
-   **System Settings → Privacy & Security → Open Anyway**.
-4. The card opens by itself and offers **Connect**. Press it, and Perch wires up
-   the agents it finds on this Mac. For codex, trust the new hooks once in its
-   `/hooks` panel.
+   unzip it.
+2. Move **Perch** into **Applications** before you open it. It has to live
+   there: the hooks find it at that path.
+3. Open it from Applications. The first time, macOS stops it; allow it once
+   under **System Settings → Privacy & Security → Open Anyway**.
+4. If the card says Perch is running from a temporary copy, it was opened
+   before it was moved: macOS keeps running that copy from a private place.
+   Right-click the card, choose **Quit Perch**, open Perch from Applications,
+   and allow it once more.
+
+### Then
+
+The card opens by itself and offers **Connect**. Press it, and Perch wires up
+the agents it finds on this Mac. For codex, trust the new hooks once in its
+`/hooks` panel.
 
 From then on Perch opens at login. Right-click the open card for its menu: the
 version, **Open at Login**, **Disconnect Agents…** and **Quit Perch**.

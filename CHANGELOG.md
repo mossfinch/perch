@@ -6,6 +6,29 @@ Notable changes to Perch, newest first. The format follows
 
 ## [Unreleased]
 
+## [2.8] — 2026-10-21
+
+### Added
+
+- Install or update with one line in Terminal:
+  `curl -fsSL https://raw.githubusercontent.com/mossfinch/perch/main/install.sh | sh`.
+  The script downloads this release, checks its checksum, puts Perch in
+  Applications and opens it. A file downloaded this way skips the "cannot
+  verify" warning and the trip to Privacy & Security, so Claude Code or codex
+  can install Perch for you too. It asks for no administrator password and
+  leaves your agents' settings to Connect. Downloading the zip still works.
+
+### Fixed
+
+- Opened from Downloads before it was moved to Applications, Perch ran from a
+  temporary copy macOS makes, and the card told you to move it to
+  Applications, where it already was. The card now says it is a temporary
+  copy and what to do: quit, open Perch from Applications, and allow it once
+  more.
+- A project name you can press now carries a faint underline all the time,
+  not only under the pointer, so it reads as a link before you find out by
+  accident. The Record view's Back is brighter and easier to hit.
+
 ## [2.7] — 2026-10-20
 
 ### Added
@@ -263,7 +286,8 @@ Notable changes to Perch, newest first. The format follows
   The archive is packed deterministically: fixed timestamps, no extra fields,
   no comments, every byte accounted for.
 
-[Unreleased]: https://github.com/mossfinch/perch/compare/v2.7...HEAD
+[Unreleased]: https://github.com/mossfinch/perch/compare/v2.8...HEAD
+[2.8]: https://github.com/mossfinch/perch/compare/v2.7...v2.8
 [2.7]: https://github.com/mossfinch/perch/compare/v2.6...v2.7
 [2.6]: https://github.com/mossfinch/perch/compare/v2.5...v2.6
 [2.5]: https://github.com/mossfinch/perch/compare/v2.4...v2.5

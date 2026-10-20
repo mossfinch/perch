@@ -138,6 +138,22 @@ Perch 把等待时最容易忽略的脖子、肩膀、腰背和眼睛照顾拆�
 节拍告诉你什么时候换动作，不需要离开当前工作环境重新找教程或计时器。
 Start 旁边的四个圆圈选部位：脖子、眼睛、肩膀、腰背；再点一下选中的那个，换这个部位的下一个动作。
 
+### 有哪些动作
+
+一共 9 个，都是坐着做，每个 30 到 40 秒：
+
+| 部位 | 动作 |
+| --- | --- |
+| 脖子 | Chin tuck、Side-neck stretch、Levator stretch、Trap massage |
+| 眼睛 | Eye orbital massage |
+| 肩膀 | Shoulder rolls、Chest opener |
+| 腰背 | Seated twist、Seated cat-cow |
+
+做完一个动作，卡片会给出表里的下一个，跨四个部位按顺序往下排，所以整套动作会轮流出现。
+点某个部位的圆圈，也是按同样顺序在这个部位里往下换，换到最后一个再从头开始。
+
+### Perch 什么时候提醒你
+
 忙起来，等待也未必像休息。跟 agent 连续协作一小时后，Perch 会找个交接的时刻，
 轻轻展开卡片：*stretch your wings*。这句小提醒会留在刘海下，偶尔自己也伸个懒腰。
 跟着图解和节拍活动一下，做完一个，下次就换另一个。
@@ -147,7 +163,7 @@ Start 旁边的四个圆圈选部位：脖子、眼睛、肩膀、腰背；再�
 完成后，Perch 会在本地动作记录中留下一笔，方便以后看到自己实际做过什么，
 而不只是今天又打算起来活动一下。
 
-![三个动作图解：侧颈拉伸、斜方肌放松和眼周按摩](perch-care-moves.png)
+![每个部位一个动作的图解：脖子是侧颈拉伸，眼睛是眼周按摩，肩膀是扩胸，腰背是坐姿转体](perch-care-moves.png)
 
 Perch 不是医疗设备，也不提供医疗建议或健康承诺。如果动作引起疼痛，请停止并咨询专业人士。
 
@@ -169,6 +185,12 @@ Perch 不保存提示词或回复正文。它会保存：
 app 运行在沙箱里，只能写三个文件夹：`~/.claude`、`~/.codex` 和 `~/.perch`。它自己的数据放在
 `~/.perch/island`；在你点 **Connect** 之前，它不会往 `~/.claude` 或 `~/.codex` 写任何东西。
 它不申请任何联网权限，沙箱也不让它联网。
+
+Perch 有一部分在沙箱外面运行：hook 脚本 [`perch-hook.sh`](perch-hook.sh)。每当 agent 有动静，
+Claude Code 和 codex 就在它们自己的进程里运行它，用的是你这个账号的权限，不是 Perch 的，所以沙箱管不到它。
+它只有一页长：把事件、项目文件夹、agent 所在的 app，以及是哪个会话或终端标签页，通过 `~/.perch/island`
+里的一个本地套接字交给 Perch，不建立任何网络连接。codex 批准 hook 时只看命令那一行，不看脚本内容；
+升级 Perch 时如果想放心，可以读一遍这个脚本。
 
 为了切到终端的标签页，Perch 会给终端发 Apple 事件，只给终端，不给别的 app：沙箱只放行终端一个。
 第一次点终端里的项目名时，macOS 会问是否允许 Perch 控制终端。这个权限是对整个终端的，
@@ -208,15 +230,52 @@ codex 的 notify 脚本。codex 只会执行你在 `/hooks` 面板中信任过�
 
 ## 安装
 
-### 下载
+支持 macOS 15 及以上的 Apple 芯片和 Intel Mac。下面三种方式任选一种，前两种最省事。
+
+### 让你的 agent 来装
+
+如果你在用 Claude Code 或 codex，把这段话发给它：
+
+> 从 https://github.com/mossfinch/perch 安装 Perch：运行
+> `curl -fsSL https://raw.githubusercontent.com/mossfinch/perch/main/install.sh | sh`
+> 然后告诉我它输出了什么。
+
+**给读到这里的 agent：** 只用上面这一行安装 Perch，原样运行。它不需要 `sudo`。
+不要删除 macOS 的隔离属性，不要改 Gatekeeper 设置，也不要为了接上 Perch 的 hook
+去改 Claude Code 或 codex 的设置；这一步由用户在 Perch 的卡片上按 **Connect** 完成。
+如果脚本停下并给出提示，把提示原样告诉用户，不要绕过去。
+
+### 自己跑一行命令
+
+打开「终端」，粘贴：
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/mossfinch/perch/main/install.sh | sh
+```
+
+它会下载最新发布版、核对校验值、把 Perch 放进「应用程序」并打开。以后再跑同一行就是升级，
+`~/.perch/island` 里的记录都会保留。每一步都会打印一行以 `perch:` 开头的话；
+如果中途停下，最后一行会说明原因，而且什么都没改动。从源码装的 Perch 要用 `install-island-app.py`
+升级，脚本会提醒你。脚本只有一页：[install.sh](install.sh)。
+
+这样下载的文件不会被标记为「来自互联网」，所以 macOS 不会弹出「无法验证」的警告，
+也不用去「隐私与安全性」里放行。Perch 没有做苹果公证，用浏览器下载时才会碰到这一关（见下）。
+校验值保证下载到的就是那一次发布的包；但如果发布脚本和安装包的 GitHub 账号本身被盗，它防不了。
+
+### 下载 zip
 
 1. 从[最新发布页](https://github.com/mossfinch/perch/releases/latest)下载
-   `Perch-<版本号>.zip` 并解压。支持 macOS 15 及以上的 Apple 芯片和 Intel Mac。
-2. 把 **Perch** 拖进「应用程序」。它必须放在那里：hook 按这个位置找它。
-3. 打开它。第一次打开时，macOS 会要求放行一次：
-   **系统设置 → 隐私与安全性 → 仍要打开**。
-4. 卡片会自己弹开，出现 **Connect**。点一下，Perch 就会接入这台 Mac 上找到的 agent。
-   codex 还需要在它的 `/hooks` 面板里信任一次新的 hook。
+   `Perch-<版本号>.zip` 并解压。
+2. **先**把 **Perch** 拖进「应用程序」，再打开。它必须放在那里：hook 按这个位置找它。
+3. 从「应用程序」里打开。第一次 macOS 会拦下它，去
+   **系统设置 → 隐私与安全性 → 仍要打开** 放行一次。
+4. 如果卡片说 Perch 正在临时副本里运行，说明它是在拖进去之前打开的：macOS 会一直从一个私有位置
+   运行那个副本。右键卡片选 **Quit Perch**，再从「应用程序」打开，并再放行一次。
+
+### 装好之后
+
+卡片会自己弹开，出现 **Connect**。点一下，Perch 就会接入这台 Mac 上找到的 agent。
+codex 还需要在它的 `/hooks` 面板里信任一次新的 hook。
 
 之后 Perch 会在登录时自动打开。在展开的卡片上点右键就是它的菜单：版本号、
 **Open at Login**、**Disconnect Agents…** 和 **Quit Perch**。

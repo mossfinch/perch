@@ -25,6 +25,7 @@
     "install-codex-island-hooks.py",
     "install-island-app.py",
     "install-island-hooks.py",
+    "install.sh",
     "island-day-report.py",
     "package-release.py",
     "perch-card.png",

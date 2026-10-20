@@ -266,9 +266,10 @@ test("status dots split into rows by agent source, claude above codex", () => {
   // Both captions ignore a press when the app is unknown.
   assert.match(captions, /guard let current, current\.host != nil else \{ return \}/, "the running caption reacts with no known app");
   assert.match(captions, /if project\.host != nil \{ onOpen\(project\) \}/, "the finished caption reacts with no known app");
-  // macOS keeps the arrow over the island, so a pressable line shows an underline under the
-  // pointer instead, and only when pressing it does something.
-  assert.match(captions, /\.underline\(pointerOver && current\?\.host != nil\)/);
+  // macOS keeps the arrow over the island, so the underline is the only sign a name can be
+  // pressed. It shows whenever pressing does something, faint at rest and solid under the
+  // pointer: shown only on hover, a new user never learns the name is a link.
+  assert.match(captions, /\.underline\(current\?\.host != nil, color: tint\.opacity\(pointerOver \? 1 : 0\.4\)\)/);
   assert.match(viewModelSource(), /projects\[idx\]\.host = host\.keepingSession\(of: projects\[idx\]\.host\)/,
     "each event replaces the host whole again, erasing a known session");
 
@@ -319,7 +320,7 @@ precondition(AgentHost(app: "com.openai.codex", session: "01a1548a-6c01-7403")?.
 `);
   execFileSync("swiftc", [islandPath("AgentHost.swift"), hostMain, "-o", hostBinary], { stdio: "pipe" });
   execFileSync(hostBinary, { stdio: "pipe" });
-  assert.match(captions, /\.underline\(pointerOver && opens\(resting\)\)/);
+  assert.match(captions, /\.underline\(opens\(resting\), color: tint\.opacity\(pointerOver \? 1 : 0\.4\)\)/);
   assert.doesNotMatch(captions, /pointerStyle|NSCursor/, "a cursor change that macOS ignores on the island came back");
   for (const [f, src] of [["install-island-hooks.py", "claude"], ["install-codex-island-hooks.py", "codex"]]) {
     const script = fs.readFileSync(pkgPath(f), "utf8");

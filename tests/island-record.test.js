@@ -185,7 +185,10 @@ test("one branch on the card at a time: the record puts the top row away and clo
   // With the reading gone, the record needs its own way back, and a real button for it.
   const view = code(read("RecordView.swift"));
   assert.match(view, /Button \{ onClose\(\) \} label: \{\s*Text\("Back"\)/, "the record lost its way back to the move");
-  assert.match(view, /\.underline\(pointerOnBack\)[\s\S]*?\.onHover \{ pointerOnBack = \$0 \}/);
+  // Easy to find: as bright as the card's other lines, always underlined like every word that
+  // does something, solid under the pointer, with room around it to land on.
+  assert.match(view, /Text\("Back"\)\s*\.font\(\.system\(size: 12, weight: \.medium\)\)\s*\.foregroundStyle\(IslandPalette\.paper\.opacity\(0\.85\)\)\s*\.underline\(true, color: IslandPalette\.paper\.opacity\(pointerOnBack \? 0\.85 : 0\.35\)\)\s*\.padding\(/);
+  assert.match(view, /\.contentShape\(Rectangle\(\)\)[\s\S]{0,120}\.onHover \{ pointerOnBack = \$0 \}/);
   // Thin strokes, each centred in an equal share of the full width: not bunched left, not fat blocks.
   assert.match(view, /\.frame\(width: Self\.strokeWidth, height: store\.weeks\[i\] == nil \? 3 : 4 \+ 26 \* share\)\s*\.frame\(maxWidth: \.infinity, maxHeight: \.infinity, alignment: \.bottom\)/,
     "the strokes no longer spread thin over the whole width");

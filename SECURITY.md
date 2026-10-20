@@ -26,6 +26,15 @@ interesting surface is narrow but real:
   bring its window forward: type into a tab, run a command, or act on any app
   but Terminal. What arrives from a hook is only ever a parameter to that fixed
   script, never part of it.
+- Anything that gets `perch-hook.sh` to do more than pass the event, the project
+  folder, the host app and its session or Terminal tab to Perch's local socket. It
+  runs inside your agent, outside Perch's sandbox, so nothing but its own code
+  keeps it to that.
+- Anything that gets `install.sh` to install something other than the release it
+  names, to run with more than the user's own rights, or to touch anything besides
+  `/Applications/Perch.app`. Its checksum guards the download; it cannot guard
+  against the GitHub account that publishes both the script and the release being
+  taken over, and that is documented, not a finding.
 - Anything that puts identifying information into the published package. The
   export refuses on the ones it knows about; a shape it does not know about is
   worth telling us.

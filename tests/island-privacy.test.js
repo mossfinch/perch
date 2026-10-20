@@ -198,7 +198,9 @@ test("no Team ID anywhere in the island's files — it links to the registrant's
   const mon = fs.readFileSync(islandPath("AgentEventMonitor.swift"), "utf8");
   assert.match(mon, /guard bound == 0 else \{[\s\S]{0,80}reportFailure\("bind"/);
   assert.match(viewModelSource(), /onListenFailed = \{[\s\S]{0,240}\.cannotListen\(reason\)/);
-  assert.match(fs.readFileSync(islandPath("GuidedCareCard.swift"), "utf8"), /case \.cannotListen\(let reason\)/);
+  // The words live with the states (`agentSetupLine`); the card shows whatever they say.
+  assert.match(fs.readFileSync(islandPath("IslandViewModel+Setup.swift"), "utf8"), /case \.cannotListen\(let reason\): return "Perch can't receive events/);
+  assert.match(fs.readFileSync(islandPath("GuidedCareCard.swift"), "utf8"), /let line = viewModel\.agentSetupLine/);
 
   // The installer must check before installing, and what it checks is what the signature
   // carries, not what the repo file says.

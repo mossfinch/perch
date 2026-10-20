@@ -198,6 +198,11 @@ test("nothing is written until Connect is pressed, and nothing twice", () => {
   const before = snapshot(home);
   assert.equal(swift("status", home, TARGET, "/Applications/Perch.app"), "needsConnect");
   assert.equal(swift("status", home, TARGET, "/Volumes/Downloads/Perch.app"), "notInApplications");
+  // Opened from Downloads before it was moved, macOS runs a copy from a temporary place, even
+  // once the app sits in Applications. Telling that user to move it to Applications sends
+  // them round in a circle, so the card names the temporary copy instead.
+  assert.equal(swift("status", home, TARGET,
+    "/private/var/folders/ab/cd/T/AppTranslocation/4CDF66DC-B186-4002-B929-8476A160EAFF/d/Perch.app"), "translocated");
   assert.deepEqual(snapshot(home), before, "asking for the status wrote to disk");
 
   // Once wired, the app leaves the files alone: no rewrite, no fresh backup on every launch.

@@ -177,7 +177,8 @@ private struct TodayFlowCell: View {
 
     /// Whether the pointer is over the line. macOS keeps the arrow over the island (the panel
     /// never becomes key, so AppKit never asks it for a cursor), so an underline under a line
-    /// that can be pressed is the only sign it can be.
+    /// that can be pressed is the only sign it can be. It is there at rest, faint, and turns
+    /// solid under the pointer: an underline that only appears on hover is never discovered.
     @State private var pointerOver = false
 
     var body: some View {
@@ -196,7 +197,7 @@ private struct TodayFlowCell: View {
                 Text(text ?? "")
                     .font(ProjectCaption.font)
                     .foregroundStyle(tint)
-                    .underline(pointerOver && opens(resting))
+                    .underline(opens(resting), color: tint.opacity(pointerOver ? 1 : 0.4))
                     .lineLimit(1)
                     .truncationMode(.tail)
             }

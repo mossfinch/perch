@@ -11,6 +11,7 @@ import SwiftUI
 struct ProjectStatus: Identifiable, Equatable {
     let source: String         // "claude" / "codex"
     let key: String            // unique key = source + project dir
+    let dir: String            // the project dir as the hook sent it
     let name: String           // display name = directory basename
     var status: IslandAgentStatus
     var updatedAt: Date
@@ -376,7 +377,7 @@ final class IslandViewModel: ObservableObject {
             projects[idx].seenAt = nil
             if let host { projects[idx].host = host.keepingSession(of: projects[idx].host) }
         } else {
-            projects.append(ProjectStatus(source: source, key: key, name: Self.displayName(dir),
+            projects.append(ProjectStatus(source: source, key: key, dir: dir, name: Self.displayName(dir),
                                           status: status, updatedAt: Date(),
                                           host: host))
         }

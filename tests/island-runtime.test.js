@@ -549,7 +549,9 @@ test("island tracks per-project status dots, hook carries project dir", () => {
   // the closed capsule reports counts derived from the same list.
   assert.match(view, /AgentStatusDots\(projects:/);
   assert.match(view, /AgentActivityStrip\(projects: viewModel\.projects/);
-  assert.match(view, /StatusTally\.counts\(viewModel\.projects\.map\(\\\.status\)\)/);
+  // The capsule hands the tally each line's folder too, so lines
+  // in a system temporary folder stay out of the numbers.
+  assert.match(view, /StatusTally\.counts\(lines: viewModel\.projects\.map \{ \(\$0\.dir, \$0\.status\) \}\)/);
 
   const script = fs.readFileSync(pkgPath("install-island-hooks.py"), "utf8");
   assert.match(script, /CLAUDE_PROJECT_DIR/);   // the hook carries the project dir

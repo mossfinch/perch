@@ -6,6 +6,15 @@ Notable changes to Perch, newest first. The format follows
 
 ## [Unreleased]
 
+## [2.9] — 2026-10-24
+
+### Fixed
+
+- The numbers in the notch no longer count projects in a temporary folder. An
+  agent that runs codex over and over (to grade or check something) opens a
+  fresh temporary folder each time, and every finished run used to add one to
+  the green count and stay there for hours. The card still lists them.
+
 ## [2.8] — 2026-10-21
 
 ### Added
@@ -286,7 +295,8 @@ Notable changes to Perch, newest first. The format follows
   The archive is packed deterministically: fixed timestamps, no extra fields,
   no comments, every byte accounted for.
 
-[Unreleased]: https://github.com/mossfinch/perch/compare/v2.8...HEAD
+[Unreleased]: https://github.com/mossfinch/perch/compare/v2.9...HEAD
+[2.9]: https://github.com/mossfinch/perch/compare/v2.8...v2.9
 [2.8]: https://github.com/mossfinch/perch/compare/v2.7...v2.8
 [2.7]: https://github.com/mossfinch/perch/compare/v2.6...v2.7
 [2.6]: https://github.com/mossfinch/perch/compare/v2.5...v2.6

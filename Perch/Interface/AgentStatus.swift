@@ -42,4 +42,23 @@ enum StatusTally {
             return n > 0 ? StatusCount(status: status, count: n) : nil
         }
     }
+
+    /// What the capsule counts: every line except those in a system temporary folder.
+    ///
+    /// An agent that batch-runs another agent (Claude grading with codex, say) opens one
+    /// throwaway folder per call, and each finished call would sit in the green count for
+    /// hours as a project to come back to, which it never is. A person works in a real
+    /// folder. The card still lists these lines; only the numbers leave them out.
+    static func counts(lines: [(dir: String, status: IslandAgentStatus)]) -> [StatusCount] {
+        counts(lines.filter { !isTemporary($0.dir) }.map(\.status))
+    }
+
+    /// macOS's fixed temporary locations, `/private` spelling included. Claude Code's
+    /// scratchpad lives under `/private/tmp`. Whole path components only, so `/tmpfiles`
+    /// is a real folder.
+    private static let temporaryRoots = ["/tmp", "/private/tmp", "/var/folders", "/private/var/folders"]
+
+    private static func isTemporary(_ dir: String) -> Bool {
+        temporaryRoots.contains { dir == $0 || dir.hasPrefix($0 + "/") }
+    }
 }

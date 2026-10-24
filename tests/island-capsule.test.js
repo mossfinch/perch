@@ -366,6 +366,32 @@ let flood = [IslandAgentStatus](repeating: .done, count: 200)
           + [IslandAgentStatus](repeating: .working, count: 50)
 precondition(StatusTally.counts(flood).count <= 3)
 precondition(StatusTally.counts(flood).map(\\.count).reduce(0, +) == 250, "every project must still be counted")
+
+// A project in a system temporary folder is not counted. Another
+// agent batch-running codex opens one throwaway folder per call, and each one
+// otherwise sat in the green count for 8 hours as "come back to this".
+let scratch = "/private/tmp/claude-501/-Volumes-code-app/0d4c/scratchpad/batch/run-1"
+let lines: [(dir: String, status: IslandAgentStatus)] = [
+  ("/Volumes/code/Developer/perch", .working),
+  (scratch, .done), ("/tmp/run-2", .done), ("/var/folders/ab/T/run-3", .working),
+  ("/private/var/folders/ab/T/run-4", .waiting), ("/private/tmp", .done),
+  ("/Volumes/code/Developer/notes", .done),
+]
+precondition(StatusTally.counts(lines: lines) == [StatusCount(status: .working, count: 1),
+                                                  StatusCount(status: .done, count: 1)],
+             "only the two real folders may be counted")
+
+// Probe: each temp root on its own must be dropped, so a root that silently
+// stopped matching shows up here instead of in the notch
+for root in ["/tmp/a", "/private/tmp/a", "/var/folders/a", "/private/var/folders/a"] {
+  precondition(StatusTally.counts(lines: [(root, .done)]).isEmpty, "\\(root) was counted")
+}
+// Only whole path components match: a real folder whose name merely starts
+// like a temp root is still counted
+for real in ["/tmpfiles/app", "/private/tmpx/app", "/Volumes/code/tmp/app", "/var/foldersx/a"] {
+  precondition(StatusTally.counts(lines: [(real, .done)]) == [StatusCount(status: .done, count: 1)],
+               "\\(real) was dropped")
+}
 `);
 
   // Feed only AgentStatus.swift: it has to stay pure Foundation, or this test

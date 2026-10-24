@@ -17,8 +17,8 @@
 # GitHub account that publishes both this script and the release is itself taken over.
 set -eu
 
-version=2.8
-checksum=9ef10fd3b1b632aead5544cc29df961f8a885963203282f06f9f58cc440acca8
+version=2.9
+checksum=8e30792514d3e523b23d5a92fb4123d1420f2990d601033bf60bbac0fc446e2a
 url="https://github.com/mossfinch/perch/releases/download/v$version/Perch-$version.zip"
 app=/Applications/Perch.app
 id=io.github.mossfinch.perch

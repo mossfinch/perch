@@ -97,7 +97,7 @@ struct IslandView: View {
     /// idle grey dot holds the place when nothing is happening, so the wing
     /// never looks broken and empty.
     private func statusCounts(display: IslandDisplayMetrics) -> some View {
-        let counts = StatusTally.counts(viewModel.projects.map(\.status))
+        let counts = StatusTally.counts(lines: viewModel.projects.map { ($0.dir, $0.status) })
         return HStack(spacing: 6) {
             if counts.isEmpty {
                 Circle().fill(IslandPalette.idleDot).frame(width: 6, height: 6)
